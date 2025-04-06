@@ -1,10 +1,34 @@
+'use client'
+
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
+import { useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import { BookOpen, Bell, Archive, Phone } from "lucide-react"
 
+// ... import your cards, icons, and components
+
 export default function Home() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
+
+  if (status === "loading") {
+    return <p className="p-10 text-center">Loading...</p>
+  }
+
   return (
     <div className="space-y-8">
+      {/* Show user info, cards, updates, etc. */}
+      <h1 className="text-3xl pt-10 font-bold">Welcome, {session?.user?.name}</h1>
+      {/* Rest of your home page content... */}
+      <div className="space-y-8">
       <div className="space-y-2">
         <h1 className="text-3xl pt-10 font-bold tracking-tight">PEC.UP</h1>
         <p className="text-muted-foreground">Your central location for all educational resources and information</p>
@@ -85,6 +109,7 @@ export default function Home() {
         </Card>
       </div>
     </div>
+    </div>
+    
   )
 }
-

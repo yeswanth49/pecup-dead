@@ -5,8 +5,18 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Home, Bell, BookOpen, Archive, Phone, Menu, X } from "lucide-react"
+import {
+  Home,
+  Bell,
+  BookOpen,
+  Archive,
+  Phone,
+  Menu,
+  X,
+  LogOut,
+} from "lucide-react"
 import { useState } from "react"
+import { useSession, signOut } from "next-auth/react"
 
 const routes = [
   {
@@ -39,8 +49,8 @@ const routes = [
 export function Sidebar() {
   const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
+  const { data: session } = useSession()
 
-  // Close sidebar when clicking outside
   const handleClickOutside = (e: React.MouseEvent) => {
     if (isOpen && e.target === e.currentTarget) {
       setIsOpen(false)
@@ -58,7 +68,6 @@ export function Sidebar() {
         {isOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
       </Button>
 
-      {/* Overlay */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-30"
@@ -76,6 +85,7 @@ export function Sidebar() {
           <div className="p-6 pt-10">
             <h1 className="text-2xl pt-10 font-bold text-primary">PEC.UP</h1>
           </div>
+
           <ScrollArea className="flex-1">
             <nav className="px-2 py-4">
               <ul className="space-y-2">
@@ -95,12 +105,25 @@ export function Sidebar() {
               </ul>
             </nav>
           </ScrollArea>
-          <div className="p-4 border-t">
-            <p className="text-xs text-muted-foreground">© 2025 Resource Hub</p>
+
+          {session && (
+            <div className="p-4 border-t">
+              <Button
+                variant="ghost"
+                className="w-full flex justify-start gap-2 text-sm"
+                onClick={() => signOut()}
+              >
+                <LogOut className="h-4 w-4" />
+                Logout
+              </Button>
+            </div>
+          )}
+
+          <div className="p-4 text-xs text-muted-foreground">
+            © 2025 Resource Hub
           </div>
         </div>
       </div>
     </>
   )
 }
-
