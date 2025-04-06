@@ -4,6 +4,7 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { Sidebar } from "@/components/sidebar"
 import { Providers } from "./providers" // ✅ Import Providers
+import { Analytics } from "@vercel/analytics/react"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -27,6 +28,7 @@ export default function RootLayout({
             <main className="flex-1 p-6 md:p-8">{children}</main>
           </div>
         </Providers>
+        <Analytics/>
       </body>
     </html>
   )
