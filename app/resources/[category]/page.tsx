@@ -8,22 +8,22 @@ const resourceData = {
   notes: {
     title: "Notes",
     description: "Lecture notes and study materials",
-    subjects: ["Physics", "Mathematics", "Chemistry", "Biology", "Computer Science"],
+    subjects: ["P&S", "DBMS", "MEFA", "OS", "SE"],
   },
   assignments: {
     title: "Assignments",
     description: "Homework and practice problems",
-    subjects: ["Physics", "Mathematics", "Chemistry", "Biology", "Computer Science"],
+    subjects: ["P&S", "DBMS", "MEFA", "OS", "SE"],
   },
   papers: {
     title: "Papers",
     description: "Research papers and publications",
-    subjects: ["Physics", "Mathematics", "Chemistry", "Biology", "Computer Science"],
+    subjects: ["P&S", "DBMS", "MEFA", "OS", "SE"],
   },
   records: {
     title: "Records",
     description: "Academic records and transcripts",
-    subjects: ["Physics", "Mathematics", "Chemistry", "Biology", "Computer Science"],
+    subjects: ["P&S", "DBMS", "MEFA", "FDS"],
   },
 }
 

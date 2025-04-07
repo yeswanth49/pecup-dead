@@ -9,7 +9,7 @@ const resourceData = {
     title: "Notes",
     subjects: {
       physics: {
-        name: "Physics",
+        name: "P&S",
         units: ["Mechanics", "Thermodynamics", "Electromagnetism", "Optics", "Modern Physics"],
       },
       mathematics: {

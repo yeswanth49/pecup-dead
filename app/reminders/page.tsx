@@ -15,12 +15,12 @@ export default function RemindersPage() {
             <AlertCircle className="mt-1 h-5 w-5 text-primary" />
             <div>
               <CardTitle>Mid-Term Exams</CardTitle>
-              <CardDescription>Due in 5 days</CardDescription>
+              <CardDescription>8 April 2025</CardDescription>
             </div>
           </CardHeader>
           <CardContent>
             <p>
-              Mid-term examinations for all subjects will begin on March 7, 2025. Make sure to check the exam schedule
+              Mid-term examinations for all subjects will begin on 8 April, 2025. Make sure to check the exam schedule
               and prepare accordingly.
             </p>
           </CardContent>
@@ -31,44 +31,12 @@ export default function RemindersPage() {
             <Clock className="mt-1 h-5 w-5 text-primary" />
             <div>
               <CardTitle>Assignment Submission</CardTitle>
-              <CardDescription>Due tomorrow</CardDescription>
+              <CardDescription>Due in fewdays</CardDescription>
             </div>
           </CardHeader>
           <CardContent>
             <p>
-              Physics and Mathematics assignments are due by 11:59 PM tomorrow. Late submissions will incur penalties.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-primary transition-all-smooth hover:shadow-md">
-          <CardHeader className="flex flex-row items-start gap-4 pb-2">
-            <CalendarClock className="mt-1 h-5 w-5 text-primary" />
-            <div>
-              <CardTitle>Research Paper Proposal</CardTitle>
-              <CardDescription>Due in 2 weeks</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p>
-              Submit your research paper proposals by March 16, 2025. Guidelines are available in the Resources section
-              under Papers.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-primary transition-all-smooth hover:shadow-md">
-          <CardHeader className="flex flex-row items-start gap-4 pb-2">
-            <CalendarClock className="mt-1 h-5 w-5 text-primary" />
-            <div>
-              <CardTitle>Course Registration</CardTitle>
-              <CardDescription>Opens in 3 weeks</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p>
-              Registration for next semester courses will open on March 23, 2025. Review the course catalog and prepare
-              your schedule in advance.
+              Submit all 5 assignments, all subjects within meantime!!
             </p>
           </CardContent>
         </Card>

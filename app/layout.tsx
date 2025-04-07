@@ -5,6 +5,7 @@ import "./globals.css"
 import { Sidebar } from "@/components/sidebar"
 import { Providers } from "./providers" // ✅ Import Providers
 import { Analytics } from "@vercel/analytics/react"
+import { SpeedInsights } from "@vercel/speed-insights/next"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -29,6 +30,7 @@ export default function RootLayout({
           </div>
         </Providers>
         <Analytics/>
+        <SpeedInsights/>
       </body>
     </html>
   )

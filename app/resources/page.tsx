@@ -72,17 +72,17 @@ export default function ResourcesPage() {
           <ul className="space-y-2">
             <li className="flex items-center gap-2 rounded-md p-2 hover:bg-muted transition-all duration-200">
               <FileText className="h-4 w-4 text-primary" />
-              <span>Physics Unit 3 Notes</span>
+              <span>MEFA Unit 3 Notes</span>
               <span className="ml-auto text-xs text-muted-foreground">2 hours ago</span>
             </li>
             <li className="flex items-center gap-2 rounded-md p-2 hover:bg-muted transition-all duration-200">
               <BookOpen className="h-4 w-4 text-primary" />
-              <span>Mathematics Assignment 4</span>
+              <span>P&S Assignment 4</span>
               <span className="ml-auto text-xs text-muted-foreground">Yesterday</span>
             </li>
             <li className="flex items-center gap-2 rounded-md p-2 hover:bg-muted transition-all duration-200">
               <FileCheck className="h-4 w-4 text-primary" />
-              <span>Research Methodology Paper</span>
+              <span>MEFA Unit 4 Notes</span>
               <span className="ml-auto text-xs text-muted-foreground">3 days ago</span>
             </li>
           </ul>
