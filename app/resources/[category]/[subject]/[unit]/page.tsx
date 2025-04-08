@@ -142,7 +142,7 @@ function generateMockResources(category: string, subject: string, unitIndex: num
   return resources
 }
 
-export default async function UnitPage({ params }: { params: { category: string; subject: string; unit: string } }) {
+export default function UnitPage({ params }: { params: { category: string; subject: string; unit: string } }) {
   const { category, subject, unit } = params
   const unitIndex = Number.parseInt(unit) - 1
 

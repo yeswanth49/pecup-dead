@@ -103,7 +103,7 @@ const resourceData = {
   },
 }
 
-export default async function SubjectPage({ params }: { params: { category: string; subject: string } }) {
+export default function SubjectPage({ params }: { params: { category: string; subject: string } }) {
   const { category, subject } = params
 
   // Check if the category exists

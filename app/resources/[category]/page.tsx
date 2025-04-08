@@ -27,7 +27,7 @@ const resourceData = {
   },
 }
 
-export default async function CategoryPage({ params }: { params: { category: string } }) {
+export default function CategoryPage({ params }: { params: { category: string } }) {
   const category = params.category
 
   // Check if the category exists
