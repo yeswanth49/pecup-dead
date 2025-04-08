@@ -9,118 +9,92 @@ const resourceData = {
   notes: {
     title: "Notes",
     subjects: {
-      physics: {
-        name: "Physics",
-        units: ["Mechanics", "Thermodynamics", "Electromagnetism", "Optics", "Modern Physics"],
+      "P&S": {
+        name: "P&S",
+        units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"],
       },
-      mathematics: {
-        name: "Mathematics",
-        units: ["Calculus", "Linear Algebra", "Probability", "Statistics", "Differential Equations"],
+      "DBMS": {
+        name: "DBMS",
+        units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"],
       },
-      chemistry: {
-        name: "Chemistry",
-        units: [
-          "Organic Chemistry",
-          "Inorganic Chemistry",
-          "Physical Chemistry",
-          "Analytical Chemistry",
-          "Biochemistry",
-        ],
+      "MEFA": {
+        name: "MEFA",
+        units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"],
       },
-      biology: {
-        name: "Biology",
-        units: ["Cell Biology", "Genetics", "Ecology", "Physiology", "Evolution"],
+      "OS": {
+        name: "OS",
+        units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"],
       },
-      "computer-science": {
-        name: "Computer Science",
-        units: ["Algorithms", "Data Structures", "Operating Systems", "Databases", "Computer Networks"],
+      "SE": {
+        name: "SE",
+        units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"],
       },
     },
   },
   assignments: {
     title: "Assignments",
     subjects: {
-      physics: {
-        name: "Physics",
-        units: ["Mechanics", "Thermodynamics", "Electromagnetism", "Optics", "Modern Physics"],
+      "P&S": {
+        name: "P&S",
+        units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"],
       },
-      mathematics: {
-        name: "Mathematics",
-        units: ["Calculus", "Linear Algebra", "Probability", "Statistics", "Differential Equations"],
+      "DBMS": {
+        name: "DBMS",
+        units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"],
       },
-      chemistry: {
-        name: "Chemistry",
-        units: [
-          "Organic Chemistry",
-          "Inorganic Chemistry",
-          "Physical Chemistry",
-          "Analytical Chemistry",
-          "Biochemistry",
-        ],
+      "MEFA": {
+        name: "MEFA",
+        units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"],
       },
-      biology: {
-        name: "Biology",
-        units: ["Cell Biology", "Genetics", "Ecology", "Physiology", "Evolution"],
+      "OS": {
+        name: "OS",
+        units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"],
       },
-      "computer-science": {
-        name: "Computer Science",
-        units: ["Algorithms", "Data Structures", "Operating Systems", "Databases", "Computer Networks"],
+      "SE": {
+        name: "SE",
+        units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"],
       },
     },
   },
   papers: {
     title: "Papers",
     subjects: {
-      physics: {
-        name: "Physics",
-        units: ["Mechanics", "Thermodynamics", "Electromagnetism", "Optics", "Modern Physics"],
+      "P&S": {
+        name: "P&S",
+        units: ["Mid-1", "Mid-2", "Sem"],
       },
-      mathematics: {
-        name: "Mathematics",
-        units: ["Calculus", "Linear Algebra", "Probability", "Statistics", "Differential Equations"],
+      "DBMS": {
+        name: "DBMS",
+        units: ["Mid-1", "Mid-2", "Sem"],
       },
-      chemistry: {
-        name: "Chemistry",
-        units: [
-          "Organic Chemistry",
-          "Inorganic Chemistry",
-          "Physical Chemistry",
-          "Analytical Chemistry",
-          "Biochemistry",
-        ],
+      "MEFA": {
+        name: "MEFA",
+        units: ["Mid-1", "Mid-2", "Sem"],
       },
-      biology: {
-        name: "Biology",
-        units: ["Cell Biology", "Genetics", "Ecology", "Physiology", "Evolution"],
+      "OS": {
+        name: "OS",
+        units: ["Mid-1", "Mid-2", "Sem"],
       },
-      "computer-science": {
-        name: "Computer Science",
-        units: ["Algorithms", "Data Structures", "Operating Systems", "Databases", "Computer Networks"],
+      "SE": {
+        name: "SE",
+        units: ["Mid-1", "Mid-2", "Sem"],
       },
     },
   },
   records: {
     title: "Records",
     subjects: {
-      physics: {
-        name: "Physics",
-        units: ["Semester 1", "Semester 2", "Semester 3", "Semester 4", "Semester 5"],
+      "FDS": {
+        name: "FDS",
+        units: ["Week 1", "Week 2", "Week 3"],
       },
-      mathematics: {
-        name: "Mathematics",
-        units: ["Semester 1", "Semester 2", "Semester 3", "Semester 4", "Semester 5"],
+      "DBMS": {
+        name: "DBMS",
+        units: ["Week 1", "Week 2", "Week 3"],
       },
-      chemistry: {
-        name: "Chemistry",
-        units: ["Semester 1", "Semester 2", "Semester 3", "Semester 4", "Semester 5"],
-      },
-      biology: {
-        name: "Biology",
-        units: ["Semester 1", "Semester 2", "Semester 3", "Semester 4", "Semester 5"],
-      },
-      "computer-science": {
-        name: "Computer Science",
-        units: ["Semester 1", "Semester 2", "Semester 3", "Semester 4", "Semester 5"],
+      "OS": {
+        name: "OS",
+        units: ["Week 1", "Week 2", "Week 3"],
       },
     },
   },
@@ -168,7 +142,7 @@ function generateMockResources(category: string, subject: string, unitIndex: num
   return resources
 }
 
-export default function UnitPage({ params }: { params: { category: string; subject: string; unit: string } }) {
+export default async function UnitPage({ params }: { params: { category: string; subject: string; unit: string } }) {
   const { category, subject, unit } = params
   const unitIndex = Number.parseInt(unit) - 1
 
