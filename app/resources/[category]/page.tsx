@@ -8,22 +8,22 @@ const resourceData = {
   notes: {
     title: "Notes",
     description: "Lecture notes and study materials",
-    subjects: ["P&S", "DBMS", "MEFA", "OS", "SE"],
+    subjects: ["Physics", "Mathematics", "Chemistry", "Biology", "Computer Science"],
   },
   assignments: {
     title: "Assignments",
     description: "Homework and practice problems",
-    subjects: ["P&S", "DBMS", "MEFA", "OS", "SE"],
+    subjects: ["Physics", "Mathematics", "Chemistry", "Biology", "Computer Science"],
   },
   papers: {
     title: "Papers",
     description: "Research papers and publications",
-    subjects: ["P&S", "DBMS", "MEFA", "OS", "SE"],
+    subjects: ["Physics", "Mathematics", "Chemistry", "Biology", "Computer Science"],
   },
   records: {
     title: "Records",
     description: "Academic records and transcripts",
-    subjects: ["P&S", "DBMS", "MEFA", "FDS"],
+    subjects: ["Physics", "Mathematics", "Chemistry", "Biology", "Computer Science"],
   },
 }
 
@@ -75,4 +75,3 @@ export default function CategoryPage({ params }: { params: { category: string } 
     </div>
   )
 }
-

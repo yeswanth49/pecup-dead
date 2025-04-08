@@ -9,7 +9,7 @@ const resourceData = {
     title: "Notes",
     subjects: {
       physics: {
-        name: "P&S",
+        name: "Physics",
         units: ["Mechanics", "Thermodynamics", "Electromagnetism", "Optics", "Modern Physics"],
       },
       mathematics: {
@@ -184,4 +184,3 @@ export default function SubjectPage({ params }: { params: { category: string; su
     </div>
   )
 }
-
