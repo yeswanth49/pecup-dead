@@ -10,8 +10,8 @@ import { SpeedInsights } from "@vercel/speed-insights/next"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Resource Hub",
-  description: "Educational resource hub for students and faculty",
+  title: "PEC.UP",
+  description: "Educational resources for students, by students!!",
   generator: "v0.dev",
 }
 
