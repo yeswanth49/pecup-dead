@@ -3,34 +3,38 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ChevronRight } from "lucide-react"
 
-// Define the categories and their subjects
 const resourceData = {
   notes: {
     title: "Notes",
     description: "Lecture notes and study materials",
-    subjects: ["P&S", "DBMS", "MEFA", "OS", "SE"],
+    subjects: ["p&s", "dbms", "mefa", "os", "SE"],
   },
   assignments: {
     title: "Assignments",
     description: "Homework and practice problems",
-    subjects: ["P&S", "DBMS", "MEFA", "OS", "SE"],
+    subjects: ["p&s", "dbms", "mefa", "os", "SE"],
   },
   papers: {
     title: "Papers",
     description: "Research papers and publications",
-    subjects: ["P&S", "DBMS", "MEFA", "OS", "SE"],
+    subjects: ["p&s", "dbms", "mefa", "os", "SE"],
   },
   records: {
     title: "Records",
     description: "Academic records and transcripts",
-    subjects: ["FDS", "DBMS", "OS", "DTI"],
+    subjects: ["fds", "dbms", "os", "dti"], 
   },
 }
 
-export default function CategoryPage({ params }: { params: { category: string } }) {
-  const category = params.category
+export async function generateStaticParams() {
+  return Object.keys(resourceData).map((category) => ({
+    category,
+  }))
+}
 
-  // Check if the category exists
+export default async function CategoryPage({ params }: { params: { category: string } }) {
+    const { category } = await params
+
   if (!resourceData[category as keyof typeof resourceData]) {
     notFound()
   }
@@ -52,25 +56,29 @@ export default function CategoryPage({ params }: { params: { category: string } 
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {categoryData.subjects.map((subject) => (
-          <Link
-            key={subject}
-            href={`/resources/${category}/${subject.toLowerCase().replace(/\s+/g, "-")}`}
-            className="block"
-          >
-            <Card className="h-full transition-all-smooth hover-lift">
-              <CardHeader>
-                <CardTitle>{subject}</CardTitle>
-                <CardDescription>
-                  Access {subject} {categoryData.title.toLowerCase()}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex justify-end">
-                <ChevronRight className="h-5 w-5 text-primary" />
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
+        {categoryData.subjects.map((subject) => {
+          const pathSegment = subject.toLowerCase().replace(/\s+/g, "-");
+
+          return (
+            <Link
+              key={subject}
+              href={`/resources/${category}/${encodeURIComponent(pathSegment)}`}
+              className="block"
+            >
+              <Card className="h-full transition-all-smooth hover-lift">
+                <CardHeader>
+                  <CardTitle>{subject.toUpperCase()}</CardTitle>
+                  <CardDescription>
+                    Access {subject.toUpperCase()} {categoryData.title.toUpperCase()}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex justify-end">
+                  <ChevronRight className="h-5 w-5 text-primary" />
+                </CardContent>
+              </Card>
+            </Link>
+          );
+        })}
       </div>
     </div>
   )

@@ -3,121 +3,91 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ChevronRight, FileText } from "lucide-react"
 
-// Define the categories and their subjects
+// Define the categories and their subjects (Ensure keys like "P&S", "DTA" are consistent)
 const resourceData = {
   notes: {
     title: "Notes",
     subjects: {
-      "P&S": {
-        name: "P&S",
-        units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"],
-      },
-      "DBMS": {
-        name: "DBMS",
-        units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"],
-      },
-      "MEFA": {
-        name: "MEFA",
-        units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"],
-      },
-      "OS": {
-        name: "OS",
-        units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"],
-      },
-      "SE": {
-        name: "SE",
-        units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"],
-      },
+      "p&s": { name: "P&S", units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"] },
+      "dbms": { name: "DBMS", units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"] },
+      "mefa": { name: "MEFA", units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"] },
+      "os": { name: "OS", units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"] },
+      "se": { name: "SE", units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"] },
     },
   },
   assignments: {
     title: "Assignments",
     subjects: {
-      "P&S": {
-        name: "P&S",
-        units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"],
-      },
-      "DBMS": {
-        name: "DBMS",
-        units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"],
-      },
-      "MEFA": {
-        name: "MEFA",
-        units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"],
-      },
-      "OS": {
-        name: "OS",
-        units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"],
-      },
-      "SE": {
-        name: "SE",
-        units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"],
-      },
+      "p&s": { name: "P&S", units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"] },
+      "dbms": { name: "DBMS", units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"] },
+      "mefa": { name: "MEFA", units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"] },
+      "os": { name: "OS", units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"] },
+      "se": { name: "SE", units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"] },
     },
   },
   papers: {
     title: "Papers",
     subjects: {
-      "P&S": {
-        name: "P&S",
-        units: ["Mid-1", "Mid-2", "Sem"],
-      },
-      "DBMS": {
-        name: "DBMS",
-        units: ["Mid-1", "Mid-2", "Sem"],
-      },
-      "MEFA": {
-        name: "MEFA",
-        units: ["Mid-1", "Mid-2", "Sem"],
-      },
-      "OS": {
-        name: "OS",
-        units: ["Mid-1", "Mid-2", "Sem"],
-      },
-      "SE": {
-        name: "SE",
-        units: ["Mid-1", "Mid-2", "Sem"],
-      },
+      "p&s": { name: "P&S", units: ["Mid-1", "Mid-2", "Sem"] },
+      "dbms": { name: "DBMS", units: ["Mid-1", "Mid-2", "Sem"] },
+      "mefa": { name: "MEFA", units: ["Mid-1", "Mid-2", "Sem"] },
+      "os": { name: "OS", units: ["Mid-1", "Mid-2", "Sem"] },
+      "se": { name: "SE", units: ["Mid-1", "Mid-2", "Sem"] },
     },
   },
   records: {
     title: "Records",
     subjects: {
-      "FDS": {
-        name: "FDS",
-        units: ["Week 1", "Week 2", "Week 3"],
-      },
-      "DBMS": {
-        name: "DBMS",
-        units: ["Week 1", "Week 2", "Week 3"],
-      },
-      "OS": {
-        name: "OS",
-        units: ["Week 1", "Week 2", "Week 3"],
-      },
-      "DTA": {
-        name: "DTA",
-        units: ["Week 1", "Week 2", "Week 3"],
-      },
+      "fds": { name: "FDS", units: ["Week 1", "Week 2", "Week 3"] },
+      "dbms": { name: "DBMS", units: ["Week 1", "Week 2", "Week 3"] },
+      "os": { name: "OS", units: ["Week 1", "Week 2", "Week 3"] },
+      "dta": { name: "DTA", units: ["Week 1", "Week 2", "Week 3"] },
     },
   },
 }
 
-export default function SubjectPage({ params }: { params: { category: string; subject: string } }) {
-  const { category, subject } = params
+export async function generateStaticParams() {
+  const params = []
+  for (const category of Object.keys(resourceData)) {
+    const subjectKeys = Object.keys(resourceData[category].subjects)
+    for (const subjectKey of subjectKeys) {
+      params.push({
+        category,
+        subject: encodeURIComponent(subjectKey)
+      })
+    }
+  }
+  return params
+}
 
-  // Check if the category exists
+export default async function SubjectPage({ params }: { params: { category: string; subject: string } }) {
+
+  const resolvedParams = await params;
+
+  const { category } = resolvedParams;
+  const encodedSubject = resolvedParams.subject; 
+
+  let subject: string;
+  try {
+     subject = decodeURIComponent(encodedSubject); 
+  } catch (error) {
+      console.error("Failed to decode subject parameter:", encodedSubject, error);
+      notFound();
+  }
+
+
   if (!resourceData[category as keyof typeof resourceData]) {
-    notFound()
+    console.error(`Category not found: ${category}`);
+    notFound();
   }
+  const categoryData = resourceData[category as keyof typeof resourceData];
 
-  // Check if the subject exists
-  const categoryData = resourceData[category as keyof typeof resourceData]
   if (!categoryData.subjects[subject as keyof typeof categoryData.subjects]) {
-    notFound()
+    console.error(`Subject not found in category ${category}: ${subject} (decoded from ${encodedSubject})`);
+    notFound();
   }
 
-  const subjectData = categoryData.subjects[subject as keyof typeof categoryData.subjects]
+  const subjectData = categoryData.subjects[subject as keyof typeof categoryData.subjects];
 
   return (
     <div className="space-y-6">
@@ -137,13 +107,13 @@ export default function SubjectPage({ params }: { params: { category: string; su
           {subjectData.name} {categoryData.title}
         </h1>
         <p className="text-muted-foreground">
-          Access all {subjectData.name} {categoryData.title.toLowerCase()} by unit
+          Access all {subjectData.name} {categoryData.title} by unit
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {subjectData.units.map((unit, index) => (
-          <Link key={unit} href={`/resources/${category}/${subject}/${index + 1}`} className="block">
+          <Link key={unit} href={`/resources/${category}/${encodedSubject}/${index + 1}`} className="block">
             <Card className="h-full transition-all-smooth hover-lift">
               <CardHeader>
                 <CardTitle>
