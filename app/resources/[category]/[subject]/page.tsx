@@ -117,9 +117,9 @@ export default async function SubjectPage({ params }: { params: { category: stri
             <Card className="h-full transition-all-smooth hover-lift">
               <CardHeader>
                 <CardTitle>
-                  Unit {index + 1}: {unit}
+                  {unit}
                 </CardTitle>
-                <CardDescription>Access {unit} materials</CardDescription>
+                <CardDescription>Access {subject.toUpperCase()} {unit}</CardDescription>
               </CardHeader>
               <CardContent className="flex items-center justify-between">
                 <FileText className="h-5 w-5 text-primary" />
