@@ -50,6 +50,7 @@
     "date-fns": "4.1.0",
     "dotenv": "^16.4.7",
     "embla-carousel-react": "8.5.1",
+    "formidable": "^3.5.2",
     "googleapis": "^148.0.0",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",

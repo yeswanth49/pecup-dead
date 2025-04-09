@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   LogOut,
+  AppWindowMac
 } from "lucide-react"
 import { useState } from "react"
 import { useSession, signOut } from "next-auth/react"
@@ -38,6 +39,11 @@ const routes = [
     name: "Archive",
     path: "/archive",
     icon: Archive,
+  },
+  {
+    name: "Developer",
+    path: "/dev-dashboard",
+    icon: AppWindowMac,
   },
   {
     name: "Contact Administration",
@@ -120,7 +126,7 @@ export function Sidebar() {
           )}
 
           <div className="p-4 text-xs text-muted-foreground">
-            © 2025 Resource Hub
+            © 2025 Yeswanth Madasu
           </div>
         </div>
       </div>
