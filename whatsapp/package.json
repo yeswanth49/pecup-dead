@@ -12,6 +12,8 @@
   "dependencies": {
     "@hapi/boom": "^10.0.1",
     "@whiskeysockets/baileys": "^6.17.16",
+    "google-auth-library": "^9.15.1",
+    "googleapis": "^148.0.0",
     "qrcode-terminal": "^0.12.0"
   }
 }
