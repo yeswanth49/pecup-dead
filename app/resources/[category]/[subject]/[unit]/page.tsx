@@ -55,11 +55,7 @@ function generateMockResources(category: string, subject: string, unitIndex: num
   // Different types of resources based on category
   if (category === "notes") {
     resources.push(
-      { title: "Lecture Notes 1", type: "PDF", date: "Feb 15, 2025" },
-      { title: "Lecture Notes 2", type: "PDF", date: "Feb 22, 2025" },
-      { title: "Study Guide", type: "DOCX", date: "Feb 28, 2025" },
-      { title: "Concept Map", type: "PDF", date: "Mar 1, 2025" },
-      { title: "Summary Sheet", type: "PDF", date: "Mar 2, 2025" },
+      { title: "Lecture Notes 1", type: "PDF", date: "Apr 9, 2025", url: "https://www.google.com"  },
     )
   } else if (category === "assignments") {
     resources.push(
