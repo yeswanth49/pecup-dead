@@ -1,163 +1,116 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import Link from "next/link"
-import { notFound } from "next/navigation"
-import { ChevronRight, FileText, Download, ExternalLink } from "lucide-react"
-import { Button } from "@/components/ui/button"
+// app/resources/[category]/[subject]/[unit]/page.tsx
 
-// Define the categories and their subjects (Ensure keys like "P&S", "DTA" are consistent)
-const resourceData = {
-  notes: {
-    title: "Notes",
-    subjects: {
-      "p&s": { name: "P&S", units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"] },
-      "dbms": { name: "DBMS", units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"] },
-      "mefa": { name: "MEFA", units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"] },
-      "os": { name: "OS", units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"] },
-      "se": { name: "SE", units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"] },
-    },
-  },
-  assignments: {
-    title: "Assignments",
-    subjects: {
-      "p&s": { name: "P&S", units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"] },
-      "dbms": { name: "DBMS", units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"] },
-      "mefa": { name: "MEFA", units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"] },
-      "os": { name: "OS", units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"] },
-      "se": { name: "SE", units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"] },
-    },
-  },
-  papers: {
-    title: "Papers",
-    subjects: {
-      "p&s": { name: "P&S", units: ["Mid-1", "Mid-2", "Sem"] },
-      "dbms": { name: "DBMS", units: ["Mid-1", "Mid-2", "Sem"] },
-      "mefa": { name: "MEFA", units: ["Mid-1", "Mid-2", "Sem"] },
-      "os": { name: "OS", units: ["Mid-1", "Mid-2", "Sem"] },
-      "se": { name: "SE", units: ["Mid-1", "Mid-2", "Sem"] },
-    },
-  },
-  records: {
-    title: "Records",
-    subjects: {
-      "fds": { name: "FDS", units: ["Week 1", "Week 2", "Week 3"] },
-      "dbms": { name: "DBMS", units: ["Week 1", "Week 2", "Week 3"] },
-      "os": { name: "OS", units: ["Week 1", "Week 2", "Week 3"] },
-       "dta": { name: "DTA", units: ["Week 1", "Week 2", "Week 3"] }, 
-    },
-  },
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { ChevronRight, FileText, Download, ExternalLink, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+interface Resource {
+  name: string;
+  description: string;
+  date: string;
+  type: string;
+  url: string;
 }
 
-// Generate mock resources for each unit
-// (No changes needed here, but it receives the decoded subject name)
-function generateMockResources(category: string, subject: string, unitIndex: number) {
-  const resources = []
-  // ... (rest of the function remains the same)
-  // Different types of resources based on category
-  if (category === "notes") {
-    resources.push(
-      { title: "Lecture Notes 1", type: "PDF", date: "Apr 9, 2025", url: "https://www.google.com"  },
-    )
-  } else if (category === "assignments") {
-    resources.push(
-      { title: "Problem Set 1", type: "PDF", date: "Feb 10, 2025", url: "https://www.google.com"  },
-      { title: "Problem Set 2", type: "PDF", date: "Feb 17, 2025" , url: "https://www.google.com" },
-      { title: "Lab Assignment", type: "DOCX", date: "Feb 24, 2025", url: "https://www.google.com" },
-      { title: "Practice Questions", type: "PDF", date: "Mar 1, 2025" },
-      { title: "Quiz Preparation", type: "PDF", date: "Mar 2, 2025" },
-    )
-  } else if (category === "papers") {
-    resources.push(
-      { title: "Research Paper 1", type: "PDF", date: "Jan 15, 2025" },
-      { title: "Research Paper 2", type: "PDF", date: "Jan 30, 2025" },
-      { title: "Literature Review", type: "DOCX", date: "Feb 15, 2025" },
-      { title: "Conference Paper", type: "PDF", date: "Feb 28, 2025" },
-      { title: "Publication Guidelines", type: "PDF", date: "Mar 1, 2025" },
-    )
-  } else if (category === "records") {
-    resources.push(
-      { title: "Attendance Record", type: "PDF", date: "Dec 20, 2024" },
-      { title: "Grade Report", type: "PDF", date: "Dec 25, 2024" },
-      { title: "Transcript", type: "PDF", date: "Jan 5, 2025" },
-      { title: "Performance Analysis", type: "PDF", date: "Jan 15, 2025" },
-      { title: "Certificate", type: "PDF", date: "Jan 30, 2025" },
-    )
-  }
-  return resources
+interface ApiResponse {
+    resources: Resource[];
+    subjectName?: string;
+    categoryTitle?: string;
+    unitName?: string;
 }
 
-// *** ADJUSTED UnitPage Component ***
 export default async function UnitPage({ params }: { params: { category: string; subject: string; unit: string } }) {
-  // Get category, ENCODED subject, and unit from params
-  const { category, unit } = params;
-  const encodedSubject = params.subject; // e.g., "P%26S"
+  // 1. Await and Decode Params
+  const resolvedParams = await params;
+  const { category, unit } = resolvedParams;
+  const encodedSubject = resolvedParams.subject;
 
-  // DECODE the subject to get the original key ("P&S", "OS", etc.)
-   let subject: string;
-   try {
-      subject = decodeURIComponent(encodedSubject);
-   } catch (error) {
-       console.error("Failed to decode subject parameter:", encodedSubject, error);
-       notFound(); // Handle potential decoding errors
-   }
-
-  // Parse unit index
-  const unitIndex = Number.parseInt(unit) - 1;
-
-  // --- Data Validation using DECODED subject ---
-
-  // Check if the category exists
-  if (!resourceData[category as keyof typeof resourceData]) {
-    console.error(`Category not found: ${category}`);
-    notFound();
-  }
-  const categoryData = resourceData[category as keyof typeof resourceData];
-
-  // Check if the subject exists using the DECODED key
-  if (!categoryData.subjects[subject as keyof typeof categoryData.subjects]) {
-     console.error(`Subject not found in category ${category}: ${subject} (decoded from ${encodedSubject})`);
-     notFound();
-  }
-  const subjectData = categoryData.subjects[subject as keyof typeof categoryData.subjects];
-
-  // Check if the unit exists
-  if (unitIndex < 0 || unitIndex >= subjectData.units.length) {
-    console.error(`Unit index out of bounds: ${unitIndex + 1} for subject ${subject}`);
-    notFound();
+  let subject = '';
+  try {
+     subject = decodeURIComponent(encodedSubject);
+  } catch (error) {
+      console.error("UnitPage: Failed to decode subject parameter:", encodedSubject, error);
+      notFound();
   }
 
-  // --- Get Data ---
-  const unitName = subjectData.units[unitIndex];
-  // Pass DECODED subject to mock resource generator
-  const resources = generateMockResources(category, subject, unitIndex);
+  const unitNumber = Number.parseInt(unit);
+  if (isNaN(unitNumber) || unitNumber <= 0) {
+      console.error(`UnitPage: Invalid unit number: ${unit}`);
+      notFound();
+  }
 
+  // 2. Fetch Data from API
+  let resources: Resource[] = [];
+  let fetchError: string | null = null;
+  let displayCategoryTitle = category.charAt(0).toUpperCase() + category.slice(1);
+  let displaySubjectName = subject; // Default - recommend improving API to return this
+  let displayUnitName = `Unit ${unitNumber}`;
+
+  try {
+    // *** FIX: Construct Absolute URL ***
+    const baseUrl = process.env.APP_URL || `http://localhost:${process.env.PORT || 3000}`; // Get base URL from env var
+    const relativeUrl = `/api/resources?category=${category}&subject=${encodedSubject}&unit=${unit}`;
+    const apiUrl = new URL(relativeUrl, baseUrl); // Create full URL object
+
+    console.log(`UnitPage: Fetching ${apiUrl.toString()}`);
+    // Consider caching: remove/adjust `cache: 'no-store'` for production
+    const response = await fetch(apiUrl.toString(), { cache: 'no-store' }); // Fetch using the absolute URL string
+
+    if (!response.ok) {
+       fetchError = `Failed to load resources. Status: ${response.status}`;
+       console.error(`UnitPage: API Error (${response.status}) for ${apiUrl.toString()}: ${await response.text()}`);
+    } else {
+        // Try parsing JSON and check structure
+        const data: ApiResponse | Resource[] = await response.json(); // Expect API response or just array
+
+        if (data && typeof data === 'object' && 'resources' in data && Array.isArray(data.resources)) {
+             // Handle enhanced API response { resources: [], subjectName: "..." }
+             resources = data.resources;
+             displaySubjectName = data.subjectName || displaySubjectName;
+             displayCategoryTitle = data.categoryTitle || displayCategoryTitle;
+             displayUnitName = data.unitName || displayUnitName;
+        } else if (Array.isArray(data)) {
+            // Handle simple API response: Resource[]
+            resources = data;
+             console.warn("UnitPage: API only returned resource array. Consider updating API to include names.");
+        } else {
+             fetchError = "Received invalid data format from API.";
+             console.error(`UnitPage: Invalid data format received from ${apiUrl.toString()}:`, data);
+             resources = []; // Ensure resources is an array even on format error
+        }
+    }
+  } catch (error: any) {
+      console.error(`UnitPage: Failed to fetch resources from ${encodedSubject}/${unit}:`, error);
+      // Check for the specific URL parsing error as well
+      if (error instanceof TypeError && error.message.includes('Invalid URL')) {
+          fetchError = "Internal application configuration error (URL)."
+      } else {
+          fetchError = "An error occurred while loading resources.";
+      }
+  }
+
+  // 3. Render Page (No changes needed in the JSX structure below)
   return (
     <div className="space-y-6">
-      {/* --- Breadcrumbs --- */}
       <div className="space-y-2">
+        {/* --- Breadcrumbs --- */}
         <div className="flex flex-wrap items-center gap-2 pt-10 text-sm text-muted-foreground">
-          <Link href="/resources" className="hover:text-foreground">
-            Resources
-          </Link>
+          <Link href="/resources" className="hover:text-foreground">Resources</Link>
           <ChevronRight className="h-4 w-4" />
-          {/* Link to category page */}
-          <Link href={`/resources/${category}`} className="hover:text-foreground">
-            {categoryData.title}
-          </Link>
+          <Link href={`/resources/${category}`} className="hover:text-foreground">{displayCategoryTitle}</Link>
           <ChevronRight className="h-4 w-4" />
-          {/* Link to subject page *must* use the ENCODED subject */}
-          <Link href={`/resources/${category}/${encodedSubject}`} className="hover:text-foreground">
-            {subjectData.name} {/* Display DECODED name */}
-          </Link>
+          <Link href={`/resources/${category}/${encodedSubject}`} className="hover:text-foreground">{displaySubjectName}</Link>
           <ChevronRight className="h-4 w-4" />
-          {/* Display unit number */}
-          <span>Unit {Number.parseInt(unit)}</span>
+          <span>{displayUnitName}</span>
         </div>
 
         {/* --- Page Title and Description --- */}
-        {/* Use DECODED subject name for display */}
-        <h1 className="text-3xl font-bold tracking-tight">{unitName}</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{displayUnitName}</h1>
         <p className="text-muted-foreground">
-          {subjectData.name} {categoryData.title} for Unit {Number.parseInt(unit)}
+          {displaySubjectName} {displayCategoryTitle} for {displayUnitName}
         </p>
       </div>
 
@@ -165,45 +118,57 @@ export default async function UnitPage({ params }: { params: { category: string;
       <Card>
         <CardHeader>
           <CardTitle>Available Resources</CardTitle>
-          <CardDescription>All materials for {unitName}</CardDescription>
+          <CardDescription>All materials for {displayUnitName}</CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Display Error Message if Fetch Failed */}
+          {fetchError && (
+             <Alert variant="destructive" className="mb-4">
+               <AlertCircle className="h-4 w-4" />
+               <AlertTitle>Error</AlertTitle>
+               <AlertDescription>{fetchError}</AlertDescription>
+             </Alert>
+          )}
+
+          {/* Display Resource List or "No resources" message */}
           <div className="space-y-4">
-            {resources.map((resource, index) => (
-              <div
-                key={index}
-                className="flex flex-col sm:flex-row sm:items-center sm:justify-between rounded-lg border p-4 transition-all-smooth hover:shadow-md hover:border-primary"
-              >
-                {/* Resource details (no changes needed here) */}
-                <div className="flex items-center gap-3 mb-3 sm:mb-0">
-                  <FileText className="h-5 w-5 text-primary" />
-                  <div>
-                    <h3 className="font-medium">{resource.title}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {resource.type} • {resource.date}
-                    </p>
+            {!fetchError && resources.length > 0 ? (
+              resources.map((resource) => (
+                <div key={resource.url || resource.name} className="flex flex-col sm:flex-row sm:items-center sm:justify-between rounded-lg border p-4 transition-all-smooth hover:shadow-md hover:border-primary">
+                  <div className="flex items-center gap-3 mb-3 sm:mb-0">
+                    <FileText className="h-5 w-5 text-primary" />
+                    <div>
+                      <h3 className="font-medium">{resource.name}</h3>
+                      {resource.description && <p className="text-sm">{resource.description}</p>}
+                      <p className="text-sm text-muted-foreground">
+                        {resource.type} • {resource.date}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                     {resource.url && resource.url !== '#' && (
+                       <>
+                         <a href={resource.url} download={resource.name}>
+                           <Button variant="outline" size="sm" className="transition-all hover:bg-primary hover:text-white">
+                             <Download className="mr-2 h-4 w-4" /> Download
+                           </Button>
+                         </a>
+                         <a href={resource.url} target="_blank" rel="noopener noreferrer">
+                           <Button variant="outline" size="sm" className="transition-all hover:bg-primary hover:text-white">
+                             <ExternalLink className="mr-2 h-4 w-4" /> View
+                           </Button>
+                         </a>
+                       </>
+                     )}
                   </div>
                 </div>
-                {/* Action Buttons (no changes needed here unless links depend on subject/category names) */}
-                <div className="flex gap-2">
-                    <a href={resource.url}> {/* Assumes resource.url is absolute or correctly relative */}
-                        <Button variant="outline" size="sm" className="transition-all hover:bg-primary hover:text-white">
-                        <Download className="mr-2 h-4 w-4" />
-                        Download
-                        </Button>
-                    </a>
-                    {/* If the "View" button constructed a URL, it might need encodedSubject */}
-                    <Button variant="outline" size="sm" className="transition-all hover:bg-primary hover:text-white">
-                        <ExternalLink className="mr-2 h-4 w-4" />
-                        View
-                    </Button>
-                </div>
-
-              </div>
-            ))}
+              ))
+            ) : (
+              !fetchError && <p className="text-muted-foreground">No resources available for this unit.</p>
+            )}
           </div>
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
