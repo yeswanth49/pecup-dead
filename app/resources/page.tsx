@@ -16,7 +16,7 @@ export default function ResourcesPage() {
     },
     {
       name: "Assignments",
-      description: "Homework and practice problems",
+      description: "Assignment questions all batches",
       icon: BookOpen,
       path: "/resources/assignments",
       color: "bg-primary/10",
@@ -24,7 +24,7 @@ export default function ResourcesPage() {
     },
     {
       name: "Papers",
-      description: "Research papers and publications",
+      description: "mid-1, mid-2, previous year papers",
       icon: FileCheck,
       path: "/resources/papers",
       color: "bg-primary/10",
@@ -32,7 +32,7 @@ export default function ResourcesPage() {
     },
     {
       name: "Records",
-      description: "Academic records and transcripts",
+      description: "records and manuals for specific weeks",
       icon: Database,
       path: "/resources/records",
       color: "bg-primary/10",
@@ -75,22 +75,22 @@ export default function ResourcesPage() {
           <ul className="space-y-2">
             <li className="flex items-center gap-2 rounded-md p-2 hover:bg-muted transition-all duration-200">
               <FileText className="h-4 w-4 text-primary" />
-              <span><a href="">Syllabus</a></span>
+              <span><a href="https://drive.google.com/file/d/1Eb7b2CQld4TMW9PuMEwOuqv3FRVWKpVe/view?usp=sharing">Syllabus</a></span>
               <span className="ml-auto text-xs text-muted-foreground">16 April 2025</span>
             </li>
             <li className="flex items-center gap-2 rounded-md p-2 hover:bg-muted transition-all duration-200">
               <BookOpen className="h-4 w-4 text-primary" />
-              <span><a href="">Mid-1 Timetable</a></span>
+              <span><a href="https://drive.google.com/file/d/1uvZncVUjhuw-AxKh3BecklX2pMTBjSdy/view">Mid-1 Timetable</a></span>
               <span className="ml-auto text-xs text-muted-foreground">16 April 2025</span>
             </li>
             <li className="flex items-center gap-2 rounded-md p-2 hover:bg-muted transition-all duration-200">
               <FileCheck className="h-4 w-4 text-primary" />
-              <span><a href="">Mid-2 Timetable</a></span>
+              <span><a href="https://drive.google.com/file/d/1X3ISvYPKOz_woK2aDXsWAQ4MiMu6tYvh/view">Mid-2 Timetable</a></span>
               <span className="ml-auto text-xs text-muted-foreground">16 April 2025</span>
             </li>
             <li className="flex items-center gap-2 rounded-md p-2 hover:bg-muted transition-all duration-200">
               <FileCheck className="h-4 w-4 text-primary" />
-              <span><a href="">Sem Timetable</a></span>
+              <span><a href="https://drive.google.com/file/d/1X6AQVCnm3ieDnLKZ5fwrZUVk4wRo2Qn_/view">Sem Timetable</a></span>
               <span className="ml-auto text-xs text-muted-foreground">16 April 2025</span>
             </li>
           </ul>

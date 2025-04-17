@@ -13,17 +13,17 @@ const resourceData = {
   },
   assignments: {
     title: "Assignments",
-    description: "Homework and practice problems",
+    description: "Assignment questions all batches",
     subjects: ["p&s", "dbms", "mefa", "os", "SE"],
   },
   papers: {
     title: "Papers",
-    description: "Research papers and publications",
+    description: "mid-1, mid-2, previous year papers",
     subjects: ["p&s", "dbms", "mefa", "os", "SE"],
   },
   records: {
     title: "Records",
-    description: "Academic records and transcripts",
+    description: "records and manuals for specific weeks",
     subjects: ["fds", "dbms", "os", "dti"], 
   },
 }
