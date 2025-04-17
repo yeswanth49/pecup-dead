@@ -1,4 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import ChatBubble from '@/components/ChatBubble'
 import { Mail, Phone, Sparkle, Clock, MessageCircle, IceCreamCone, SquareUserRound } from "lucide-react";
 
 export default function ContactPage() {
@@ -129,6 +130,7 @@ export default function ContactPage() {
           </CardContent>
         </Card>
       </div>
+      <ChatBubble href="https://chat.pecup.in" />
     </div>
   );
 }

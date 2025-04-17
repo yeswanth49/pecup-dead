@@ -1,97 +1,159 @@
+// app/resources/[category]/[subject]/page.tsx
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { Header } from '@/components/Header'
+import ChatBubble from '@/components/ChatBubble'
 import { ChevronRight, FileText } from "lucide-react"
 
-// Define the categories and their subjects (Ensure keys like "P&S", "DTA" are consistent)
+// 1) Your data – no changes here
 const resourceData = {
   notes: {
     title: "Notes",
     subjects: {
-      "p&s": { name: "P&S", units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"] },
-      "dbms": { name: "DBMS", units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"] },
-      "mefa": { name: "MEFA", units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"] },
-      "os": { name: "OS", units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"] },
-      "se": { name: "SE", units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"] },
+      "p&s": {
+        name: "P&S",
+        units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"],
+      },
+      dbms: {
+        name: "DBMS",
+        units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"],
+      },
+      mefa: {
+        name: "MEFA",
+        units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"],
+      },
+      os: {
+        name: "OS",
+        units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"],
+      },
+      se: {
+        name: "SE",
+        units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"],
+      },
     },
   },
   assignments: {
     title: "Assignments",
     subjects: {
-      "p&s": { name: "P&S", units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"] },
-      "dbms": { name: "DBMS", units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"] },
-      "mefa": { name: "MEFA", units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"] },
-      "os": { name: "OS", units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"] },
-      "se": { name: "SE", units: ["Assignment 1", "Assignment 2", "Assignment 3", "Assignment 4", "Assignment 5"] },
+      "p&s": {
+        name: "P&S",
+        units: [
+          "Assignment 1",
+          "Assignment 2",
+          "Assignment 3",
+          "Assignment 4",
+          "Assignment 5",
+        ],
+      },
+      dbms: {
+        name: "DBMS",
+        units: [
+          "Assignment 1",
+          "Assignment 2",
+          "Assignment 3",
+          "Assignment 4",
+          "Assignment 5",
+        ],
+      },
+      mefa: {
+        name: "MEFA",
+        units: [
+          "Assignment 1",
+          "Assignment 2",
+          "Assignment 3",
+          "Assignment 4",
+          "Assignment 5",
+        ],
+      },
+      os: {
+        name: "OS",
+        units: [
+          "Assignment 1",
+          "Assignment 2",
+          "Assignment 3",
+          "Assignment 4",
+          "Assignment 5",
+        ],
+      },
+      se: {
+        name: "SE",
+        units: [
+          "Assignment 1",
+          "Assignment 2",
+          "Assignment 3",
+          "Assignment 4",
+          "Assignment 5",
+        ],
+      },
     },
   },
   papers: {
     title: "Papers",
     subjects: {
       "p&s": { name: "P&S", units: ["Mid-1", "Mid-2", "Sem"] },
-      "dbms": { name: "DBMS", units: ["Mid-1", "Mid-2", "Sem"] },
-      "mefa": { name: "MEFA", units: ["Mid-1", "Mid-2", "Sem"] },
-      "os": { name: "OS", units: ["Mid-1", "Mid-2", "Sem"] },
-      "se": { name: "SE", units: ["Mid-1", "Mid-2", "Sem"] },
+      dbms: { name: "DBMS", units: ["Mid-1", "Mid-2", "Sem"] },
+      mefa: { name: "MEFA", units: ["Mid-1", "Mid-2", "Sem"] },
+      os: { name: "OS", units: ["Mid-1", "Mid-2", "Sem"] },
+      se: { name: "SE", units: ["Mid-1", "Mid-2", "Sem"] },
     },
   },
   records: {
     title: "Records",
     subjects: {
-      "fds": { name: "FDS", units: ["Week 1", "Week 2", "Week 3"] },
-      "dbms": { name: "DBMS", units: ["Week 1", "Week 2", "Week 3"] },
-      "os": { name: "OS", units: ["Week 1", "Week 2", "Week 3"] },
-      "dta": { name: "DTA", units: ["Week 1", "Week 2", "Week 3"] },
+      fds: { name: "FDS", units: ["Week 1", "Week 2", "Week 3"] },
+      dbms: { name: "DBMS", units: ["Week 1", "Week 2", "Week 3"] },
+      os: { name: "OS", units: ["Week 1", "Week 2", "Week 3"] },
+      dta: { name: "DTA", units: ["Week 1", "Week 2", "Week 3"] },
     },
   },
 }
 
+// 2) Statically generate all (category, subject) paths
 export async function generateStaticParams() {
-  const params = []
+  const params: { category: string; subject: string }[] = []
+
   for (const category of Object.keys(resourceData)) {
-    const subjectKeys = Object.keys(resourceData[category].subjects)
-    for (const subjectKey of subjectKeys) {
+    for (const subjectKey of Object.keys(
+      resourceData[category as keyof typeof resourceData].subjects
+    )) {
       params.push({
         category,
-        subject: encodeURIComponent(subjectKey)
+        subject: encodeURIComponent(subjectKey),
       })
     }
   }
+
   return params
 }
 
-export default async function SubjectPage({ params }: { params: { category: string; subject: string } }) {
+// 3) The page component
+export default async function SubjectPage({
+  params,
+}: {
+  params: { category: string; subject: string }
+}) {
+  const { category } = params
+  let decodedSubject: string
 
-  const resolvedParams = await params;
-
-  const { category } = resolvedParams;
-  const encodedSubject = resolvedParams.subject; 
-
-  let subject: string;
+  // decode & validate
   try {
-     subject = decodeURIComponent(encodedSubject); 
-  } catch (error) {
-      console.error("Failed to decode subject parameter:", encodedSubject, error);
-      notFound();
+    decodedSubject = decodeURIComponent(params.subject)
+  } catch {
+    return notFound()
   }
 
+  const categoryData = resourceData[category as keyof typeof resourceData]
+  if (!categoryData) return notFound()
 
-  if (!resourceData[category as keyof typeof resourceData]) {
-    console.error(`Category not found: ${category}`);
-    notFound();
-  }
-  const categoryData = resourceData[category as keyof typeof resourceData];
-
-  if (!categoryData.subjects[subject as keyof typeof categoryData.subjects]) {
-    console.error(`Subject not found in category ${category}: ${subject} (decoded from ${encodedSubject})`);
-    notFound();
-  }
-
-  const subjectData = categoryData.subjects[subject as keyof typeof categoryData.subjects];
+  const subjectData =
+    categoryData.subjects[decodedSubject as keyof typeof categoryData.subjects]
+  if (!subjectData) return notFound()
 
   return (
     <div className="space-y-6">
       <div className="space-y-2">
+      <Header/>
         <div className="flex items-center pt-10 gap-2 text-sm text-muted-foreground">
           <Link href="/resources" className="hover:text-foreground">
             Resources
@@ -103,6 +165,7 @@ export default async function SubjectPage({ params }: { params: { category: stri
           <ChevronRight className="h-4 w-4" />
           <span>{subjectData.name}</span>
         </div>
+
         <h1 className="text-3xl font-bold tracking-tight">
           {subjectData.name} {categoryData.title}
         </h1>
@@ -113,22 +176,31 @@ export default async function SubjectPage({ params }: { params: { category: stri
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {subjectData.units.map((unit, index) => (
-          <Link key={unit} href={`/resources/${category}/${encodedSubject}/${index + 1}`} className="block">
+          <Link
+            key={unit}
+            href={`/resources/${category}/${params.subject}/${index + 1}`}
+            className="block"
+          >
             <Card className="h-full transition-all-smooth hover-lift">
               <CardHeader>
-                <CardTitle>
-                  {unit}
-                </CardTitle>
-                <CardDescription>Access {subject.toUpperCase()} {unit}</CardDescription>
+                <CardTitle>{unit}</CardTitle>
+                <CardDescription>
+                  Access {subjectData.name.toUpperCase()} {unit}
+                </CardDescription>
               </CardHeader>
+
               <CardContent className="flex items-center justify-between">
+                {/* ← THIS is where you can swap the left‑hand icon: */}
                 <FileText className="h-5 w-5 text-primary" />
+
+                {/* ← AND this is the chevron on the right: */}
                 <ChevronRight className="h-5 w-5 text-primary" />
               </CardContent>
             </Card>
           </Link>
         ))}
       </div>
+      <ChatBubble href="https://chat.pecup.in" />
     </div>
   )
 }

@@ -5,6 +5,8 @@ import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react" // Removed useMemo as grouping is now server-side
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Header } from '@/components/Header'
+import ChatBubble from '@/components/ChatBubble'
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link"
 import { BookOpen, Bell, Archive, Phone, AlertCircle, Loader2, Star, ExternalLink, FileText, Edit, FileQuestion } from "lucide-react"
@@ -117,7 +119,7 @@ export default function Home() {
   // --- Render authenticated user's dashboard ---
   return (
     <div className="space-y-8 p-4 md:p-6 lg:p-8">
-        <h1 className="text-2xl md:text-3xl pt-6 md:pt-10 font-bold">Welcome, {session?.user?.name || 'User'}</h1>
+        <Header/>
 
         {/* ... Top description and Navigation Cards ... (same as before) */}
          <div className="space-y-2">
@@ -154,7 +156,7 @@ export default function Home() {
                 <CardHeader>
                     <div className="flex items-center gap-2">
                         <Star className="h-6 w-6 text-yellow-600" />
-                        <CardTitle className="text-xl">Exam Prep Section</CardTitle>
+                        <CardTitle className="text-xl">Prime Section</CardTitle>
                     </div>
                      {/* Display which subjects triggered this */}
                     <CardDescription>
@@ -266,6 +268,7 @@ export default function Home() {
               </CardContent>
           </Card>
       </div>
+      <ChatBubble href="https://chat.pecup.in" />
     </div>
   );
 }

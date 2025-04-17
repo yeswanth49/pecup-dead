@@ -1,6 +1,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { Header } from '@/components/Header'
+import ChatBubble from '@/components/ChatBubble'
 import { ChevronRight } from "lucide-react"
 
 const resourceData = {
@@ -44,6 +46,7 @@ export default async function CategoryPage({ params }: { params: { category: str
   return (
     <div className="space-y-6">
       <div className="space-y-2">
+      <Header/>
         <div className="flex items-center pt-10 gap-2 text-sm text-muted-foreground">
           <Link href="/resources" className="hover:text-foreground">
             Resources
@@ -80,6 +83,7 @@ export default async function CategoryPage({ params }: { params: { category: str
           );
         })}
       </div>
+      <ChatBubble href="https://chat.pecup.in" />
     </div>
   )
 }

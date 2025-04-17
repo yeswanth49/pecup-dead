@@ -1,5 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
+import { Header } from '@/components/Header'
+import ChatBubble from '@/components/ChatBubble'
 import { FileText, BookOpen, FileCheck, Database } from "lucide-react"
 
 export default function ResourcesPage() {
@@ -41,6 +43,7 @@ export default function ResourcesPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
+      <Header/>
         <h1 className="text-3xl pt-10 font-bold tracking-tight">Resources</h1>
         <p className="text-muted-foreground">Access all educational materials organized by category</p>
       </div>
@@ -93,6 +96,7 @@ export default function ResourcesPage() {
           </ul>
         </CardContent>
       </Card>
+      <ChatBubble href="https://chat.pecup.in" />
     </div>
   )
 }
