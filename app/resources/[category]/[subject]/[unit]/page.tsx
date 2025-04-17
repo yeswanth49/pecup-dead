@@ -82,16 +82,10 @@ export default function UnitPage() {
       setSubjectName(decodedSubject)
       setUnitName(`Unit ${unitNum}`)
 
-      // build absolute URL
-      const base =
-        process.env.NEXT_PUBLIC_APP_URL ||
-        `http://localhost:${process.env.PORT ?? 3000}`
-      const apiUrl = new URL(
-        `/api/resources?category=${category}&subject=${encodeURIComponent(
-          decodedSubject
-        )}&unit=${unitNum}`,
-        base
-      ).toString()
+      // fetch from relative API route on the same origin
+      const apiUrl = `/api/resources?category=${category}&subject=${encodeURIComponent(
+        decodedSubject
+      )}&unit=${unitNum}`
 
       try {
         const res = await fetch(apiUrl, { cache: 'no-store' })
