@@ -11,7 +11,7 @@ const resourceData = {
   notes: {
     title: "Notes",
     subjects: {
-      "p&s": {
+      "ps": {
         name: "P&S",
         units: ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"],
       },
@@ -36,7 +36,7 @@ const resourceData = {
   assignments: {
     title: "Assignments",
     subjects: {
-      "p&s": {
+      "ps": {
         name: "P&S",
         units: [
           "Assignment 1",
@@ -91,7 +91,7 @@ const resourceData = {
   papers: {
     title: "Papers",
     subjects: {
-      "p&s": { name: "P&S", units: ["Mid-1", "Mid-2", "Sem"] },
+      ps: { name: "P&S", units: ["Mid-1", "Mid-2", "Sem"] },
       dbms: { name: "DBMS", units: ["Mid-1", "Mid-2", "Sem"] },
       mefa: { name: "MEFA", units: ["Mid-1", "Mid-2", "Sem"] },
       os: { name: "OS", units: ["Mid-1", "Mid-2", "Sem"] },

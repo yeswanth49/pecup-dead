@@ -9,17 +9,17 @@ const resourceData = {
   notes: {
     title: "Notes",
     description: "Lecture notes and study materials",
-    subjects: ["p&s", "dbms", "mefa", "os", "SE"],
+    subjects: ["ps", "dbms", "mefa", "os", "SE"],
   },
   assignments: {
     title: "Assignments",
     description: "Assignment questions all batches",
-    subjects: ["p&s", "dbms", "mefa", "os", "SE"],
+    subjects: ["ps", "dbms", "mefa", "os", "SE"],
   },
   papers: {
     title: "Papers",
     description: "mid-1, mid-2, previous year papers",
-    subjects: ["p&s", "dbms", "mefa", "os", "SE"],
+    subjects: ["ps", "dbms", "mefa", "os", "SE"],
   },
   records: {
     title: "Records",
