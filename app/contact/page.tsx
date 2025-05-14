@@ -22,10 +22,10 @@ export default function ContactPage() {
             <div className="flex items-start gap-3">
               <IceCreamCone className="mt-1 h-5 w-5 text-primary" />
               <div>
-                <h3 className="font-medium">Yeswanth Madasu</h3>
+                <h3 className="font-medium">Yeswanth Madasu.</h3>
                 <h3 className="text-muted-foreground h-10">CSE-B 2nd Year</h3>
                 <p className="text-sm text-muted-foreground"><a href="https://google.com">website</a></p>
-                <p className="text-sm text-muted-foreground"><a href="https://google.com">X</a></p>
+                <p className="text-sm text-muted-foreground"><a href="https://x.com">X</a></p>
                 <p className="text-sm text-muted-foreground"><a href="https://google.com">Github</a></p>
                 <p className="text-sm text-muted-foreground"><a href="https://google.com">Linkedin</a></p>
               </div>
