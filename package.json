@@ -39,6 +39,7 @@
     "@radix-ui/react-toggle": "^1.1.1",
     "@radix-ui/react-toggle-group": "^1.1.1",
     "@radix-ui/react-tooltip": "^1.1.6",
+    "@supabase/supabase-js": "^2.51.0",
     "@vercel/analytics": "^1.5.0",
     "@vercel/speed-insights": "^1.2.0",
     "ai": "^4.3.4",
@@ -48,7 +49,6 @@
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
     "date-fns": "4.1.0",
-    "dotenv": "^16.4.7",
     "embla-carousel-react": "8.5.1",
     "formidable": "^3.5.2",
     "googleapis": "^148.0.0",
@@ -58,6 +58,7 @@
     "next-auth": "^4.24.11",
     "next-pwa": "^5.6.0",
     "next-themes": "latest",
+    "pg": "^8.16.3",
     "react": "^19",
     "react-day-picker": "8.10.1",
     "react-dom": "^19",
@@ -73,10 +74,13 @@
   },
   "devDependencies": {
     "@types/node": "^22",
+    "@types/pg": "^8.15.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^16.4.7",
     "postcss": "^8",
     "tailwindcss": "^3.4.17",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
   }
 }
