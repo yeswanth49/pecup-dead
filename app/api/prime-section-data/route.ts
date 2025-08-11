@@ -100,6 +100,7 @@ export async function GET() {
             const { data: resourceData, error: resourceError } = await supabaseAdmin
                 .from('resources')
                 .select('*')
+                .is('deleted_at', null)
                 .in('subject', uniqueUpcomingSubjects)
                 .order('date', { ascending: false });
 

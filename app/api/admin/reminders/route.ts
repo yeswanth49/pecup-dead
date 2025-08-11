@@ -1,0 +1,69 @@
+import { NextResponse } from 'next/server'
+import { createSupabaseAdmin } from '@/lib/supabase'
+import { requireAdmin } from '@/lib/admin-auth'
+import { logAudit } from '@/lib/audit'
+
+export const runtime = 'nodejs'
+
+function toInt(value: unknown): number | null {
+  const n = Number.parseInt(String(value ?? ''), 10)
+  return Number.isFinite(n) ? n : null
+}
+
+export async function GET(request: Request) {
+  await requireAdmin('admin')
+  const supabase = createSupabaseAdmin()
+  const url = new URL(request.url)
+  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10))
+  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '20', 10)))
+  const sort = (url.searchParams.get('sort') || 'due_date') as 'due_date' | 'title' | 'created_at'
+  const order = (url.searchParams.get('order') || 'asc') as 'asc' | 'desc'
+  const from = (page - 1) * limit
+  const to = from + limit - 1
+  const status = url.searchParams.get('status')
+
+  let query = supabase
+    .from('reminders')
+    .select('id,title,due_date,description,icon_type,status,year,branch', { count: 'exact' })
+    .is('deleted_at', null)
+    .order(sort, { ascending: order === 'asc' })
+
+  if (status) query = query.eq('status', status)
+  const year = toInt(url.searchParams.get('year'))
+  if (year) query = query.eq('year', year)
+  const branch = url.searchParams.get('branch')
+  if (branch) query = query.eq('branch', branch)
+
+  const { data, error, count } = await query.range(from, to)
+  if (error) return NextResponse.json({ error: 'Failed to list reminders' }, { status: 500 })
+  return NextResponse.json({ data, meta: { page, limit, count, totalPages: count ? Math.ceil(count / limit) : 1, sort, order } })
+}
+
+export async function POST(request: Request) {
+  const admin = await requireAdmin('admin')
+  const supabase = createSupabaseAdmin()
+  try {
+    const body = await request.json()
+    const title = String(body.title || '')
+    const due_date = String(body.due_date || '')
+    if (!title || !due_date) return NextResponse.json({ error: 'title and due_date are required' }, { status: 400 })
+    const payload = {
+      title,
+      due_date,
+      description: body.description ? String(body.description) : null,
+      icon_type: body.icon_type ? String(body.icon_type) : null,
+      status: body.status ? String(body.status) : null,
+      year: body.year ? toInt(body.year) : null,
+      branch: body.branch || null,
+    }
+    const { data, error } = await supabase.from('reminders').insert(payload).select('id').single()
+    if (error) throw error
+    await logAudit({ actor_email: admin.email, actor_role: admin.role, action: 'create', entity: 'reminder', entity_id: data.id, after_data: payload })
+    return NextResponse.json({ id: data.id, ...payload })
+  } catch (err: any) {
+    await logAudit({ actor_email: admin.email, actor_role: admin.role, action: 'create', entity: 'reminder', success: false, message: err?.message })
+    return NextResponse.json({ error: 'Failed to create reminder' }, { status: 500 })
+  }
+}
+
+

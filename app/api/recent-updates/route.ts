@@ -19,16 +19,25 @@ export async function GET() {
         console.log(`API Route: /api/recent-updates called at ${new Date().toISOString()}`);
         
         // Query Supabase for recent updates
-        const { data: updates, error } = await supabaseAdmin
+        // Try with deleted_at filter; fallback if column doesn't exist (code 42703)
+        let updatesRes = await supabaseAdmin
+          .from('recent_updates')
+          .select('*')
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .limit(10)
+        if (updatesRes.error && updatesRes.error.code === '42703') {
+          updatesRes = await supabaseAdmin
             .from('recent_updates')
             .select('*')
             .order('created_at', { ascending: false })
-            .limit(10); // Limit to 10 most recent updates
-
-        if (error) {
-            console.error('API Error: Supabase query failed:', error);
-            return NextResponse.json({ error: 'Failed to load recent updates from database' }, { status: 500 });
+            .limit(10)
         }
+        if (updatesRes.error) {
+          console.error('API Error: Supabase query failed:', updatesRes.error)
+          return NextResponse.json({ error: 'Failed to load recent updates from database' }, { status: 500 })
+        }
+        const updates = updatesRes.data
 
         console.log(`API Route: Found ${updates?.length || 0} recent updates`);
 

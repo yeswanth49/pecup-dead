@@ -2,8 +2,14 @@
 
 import { useSession, signIn, signOut } from 'next-auth/react'
 import { useEffect, useState } from 'react'
-import ChatBubble from '@/components/ChatBubble'
-import ResourceUploadForm from '@/components/ResourceUploadForm'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Card } from '@/components/ui/card'
+import { ResourcesSection } from './_components/ResourcesSection'
+import { RemindersSection } from './_components/RemindersSection'
+import { RecentUpdatesSection } from './_components/RecentUpdatesSection'
+import { ExamsSection } from './_components/ExamsSection'
+import { SettingsSection } from './_components/SettingsSection'
+import { AdminsSection } from './_components/AdminsSection'
 
 // 1) Read & parse authorized emails from your env
 const authorizedEmails = (process.env.NEXT_PUBLIC_AUTHORIZED_EMAILS || '')
@@ -109,11 +115,38 @@ export default function DeveloperDashboardPage() {
           Welcome, {session.user?.name}! Manage resources below.
         </p>
       </div>
-      <Card className="max-w-2xl mx-auto">
-        <h2 className="text-xl font-semibold mb-4">Upload New Resource</h2>
-        <ResourceUploadForm />
-      </Card>
-      <ChatBubble href="https://chat.pecup.in" />
+      <Tabs defaultValue="resources" className="space-y-6">
+        <TabsList className="flex flex-wrap gap-2">
+          <TabsTrigger value="resources">Resources</TabsTrigger>
+          <TabsTrigger value="archive">Archive</TabsTrigger>
+          <TabsTrigger value="reminders">Reminders</TabsTrigger>
+          <TabsTrigger value="updates">Recent Updates</TabsTrigger>
+          <TabsTrigger value="exams">Exams</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+          <TabsTrigger value="admins">Admins</TabsTrigger>
+        </TabsList>
+        <TabsContent value="resources">
+          <Card className="p-4"><ResourcesSection /></Card>
+        </TabsContent>
+        <TabsContent value="archive">
+          <Card className="p-4"><ResourcesSection archivedOnly /></Card>
+        </TabsContent>
+        <TabsContent value="reminders">
+          <Card className="p-4"><RemindersSection /></Card>
+        </TabsContent>
+        <TabsContent value="updates">
+          <Card className="p-4"><RecentUpdatesSection /></Card>
+        </TabsContent>
+        <TabsContent value="exams">
+          <Card className="p-4"><ExamsSection /></Card>
+        </TabsContent>
+        <TabsContent value="settings">
+          <Card className="p-4"><SettingsSection /></Card>
+        </TabsContent>
+        <TabsContent value="admins">
+          <Card className="p-4"><AdminsSection /></Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

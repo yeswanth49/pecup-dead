@@ -28,6 +28,7 @@ export async function GET(request: Request) {
     let query = supabaseAdmin
       .from('reminders')
       .select('id,title,due_date,description,icon_type,status')
+      .is('deleted_at', null)
       .order('due_date', { ascending: true });
 
     if (status) {
