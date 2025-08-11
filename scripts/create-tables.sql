@@ -169,3 +169,36 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE exams ADD CONSTRAINT fk_exams_created_by FOREIGN KEY (created_by) REFERENCES admins(id) ON DELETE SET NULL;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Profiles table for user onboarding
+-- Enum branch_type already created above; reuse it here
+
+-- Table: profiles
+CREATE TABLE IF NOT EXISTS profiles (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email text NOT NULL UNIQUE,
+  name text NOT NULL,
+  year smallint NOT NULL CHECK (year BETWEEN 1 AND 4),
+  branch branch_type NOT NULL,
+  roll_number text NOT NULL UNIQUE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- updated_at trigger function (idempotent via CREATE OR REPLACE)
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for profiles.updated_at
+DROP TRIGGER IF EXISTS trg_profiles_updated_at ON profiles;
+CREATE TRIGGER trg_profiles_updated_at
+BEFORE UPDATE ON profiles
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- RLS enable (admin APIs will use service role)
+DO $$ BEGIN EXECUTE 'ALTER TABLE profiles ENABLE ROW LEVEL SECURITY'; EXCEPTION WHEN others THEN NULL; END $$;
