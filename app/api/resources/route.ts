@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { createSupabaseAdmin } from '@/lib/supabase';
+const supabaseAdmin = createSupabaseAdmin();
 
 // Define the Resource interface
 interface Resource {

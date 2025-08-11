@@ -3,7 +3,8 @@
 //        and fetches resources for ALL exams on that specific date.
 // Version: Handles multiple exams on the next day, Reduced Logging
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { createSupabaseAdmin } from '@/lib/supabase';
+const supabaseAdmin = createSupabaseAdmin();
 
 // Configuration
 const UPCOMING_EXAM_DAYS_THRESHOLD = 4; // Days from today to look ahead
@@ -46,10 +47,21 @@ export async function GET() {
     console.log(`API Route: /api/prime-section-data called at ${new Date().toISOString()}`);
     
     try {
-        // Fetch upcoming exams from Supabase
+        // Compute date range [today .. today + threshold] as YYYY-MM-DD
+        const todayLocal = new Date();
+        todayLocal.setHours(0, 0, 0, 0);
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const startDateStr = `${todayLocal.getFullYear()}-${pad(todayLocal.getMonth() + 1)}-${pad(todayLocal.getDate())}`;
+        const endLocal = new Date(todayLocal);
+        endLocal.setDate(endLocal.getDate() + UPCOMING_EXAM_DAYS_THRESHOLD);
+        const endDateStr = `${endLocal.getFullYear()}-${pad(endLocal.getMonth() + 1)}-${pad(endLocal.getDate())}`;
+
+        // Fetch upcoming exams from Supabase (DB-side filtering and selecting only needed columns)
         const { data: examData, error: examError } = await supabaseAdmin
             .from('exams')
-            .select('*')
+            .select('subject, exam_date')
+            .gte('exam_date', startDateStr)
+            .lte('exam_date', endDateStr)
             .order('exam_date', { ascending: true });
 
         if (examError) {
@@ -57,18 +69,10 @@ export async function GET() {
             return NextResponse.json({ error: 'Failed to load exam data' }, { status: 500 });
         }
 
-        // Filter for upcoming exams within the threshold
+        // Convert DB rows to response-friendly format (DB-side filtering makes client-side filtering unnecessary)
         const upcomingExamsData = (examData || [])
-            .filter(exam => {
-                const examDateStr = exam.exam_date;
-                if (!examDateStr) return false;
-                
-                // Convert date to YYYY-MM-DD format if needed
-                const dateStr = new Date(examDateStr).toISOString().split('T')[0];
-                return isDateWithinDays(dateStr, UPCOMING_EXAM_DAYS_THRESHOLD);
-            })
             .map(exam => ({
-                subject: exam.subject?.toLowerCase() || '',
+                subject: exam.subject || '',
                 examDate: new Date(exam.exam_date).toISOString().split('T')[0]
             }));
 
@@ -84,7 +88,7 @@ export async function GET() {
             
             // Get all exams on that earliest date
             examsToDisplay = upcomingExamsData.filter(exam => exam.examDate === earliestDate);
-            uniqueUpcomingSubjects = examsToDisplay.map(exam => exam.subject);
+            uniqueUpcomingSubjects = Array.from(new Set(examsToDisplay.map(exam => exam.subject))).filter(Boolean);
             
             console.log(`API Prime: Selected ${examsToDisplay.length} exams on the soonest date (${earliestDate}): ${uniqueUpcomingSubjects.join(', ')}`);
         }

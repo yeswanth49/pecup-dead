@@ -1,6 +1,7 @@
 // app/api/recent-updates/route.ts
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { createSupabaseAdmin } from '@/lib/supabase';
+const supabaseAdmin = createSupabaseAdmin();
 
 // Define the structure for a recent update item
 interface RecentUpdate {

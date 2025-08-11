@@ -1,6 +1,7 @@
 // app/api/reminders/route.ts
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { createSupabaseAdmin } from '@/lib/supabase';
+const supabaseAdmin = createSupabaseAdmin();
 
 // Define the structure for a reminder item
 interface Reminder {
@@ -16,13 +17,24 @@ export async function GET(request: Request) {
   console.log(`\nAPI Route (Reminders): Received request at ${new Date().toISOString()}`);
 
   try {
-    console.log(`API Route (Reminders): Querying Supabase for reminders...`);
-    
-    // Query Supabase for all reminders, optionally filter by status
-    const { data: reminders, error } = await supabaseAdmin
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get('status')?.trim() || null;
+
+    console.log(
+      `API Route (Reminders): Querying Supabase for reminders${status ? ` with status=${status}` : ''}...`
+    );
+
+    // Build Supabase query: select only the fields that are returned and optionally filter by status
+    let query = supabaseAdmin
       .from('reminders')
-      .select('*')
+      .select('id,title,due_date,description,icon_type,status')
       .order('due_date', { ascending: true });
+
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    const { data: reminders, error } = await query;
 
     if (error) {
       console.error('API Error (Reminders): Supabase query failed:', error);

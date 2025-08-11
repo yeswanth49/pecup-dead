@@ -5,7 +5,9 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../auth/[...nextauth]/route';
 import { google } from 'googleapis';
 import { Readable } from 'stream';
-import { supabaseAdmin } from '@/lib/supabase';
+import { createSupabaseAdmin } from '@/lib/supabase';
+const supabaseAdmin = createSupabaseAdmin();
+import { validateFile, getFileExtension } from '@/lib/file-validation';
 
 // Debug logging prefix
 const DEBUG_PREFIX = '[API DEBUG UploadResource]';
@@ -91,7 +93,7 @@ export async function POST(request: Request) {
     console.log(`${REQ_DEBUG_PREFIX} Authorization successful for user: ${authorizedUser.email}`);
   } catch (authError: any) {
     console.error(`${REQ_DEBUG_PREFIX} Error during authorization check:`, authError.message);
-    return NextResponse.json({ error: 'Internal server error during authorization.', details: authError.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error during authorization.' }, { status: 500 });
   }
 
   // Main Upload Logic
@@ -105,29 +107,70 @@ export async function POST(request: Request) {
     const description = formData.get('description') as string | null;
     const category = formData.get('category') as string | null;
     const subject = formData.get('subject') as string | null;
-    const unit = formData.get('unit') as string | null;
+    const unitRaw = formData.get('unit') as string | null;
     const resourceType = formData.get('resourceType') as string | null;
 
-    console.log(`${REQ_DEBUG_PREFIX} Extracted form data: title='${title}', description='${description}', category='${category}', subject='${subject}', unit='${unit}', resourceType='${resourceType}', file presence=${!!file}`);
+    console.log(`${REQ_DEBUG_PREFIX} Extracted form data: title='${title}', description='${description}', category='${category}', subject='${subject}', unitRaw='${unitRaw}', resourceType='${resourceType}', file presence=${!!file}`);
 
     // Input Validation
     if (!file) {
       console.error(`${REQ_DEBUG_PREFIX} Validation Error: Missing file.`);
       return NextResponse.json({ error: 'File is required.' }, { status: 400 });
     }
-    if (!title || !description || !category || !subject || !unit || !resourceType) {
+    if (!title || !description || !category || !subject || !resourceType) {
       console.error(`${REQ_DEBUG_PREFIX} Validation Error: Missing required form fields.`);
-      return NextResponse.json({ error: 'Missing required form fields (title, description, category, subject, unit, resourceType).' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing required form fields (title, description, category, subject, resourceType).' }, { status: 400 });
     }
 
+    // Validate unit specifically
+    if (unitRaw === null) {
+      console.error(`${REQ_DEBUG_PREFIX} Validation Error: Unit is required.`);
+      return NextResponse.json({ error: 'Unit is required.' }, { status: 400 });
+    }
+    const unitStr = String(unitRaw).trim();
+    if (unitStr === '') {
+      console.error(`${REQ_DEBUG_PREFIX} Validation Error: Unit cannot be empty.`);
+      return NextResponse.json({ error: 'Unit cannot be empty.' }, { status: 400 });
+    }
+    const parsedUnit = Number.parseInt(unitStr, 10);
+    if (!Number.isInteger(parsedUnit) || !Number.isFinite(parsedUnit) || parsedUnit < 0) {
+      console.error(`${REQ_DEBUG_PREFIX} Validation Error: Invalid unit value '${unitStr}'.`);
+      return NextResponse.json({ error: 'Invalid unit. Must be a non-negative integer.' }, { status: 400 });
+    }
+    const validatedUnit: number = parsedUnit;
+
     const originalFilename = file.name;
-    const mimeType = file.type;
-    const isPdf = mimeType === 'application/pdf' || originalFilename.toLowerCase().endsWith('.pdf');
-    
-    console.log(`${REQ_DEBUG_PREFIX} File details - Name: ${originalFilename}, Size: ${file.size}, Type: ${mimeType}, Is PDF: ${isPdf}`);
+    const clientProvidedMime = file.type;
+
+    // Read buffer early so we can validate content before any processing/storage
+    const fileBuffer: Buffer = Buffer.from(await file.arrayBuffer());
+
+    // Centralized whitelist validation (MIME, extension, and magic bytes)
+    const validation = validateFile(fileBuffer, originalFilename, clientProvidedMime);
+    if (!validation.ok) {
+      const ext = getFileExtension(originalFilename);
+      console.warn(
+        `${REQ_DEBUG_PREFIX} File rejected by whitelist. Name='${originalFilename}', Ext='${ext}', Client MIME='${clientProvidedMime}', Detected='${validation.detectedMime}', Reason='${validation.reason}'`
+      );
+      const status = 415; // Unsupported Media Type
+      return NextResponse.json(
+        { error: 'Unsupported file type.', reason: validation.reason },
+        { status }
+      );
+    }
+
+    const effectiveMime = (validation.detectedMime || clientProvidedMime || '').toLowerCase();
+    const isPdf = effectiveMime === 'application/pdf' || originalFilename.toLowerCase().endsWith('.pdf');
+
+    if (effectiveMime && clientProvidedMime && effectiveMime !== clientProvidedMime.toLowerCase()) {
+      console.warn(
+        `${REQ_DEBUG_PREFIX} MIME mismatch: client='${clientProvidedMime}' vs detected='${effectiveMime}' for '${originalFilename}'. Proceeding with detected.`
+      );
+    }
+
+    console.log(`${REQ_DEBUG_PREFIX} File details - Name: ${originalFilename}, Size: ${file.size}, Client MIME: ${clientProvidedMime}, Effective MIME: ${effectiveMime}, Is PDF: ${isPdf}`);
 
     let finalUrl = '';
-    let fileBuffer: Buffer;
 
     if (isPdf) {
       // Upload PDFs to Google Drive
@@ -141,7 +184,6 @@ export async function POST(request: Request) {
         throw new Error('Server configuration error: Drive folder ID missing.');
       }
 
-      fileBuffer = Buffer.from(await file.arrayBuffer());
       const fileReadableStream = Readable.from(fileBuffer);
 
       const driveFileMetadata = {
@@ -151,7 +193,7 @@ export async function POST(request: Request) {
       };
 
       const driveMedia = {
-        mimeType: mimeType,
+        mimeType: effectiveMime || 'application/pdf',
         body: fileReadableStream,
       };
 
@@ -177,7 +219,16 @@ export async function POST(request: Request) {
         });
         console.log(`${REQ_DEBUG_PREFIX} Google Drive file permissions set to public successfully.`);
       } catch (permError: any) {
-        console.warn(`${REQ_DEBUG_PREFIX} WARN: Failed to set public permissions for file ${driveFileId}.`, permError.message);
+        console.error(`${REQ_DEBUG_PREFIX} ERROR: Failed to set public permissions for file ${driveFileId}.`, permError?.message || permError);
+        // Attempt rollback: delete uploaded file so we do not leave inaccessible artifacts
+        try {
+          await drive.files.delete({ fileId: driveFileId });
+          console.error(`${REQ_DEBUG_PREFIX} Rolled back Google Drive upload due to permissions failure. Deleted file ${driveFileId}.`);
+        } catch (rollbackError: any) {
+          console.error(`${REQ_DEBUG_PREFIX} CRITICAL: Failed to delete uploaded file ${driveFileId} after permissions failure.`, rollbackError?.message || rollbackError);
+        }
+        // Treat as critical to avoid returning a link that won't be publicly accessible
+        throw new Error('Failed to set public permissions on uploaded file. Upload has been rolled back.');
       }
 
       console.log(`${REQ_DEBUG_PREFIX} PDF uploaded to Google Drive - ID: ${driveFileId}, Link: ${finalUrl}`);
@@ -185,13 +236,12 @@ export async function POST(request: Request) {
       // Upload non-PDFs to Supabase Storage
       console.log(`${REQ_DEBUG_PREFIX} Uploading non-PDF file to Supabase Storage...`);
       
-      fileBuffer = Buffer.from(await file.arrayBuffer());
       const fileName = `${Date.now()}-${originalFilename}`;
       
       const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
         .from('resources')
         .upload(fileName, fileBuffer, {
-          contentType: mimeType,
+          contentType: effectiveMime || undefined,
           duplex: 'half'
         });
 
@@ -217,7 +267,7 @@ export async function POST(request: Request) {
       .insert({
         category: category,
         subject: subject.toLowerCase(),
-        unit: parseInt(unit),
+        unit: validatedUnit,
         name: title,
         description: description,
         date: new Date().toISOString(),
