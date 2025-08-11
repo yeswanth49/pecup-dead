@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "seed:samples": "ts-node scripts/seed-sample-resources.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^1.2.10",

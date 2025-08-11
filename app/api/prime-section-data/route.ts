@@ -3,6 +3,8 @@
 //        and fetches resources for ALL exams on that specific date.
 // Version: Handles multiple exams on the next day, Reduced Logging
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { createSupabaseAdmin } from '@/lib/supabase';
 const supabaseAdmin = createSupabaseAdmin();
 
@@ -42,7 +44,7 @@ function isDateWithinDays(dateString: string, daysThreshold: number): boolean {
     return diffDays >= 0 && diffDays <= daysThreshold;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
     const startTime = Date.now();
     console.log(`API Route: /api/prime-section-data called at ${new Date().toISOString()}`);
     
@@ -56,13 +58,36 @@ export async function GET() {
         const startDateStr = startUtc.toISOString().slice(0, 10);
         const endDateStr = endUtc.toISOString().slice(0, 10);
 
-        // Fetch upcoming exams from Supabase (DB-side filtering and selecting only needed columns)
-        const { data: examData, error: examError } = await supabaseAdmin
+        // Determine context from query or profile
+        const url = new URL(request.url)
+        let yearParam = url.searchParams.get('year')
+        let branchParam = url.searchParams.get('branch')
+        if (!yearParam || !branchParam) {
+          const session = await getServerSession(authOptions)
+          const email = session?.user?.email?.toLowerCase()
+          if (email) {
+            const { data: profile } = await supabaseAdmin
+              .from('profiles')
+              .select('year,branch')
+              .eq('email', email)
+              .maybeSingle()
+            if (profile) {
+              yearParam = yearParam || String(profile.year)
+              branchParam = branchParam || String(profile.branch)
+            }
+          }
+        }
+
+        // Fetch upcoming exams from Supabase within user's context
+        let examQuery = supabaseAdmin
             .from('exams')
             .select('subject, exam_date')
             .gte('exam_date', startDateStr)
             .lte('exam_date', endDateStr)
             .order('exam_date', { ascending: true });
+        if (yearParam) examQuery = examQuery.eq('year', parseInt(yearParam, 10))
+        if (branchParam) examQuery = examQuery.eq('branch', branchParam)
+        const { data: examData, error: examError } = await examQuery
 
         if (examError) {
             console.error('API Error: Failed to fetch exams:', examError);
@@ -97,12 +122,15 @@ export async function GET() {
         let relevantResources: Resource[] = [];
         
         if (uniqueUpcomingSubjects.length > 0) {
-            const { data: resourceData, error: resourceError } = await supabaseAdmin
-                .from('resources')
-                .select('*')
-                .is('deleted_at', null)
-                .in('subject', uniqueUpcomingSubjects)
-                .order('date', { ascending: false });
+            let resourceQuery = supabaseAdmin
+              .from('resources')
+              .select('*')
+              .is('deleted_at', null)
+              .in('subject', uniqueUpcomingSubjects)
+              .order('date', { ascending: false });
+            if (yearParam) resourceQuery = resourceQuery.eq('year', parseInt(yearParam, 10))
+            if (branchParam) resourceQuery = resourceQuery.eq('branch', branchParam)
+            const { data: resourceData, error: resourceError } = await resourceQuery
 
             if (resourceError) {
                 console.error('API Error: Failed to fetch resources:', resourceError);

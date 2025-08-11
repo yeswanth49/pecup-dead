@@ -8,6 +8,13 @@ EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
 
+-- User roles enum (for profiles)
+DO $$ BEGIN
+  CREATE TYPE user_role AS ENUM ('student','admin','superadmin');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
 -- Branch enum (simple approach; alternatively use lookup table)
 DO $$ BEGIN
   CREATE TYPE branch_type AS ENUM ('CSE','AIML','DS','AI','ECE','EEE','MEC','CE');
@@ -132,9 +139,17 @@ CREATE INDEX IF NOT EXISTS idx_resources_subject ON resources(subject);
 CREATE INDEX IF NOT EXISTS idx_resources_unit ON resources(unit);
 CREATE INDEX IF NOT EXISTS idx_resources_date ON resources(date DESC);
 CREATE INDEX IF NOT EXISTS idx_resources_archived ON resources(archived);
+CREATE INDEX IF NOT EXISTS idx_resources_year ON resources(year);
+CREATE INDEX IF NOT EXISTS idx_resources_semester ON resources(semester);
+CREATE INDEX IF NOT EXISTS idx_resources_year_semester ON resources(year, semester);
+CREATE INDEX IF NOT EXISTS idx_resources_branch ON resources(branch);
+CREATE INDEX IF NOT EXISTS idx_resources_year_branch ON resources(year, branch);
 CREATE INDEX IF NOT EXISTS idx_reminders_due_date ON reminders(due_date);
+CREATE INDEX IF NOT EXISTS idx_reminders_year_branch ON reminders(year, branch);
 CREATE INDEX IF NOT EXISTS idx_recent_updates_created_at ON recent_updates(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_recent_updates_year_branch ON recent_updates(year, branch);
 CREATE INDEX IF NOT EXISTS idx_exams_exam_date ON exams(exam_date);
+CREATE INDEX IF NOT EXISTS idx_exams_year_branch ON exams(year, branch);
 
 -- RLS enable (admin APIs will use service role)
 DO $$ BEGIN EXECUTE 'ALTER TABLE admins ENABLE ROW LEVEL SECURITY'; EXCEPTION WHEN others THEN NULL; END $$;
@@ -181,6 +196,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   year smallint NOT NULL CHECK (year BETWEEN 1 AND 4),
   branch branch_type NOT NULL,
   roll_number text NOT NULL UNIQUE,
+  role user_role NOT NULL DEFAULT 'student',
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -202,3 +218,86 @@ FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- RLS enable (admin APIs will use service role)
 DO $$ BEGIN EXECUTE 'ALTER TABLE profiles ENABLE ROW LEVEL SECURITY'; EXCEPTION WHEN others THEN NULL; END $$;
+
+-- Scopes for admins to restrict which year+branch they can manage
+CREATE TABLE IF NOT EXISTS admin_scopes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_id uuid NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
+  year smallint NOT NULL CHECK (year BETWEEN 1 AND 4),
+  branch branch_type NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (admin_id, year, branch)
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_scopes_admin ON admin_scopes(admin_id);
+CREATE INDEX IF NOT EXISTS idx_admin_scopes_ctx ON admin_scopes(year, branch);
+
+-- Domain taxonomy for subjects/regulations/offerings/templates
+
+-- Regulations (e.g., 'R23')
+CREATE TABLE IF NOT EXISTS regulations (
+  code text PRIMARY KEY,
+  effective_year smallint,
+  notes text
+);
+
+-- Canonical subject catalog
+CREATE TABLE IF NOT EXISTS subjects (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  code text NOT NULL UNIQUE, -- lowercase key used in URLs/resources.subject
+  name text NOT NULL,
+  default_units smallint NOT NULL DEFAULT 5,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Offerings of a subject for a regulation/branch/year/semester
+CREATE TABLE IF NOT EXISTS subject_offerings (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  regulation text NOT NULL REFERENCES regulations(code) ON DELETE CASCADE,
+  branch branch_type NOT NULL,
+  year smallint NOT NULL CHECK (year BETWEEN 1 AND 4),
+  semester smallint NOT NULL CHECK (semester IN (1,2)),
+  subject_id uuid NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  display_order smallint,
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (regulation, branch, year, semester, subject_id)
+);
+
+-- Templates for Record unit names (e.g., Week 1..4) scoped by context
+CREATE TABLE IF NOT EXISTS record_templates (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  regulation text REFERENCES regulations(code) ON DELETE CASCADE,
+  branch branch_type,
+  subject_id uuid REFERENCES subjects(id) ON DELETE CASCADE,
+  year smallint,
+  semester smallint,
+  names text[] NOT NULL DEFAULT ARRAY['Week 1','Week 2','Week 3','Week 4'],
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (
+    COALESCE(regulation,''),
+    COALESCE((branch::text),'') ,
+    COALESCE((subject_id::text),''),
+    COALESCE((year::text),''),
+    COALESCE((semester::text),'')
+  )
+);
+
+-- Templates for Paper types (e.g., Mid-1, Mid-2, Sem, Prev)
+CREATE TABLE IF NOT EXISTS paper_templates (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  regulation text REFERENCES regulations(code) ON DELETE CASCADE,
+  subject_id uuid REFERENCES subjects(id) ON DELETE CASCADE,
+  names text[] NOT NULL DEFAULT ARRAY['Mid-1','Mid-2','Sem','Prev'],
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (COALESCE(regulation,''), COALESCE((subject_id::text),''))
+);
+
+-- Helpful indexes
+CREATE INDEX IF NOT EXISTS idx_subject_offerings_context
+  ON subject_offerings(regulation, branch, year, semester);
+CREATE INDEX IF NOT EXISTS idx_subjects_code ON subjects(code);

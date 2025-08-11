@@ -16,14 +16,17 @@ export function RemindersSection() {
   const [error, setError] = useState<string | null>(null)
   const [refreshIndex, setRefreshIndex] = useState(0)
   const [status, setStatus] = useState<string>('')
+  const [profile, setProfile] = useState<{ year?: number; branch?: string } | null>(null)
 
   const query = useMemo(() => {
     const p = new URLSearchParams()
     p.set('page', '1')
     p.set('limit', '50')
     if (status) p.set('status', status)
+    if (profile?.year) p.set('year', String(profile.year))
+    if (profile?.branch) p.set('branch', profile.branch as string)
     return p.toString()
-  }, [status])
+  }, [status, profile])
 
   async function load() {
     setLoading(true)
@@ -40,6 +43,17 @@ export function RemindersSection() {
     }
   }
   useEffect(() => { load() }, [query, refreshIndex])
+
+  useEffect(() => {
+    async function initProfile() {
+      try {
+        const res = await fetch('/api/profile', { cache: 'no-store' })
+        const json = await res.json().catch(() => ({}))
+        setProfile(json?.profile || null)
+      } catch {}
+    }
+    initProfile()
+  }, [])
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this reminder?')) return
@@ -102,18 +116,20 @@ function CreateReminderDialog({ onCreated }: { onCreated: () => void }) {
   const [title, setTitle] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [status, setStatus] = useState('')
+  const [year, setYear] = useState<number | ''>('')
+  const [branch, setBranch] = useState<string | ''>('')
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
     setError(null)
     try {
-      const res = await fetch('/api/admin/reminders', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title, due_date: dueDate, status }) })
+      const res = await fetch('/api/admin/reminders', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title, due_date: dueDate, status, year, branch }) })
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error || 'Failed to create')
       setOpen(false)
       onCreated()
-      setTitle(''); setDueDate(''); setStatus('')
+      setTitle(''); setDueDate(''); setStatus(''); setYear(''); setBranch('')
     } catch (e: any) {
       setError(e?.message || 'Failed to create')
     } finally {
@@ -143,6 +159,24 @@ function CreateReminderDialog({ onCreated }: { onCreated: () => void }) {
           <div>
             <Label>Status</Label>
             <Input value={status} onChange={(e) => setStatus(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Year</Label>
+              <Select value={year ? String(year) : 'none'} onValueChange={(v) => setYear(v === 'none' ? '' : Number(v))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {[1,2,3,4].map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Branch</Label>
+              <Input placeholder="e.g., CSE" value={branch} onChange={(e) => setBranch(e.target.value)} />
+            </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>

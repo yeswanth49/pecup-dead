@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { google } from 'googleapis'
 import { Readable } from 'stream'
 import { createSupabaseAdmin } from '@/lib/supabase'
@@ -53,6 +55,30 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     if (sanitized.subject) sanitized.subject = String(sanitized.subject).toLowerCase()
     if (sanitized.unit) sanitized.unit = Number.parseInt(String(sanitized.unit), 10)
     if (typeof sanitized.archived !== 'undefined') sanitized.archived = Boolean(sanitized.archived)
+
+    // Enforce scope for non-superadmin
+    try {
+      const session = await getServerSession(authOptions)
+      const email = session?.user?.email?.toLowerCase()
+      if (email) {
+        const { data: adminRow } = await supabase.from('admins').select('id,role').eq('email', email).maybeSingle()
+        if (adminRow && adminRow.role !== 'superadmin') {
+          const { data: scopes } = await supabase
+            .from('admin_scopes')
+            .select('year,branch')
+            .eq('admin_id', adminRow.id)
+          if (scopes && scopes.length > 0) {
+            const years = new Set(scopes.map((s: any) => s.year))
+            const branches = new Set(scopes.map((s: any) => s.branch))
+            const targetYear = 'year' in sanitized ? sanitized.year : before.year
+            const targetBranch = 'branch' in sanitized ? sanitized.branch : before.branch
+            if (!years.has(targetYear) || !branches.has(targetBranch)) {
+              return NextResponse.json({ error: 'Forbidden: outside your scope' }, { status: 403 })
+            }
+          }
+        }
+      }
+    } catch {}
 
     if (file) {
       // Replace flow: delete old first, then upload new
@@ -110,6 +136,21 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
   try {
     const { data: row } = await supabase.from('resources').select('*').eq('id', id).maybeSingle()
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    // Scope enforcement for non-superadmin
+    try {
+      const { data: adminRow } = await supabase.from('admins').select('id,role').eq('email', admin.email).maybeSingle()
+      if (adminRow && adminRow.role !== 'superadmin') {
+        const { data: scopes } = await supabase
+          .from('admin_scopes')
+          .select('year,branch')
+          .eq('admin_id', adminRow.id)
+        const allowed = scopes && scopes.some((s: any) => s.year === row.year && s.branch === row.branch)
+        if (!allowed) {
+          return NextResponse.json({ error: 'Forbidden: outside your scope' }, { status: 403 })
+        }
+      }
+    } catch {}
     let hardDeleted = false
     if (row.url) {
       try {

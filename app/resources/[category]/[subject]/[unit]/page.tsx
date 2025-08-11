@@ -38,6 +38,8 @@ export default function UnitPage() {
     subject?: string
     unit?: string
   }
+  const [year, setYear] = useState<string | undefined>(undefined)
+  const [semester, setSemester] = useState<string | undefined>(undefined)
 
   // Local state
   const [resources, setResources] = useState<Resource[]>([])
@@ -82,10 +84,20 @@ export default function UnitPage() {
       setSubjectName(decodedSubject)
       setUnitName(`Unit ${unitNum}`)
 
+      // read URL search params for year/semester
+      const currentUrl = new URL(window.location.href)
+      const qpYear = currentUrl.searchParams.get('year') || undefined
+      const qpSem = currentUrl.searchParams.get('semester') || undefined
+      setYear(qpYear || undefined)
+      setSemester(qpSem || undefined)
+
       // fetch from relative API route on the same origin
-      const apiUrl = `/api/resources?category=${category}&subject=${encodeURIComponent(
-        decodedSubject
-      )}&unit=${unitNum}`
+      const qs = new URLSearchParams({ category, subject: decodedSubject, unit: String(unitNum) })
+      if (qpYear) qs.set('year', qpYear)
+      if (qpSem) qs.set('semester', qpSem)
+      const qpBranch = currentUrl.searchParams.get('branch') || undefined
+      if (qpBranch) qs.set('branch', qpBranch)
+      const apiUrl = `/api/resources?${qs.toString()}`
 
       try {
         const res = await fetch(apiUrl, { cache: 'no-store' })
@@ -149,10 +161,13 @@ export default function UnitPage() {
             {subjectName.toUpperCase()}
           </Link>
           <ChevronRight className="h-4 w-4" />
-          <span>{unitName}</span>
+          <span>{unitName}{year ? ` • Year ${year}` : ''}{semester ? ` • Sem ${semester}` : ''}</span>
         </div>
         {/* Title */}
-        <h1 className="text-3xl font-bold tracking-tight">{unitName}</h1>
+        <div className="flex items-start justify-between">
+          <h1 className="text-3xl font-bold tracking-tight">{unitName}</h1>
+          <span className="text-sm text-muted-foreground">{year ? `${year} Year` : ''}{semester ? `${year ? ', ' : ''}${semester} Sem` : ''}</span>
+        </div>
         <p className="text-muted-foreground">
           {subjectName} {categoryTitle} for {unitName}
         </p>

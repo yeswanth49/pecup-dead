@@ -1,10 +1,43 @@
+"use client"
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import { Header } from '@/components/Header'
 import ChatBubble from '@/components/ChatBubble'
 import { FileText, BookOpen, FileCheck, Database } from "lucide-react"
 
+import { useEffect, useMemo, useState } from 'react'
+
 export default function ResourcesPage() {
+  const [year, setYear] = useState<number | 'all'>('all')
+  const [semester, setSemester] = useState<number | 'all'>('all')
+  const [branch, setBranch] = useState<string | ''>('')
+
+  useEffect(() => {
+    async function initFromProfile() {
+      try {
+        const res = await fetch('/api/profile', { cache: 'no-store' })
+        if (!res.ok) return
+        const json = await res.json()
+        const profile = json?.profile
+        if (!profile) return
+        if (year === 'all') setYear(profile.year as number)
+        const month = new Date().getMonth() // 0..11; > July => month >= 7 => Sem 2
+        if (semester === 'all') setSemester(month >= 7 ? 2 : 1)
+        if (!branch) setBranch(profile.branch as string)
+      } catch {}
+    }
+    initFromProfile()
+  }, [])
+
+  const query = useMemo(() => {
+    const p = new URLSearchParams()
+    if (year !== 'all') p.set('year', String(year))
+    if (semester !== 'all') p.set('semester', String(semester))
+    if (branch) p.set('branch', branch)
+    const s = p.toString()
+    return s ? `?${s}` : ''
+  }, [year, semester, branch])
   const categories = [
     {
       name: "Notes",
@@ -44,13 +77,16 @@ export default function ResourcesPage() {
     <div className="space-y-6">
       <div className="space-y-2">
       <Header/>
-        <h1 className="text-3xl pt-10 font-bold tracking-tight">Resources</h1>
+        <div className="flex items-start justify-between pt-10">
+          <h1 className="text-3xl font-bold tracking-tight">Resources</h1>
+          <span className="text-sm text-muted-foreground">{year !== 'all' ? `${year} Year` : 'All Years'}{semester !== 'all' ? `, ${semester} Sem` : ''}</span>
+        </div>
         <p className="text-muted-foreground">Access all educational materials organized by category</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {categories.map((category) => (
-          <Link key={category.name} href={category.path} className="block">
+          <Link key={category.name} href={`${category.path}${query}`} className="block">
             <Card className="h-full transition-all-smooth hover-lift">
               <CardHeader className={`rounded-t-lg ${category.color}`}>
                 <div className="flex items-center gap-3">

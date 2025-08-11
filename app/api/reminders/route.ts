@@ -1,5 +1,7 @@
 // app/api/reminders/route.ts
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { createSupabaseAdmin } from '@/lib/supabase';
 const supabaseAdmin = createSupabaseAdmin();
 
@@ -19,12 +21,31 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status')?.trim() || null;
+    let year = searchParams.get('year');
+    let branch = searchParams.get('branch');
 
     console.log(
       `API Route (Reminders): Querying Supabase for reminders${status ? ` with status=${status}` : ''}...`
     );
 
     // Build Supabase query: select only the fields that are returned and optionally filter by status
+    // Infer year/branch from profile if missing
+    if (!year || !branch) {
+      const session = await getServerSession(authOptions);
+      const email = session?.user?.email?.toLowerCase();
+      if (email) {
+        const { data: profile } = await supabaseAdmin
+          .from('profiles')
+          .select('year,branch')
+          .eq('email', email)
+          .maybeSingle();
+        if (profile) {
+          year = year || String(profile.year);
+          branch = branch || String(profile.branch);
+        }
+      }
+    }
+
     let query = supabaseAdmin
       .from('reminders')
       .select('id,title,due_date,description,icon_type,status')
@@ -34,6 +55,9 @@ export async function GET(request: Request) {
     if (status) {
       query = query.eq('status', status);
     }
+
+    if (year) query = query.eq('year', parseInt(year, 10));
+    if (branch) query = query.eq('branch', branch);
 
     const { data: reminders, error } = await query;
 

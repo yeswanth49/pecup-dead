@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { createSupabaseAdmin } from '@/lib/supabase'
 import { requireAdmin } from '@/lib/admin-auth'
 import { logAudit } from '@/lib/audit'
@@ -52,6 +54,19 @@ export async function POST(request: Request) {
       year: body.year ? toInt(body.year) : null,
       branch: body.branch || null,
     }
+    // Scope enforcement (non-superadmin)
+    try {
+      const { data: adminRow } = await supabase.from('admins').select('id,role').eq('email', admin.email).maybeSingle()
+      if (adminRow && adminRow.role !== 'superadmin') {
+        const { data: scopes } = await supabase
+          .from('admin_scopes')
+          .select('year,branch')
+          .eq('admin_id', adminRow.id)
+        const allowed = scopes && scopes.some((s: any) => s.year === payload.year && s.branch === payload.branch)
+        if (!allowed) return NextResponse.json({ error: 'Forbidden: outside your scope' }, { status: 403 })
+      }
+    } catch {}
+
     const { data, error } = await supabase.from('exams').insert(payload).select('id').single()
     if (error) throw error
     await logAudit({ actor_email: admin.email, actor_role: admin.role, action: 'create', entity: 'exam', entity_id: data.id, after_data: payload })

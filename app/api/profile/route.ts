@@ -10,6 +10,7 @@ interface ProfilePayload {
   year: number
   branch: BranchType
   roll_number: string
+  role?: 'student' | 'admin' | 'superadmin'
 }
 
 function validatePayload(body: any): { ok: true; data: ProfilePayload } | { ok: false; error: string } {
@@ -18,6 +19,7 @@ function validatePayload(body: any): { ok: true; data: ProfilePayload } | { ok: 
   const year = Number(body.year)
   const branch = body.branch as BranchType
   const rollNumber = (body.roll_number ?? '').trim()
+  const role = (body.role ?? 'student') as 'student' | 'admin' | 'superadmin'
 
   const validBranches: BranchType[] = ['CSE', 'AIML', 'DS', 'AI', 'ECE', 'EEE', 'MEC', 'CE']
   if (!name) return { ok: false, error: 'Name is required' }
@@ -25,7 +27,7 @@ function validatePayload(body: any): { ok: true; data: ProfilePayload } | { ok: 
   if (!validBranches.includes(branch)) return { ok: false, error: 'Invalid branch' }
   if (!rollNumber) return { ok: false, error: 'Roll number is required' }
 
-  return { ok: true, data: { name, year, branch, roll_number: rollNumber } }
+  return { ok: true, data: { name, year, branch, roll_number: rollNumber, role } }
 }
 
 export async function GET() {

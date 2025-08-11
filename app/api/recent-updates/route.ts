@@ -1,5 +1,7 @@
 // app/api/recent-updates/route.ts
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { createSupabaseAdmin } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
@@ -14,16 +16,43 @@ interface RecentUpdate {
     description?: string;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
         console.log(`API Route: /api/recent-updates called at ${new Date().toISOString()}`);
-        
+        const url = new URL(request.url)
+        let year = url.searchParams.get('year')
+        let branch = url.searchParams.get('branch')
+        // Infer from profile if missing
+        if (!year || !branch) {
+          const session = await getServerSession(authOptions)
+          const email = session?.user?.email?.toLowerCase()
+          if (email) {
+            const { data: profile } = await supabaseAdmin
+              .from('profiles')
+              .select('year,branch')
+              .eq('email', email)
+              .maybeSingle()
+            if (profile) {
+              year = year || String(profile.year)
+              branch = branch || String(profile.branch)
+            }
+          }
+        }
+
         // Query Supabase for recent updates
         // Try with deleted_at filter; fallback if column doesn't exist (code 42703)
         let updatesRes = await supabaseAdmin
           .from('recent_updates')
           .select('*')
           .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .limit(10)
+        if (year) updatesRes = await supabaseAdmin
+          .from('recent_updates')
+          .select('*')
+          .is('deleted_at', null)
+          .eq('year', parseInt(year, 10))
+          .eq('branch', branch as any)
           .order('created_at', { ascending: false })
           .limit(10)
         if (updatesRes.error && updatesRes.error.code === '42703') {

@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { google } from 'googleapis'
 import { Readable } from 'stream'
 import { createSupabaseAdmin } from '@/lib/supabase'
@@ -41,17 +43,51 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from('resources')
-    // Select only columns that exist in current DB schema
-    .select('id,name,category,subject,unit,type,date,is_pdf,url', { count: 'exact' })
+    .select('id,name,category,subject,unit,type,date,is_pdf,url,year,branch,archived,semester', { count: 'exact' })
     .order(sort, { ascending: order === 'asc' })
 
-  // Note: current DB schema has no archived/year/branch columns; ignore those filters safely
+  // Optional filters
   const subject = url.searchParams.get('subject')
   if (subject) query = query.ilike('subject', `%${subject}%`)
   const category = url.searchParams.get('category')
   if (category) query = query.eq('category', category)
   const unit = toInt(url.searchParams.get('unit'))
   if (unit !== null) query = query.eq('unit', unit)
+  const year = toInt(url.searchParams.get('year'))
+  if (year !== null) query = query.eq('year', year)
+  const semester = toInt(url.searchParams.get('semester'))
+  if (semester !== null) query = query.eq('semester', semester)
+  const branch = url.searchParams.get('branch')
+  if (branch) query = query.eq('branch', branch)
+  const archivedParam = url.searchParams.get('archived')
+  if (archivedParam === 'true') query = query.eq('archived', true)
+  if (archivedParam === 'false') query = query.eq('archived', false)
+
+  // Enforce admin scope: if admin_scopes exist for this user, limit results
+  try {
+    const session = await getServerSession(authOptions)
+    const email = session?.user?.email?.toLowerCase()
+    if (email) {
+      const { data: adminRow } = await supabase
+        .from('admins')
+        .select('id,role')
+        .eq('email', email)
+        .maybeSingle()
+      if (adminRow && adminRow.role !== 'superadmin') {
+        const { data: scopes } = await supabase
+          .from('admin_scopes')
+          .select('year,branch')
+          .eq('admin_id', adminRow.id)
+        if (scopes && scopes.length > 0) {
+          // If filters already set, they further narrow; otherwise apply in() clauses
+          const years = [...new Set(scopes.map((s: any) => s.year))]
+          const branches = [...new Set(scopes.map((s: any) => s.branch))]
+          if (year === null) query = query.in('year', years)
+          if (!branch) query = query.in('branch', branches)
+        }
+      }
+    }
+  } catch {}
 
   const { data, error, count } = await query.range(from, to)
   if (error) {
@@ -155,9 +191,28 @@ export async function POST(request: Request) {
       year: payload.year ? toInt(payload.year) : null,
       branch: payload.branch || null,
       archived: Boolean(payload.archived) || false,
+      semester: payload.semester ? toInt(payload.semester) : null,
       url: url!,
       is_pdf,
     }
+
+    // Enforce scope for non-superadmin: require year+branch be within admin_scopes
+    try {
+      const { data: adminRow } = await supabase.from('admins').select('id,role').eq('email', admin.email).maybeSingle()
+      if (adminRow && adminRow.role !== 'superadmin') {
+        const { data: scopes } = await supabase
+          .from('admin_scopes')
+          .select('year,branch')
+          .eq('admin_id', adminRow.id)
+        if (!scopes || scopes.length === 0) {
+          return NextResponse.json({ error: 'Forbidden: no scope assigned' }, { status: 403 })
+        }
+        const allowed = scopes.some((s: any) => s.year === insertPayload.year && s.branch === insertPayload.branch)
+        if (!allowed) {
+          return NextResponse.json({ error: 'Forbidden: outside your assigned year/branch' }, { status: 403 })
+        }
+      }
+    } catch {}
 
     const { data, error } = await supabase.from('resources').insert(insertPayload).select('id').single()
     if (error) throw error

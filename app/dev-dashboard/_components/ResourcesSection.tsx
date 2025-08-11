@@ -17,6 +17,7 @@ type Resource = {
   type?: string | null
   year?: number | null
   branch?: string | null
+  semester?: number | null
   date: string
   is_pdf: boolean
   url: string
@@ -31,7 +32,8 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
   const [error, setError] = useState<string | null>(null)
   const [refreshIndex, setRefreshIndex] = useState(0)
 
-  const [filters, setFilters] = useState<{ subject?: string; category?: string; unit?: number | null }>({})
+  const [filters, setFilters] = useState<{ subject?: string; category?: string; unit?: number | null; year?: number | null; semester?: number | null; branch?: string }>({})
+  const [profile, setProfile] = useState<{ year: number; branch: string } | null>(null)
 
   const query = useMemo(() => {
     const p = new URLSearchParams()
@@ -43,6 +45,9 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
     if (filters.subject) p.set('subject', filters.subject)
     if (filters.category) p.set('category', filters.category)
     if (filters.unit != null) p.set('unit', String(filters.unit))
+    if (filters.year != null) p.set('year', String(filters.year))
+    if (filters.semester != null) p.set('semester', String(filters.semester))
+    if (filters.branch) p.set('branch', filters.branch)
     return p.toString()
   }, [filters, archivedOnly])
 
@@ -63,6 +68,22 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
 
   useEffect(() => { load() }, [query, refreshIndex])
 
+  useEffect(() => {
+    // Prefill filters with admin's assigned scope if available
+    async function initProfile() {
+      try {
+        const res = await fetch('/api/profile', { cache: 'no-store' })
+        const json = await res.json().catch(() => ({}))
+        const p = json?.profile
+        if (p?.year && p?.branch) {
+          setProfile({ year: p.year, branch: p.branch })
+          setFilters((f) => ({ ...f, year: f.year ?? p.year, branch: f.branch || p.branch }))
+        }
+      } catch {}
+    }
+    initProfile()
+  }, [])
+
   async function handleDelete(id: string) {
     if (!confirm('Delete this resource?')) return
     const res = await fetch(`/api/admin/resources/${id}`, { method: 'DELETE' })
@@ -73,7 +94,7 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3 items-end">
-        {/* Year/Branch derived from profile; temporarily hardcoded (Year=3, Branch=CSE) */}
+        {/* Year/Branch derived from profile if present */}
         <div className="flex flex-col gap-1 min-w-[160px]">
           <Label>Category</Label>
           <Select value={filters.category || 'any'} onValueChange={(v) => setFilters((f) => ({ ...f, category: v === 'any' ? '' : v }))}>
@@ -107,9 +128,54 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
             </SelectContent>
           </Select>
         </div>
+        <div className="flex flex-col gap-1 min-w-[120px]">
+          <Label>Year</Label>
+          <Select value={filters.year != null ? String(filters.year) : 'all'} onValueChange={(v) => setFilters((f) => ({ ...f, year: v === 'all' ? null : Number(v) }))}>
+            <SelectTrigger>
+              <SelectValue placeholder="All" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              {[1,2,3,4].map((y) => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1 min-w-[140px]">
+          <Label>Semester</Label>
+          <Select value={filters.semester != null ? String(filters.semester) : 'all'} onValueChange={(v) => setFilters((f) => ({ ...f, semester: v === 'all' ? null : Number(v) }))}>
+            <SelectTrigger>
+              <SelectValue placeholder="All" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              {[1,2].map((s) => (
+                <SelectItem key={s} value={String(s)}>{s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1 min-w-[160px]">
+          <Label>Branch</Label>
+          <Select value={filters.branch || 'any'} onValueChange={(v) => setFilters((f) => ({ ...f, branch: v === 'any' ? '' : v }))}>
+            <SelectTrigger>
+              <SelectValue placeholder="Any" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="any">Any</SelectItem>
+              {BRANCHES.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="ml-auto flex gap-2">
           <Button variant="secondary" onClick={() => setRefreshIndex((i) => i + 1)} disabled={loading}>Refresh</Button>
-          <CreateResourceDialog onCreated={() => setRefreshIndex((i) => i + 1)} defaultArchived={archivedOnly} />
+          <CreateResourceDialog
+            onCreated={() => setRefreshIndex((i) => i + 1)}
+            defaultArchived={archivedOnly}
+            defaultYear={profile?.year}
+            defaultBranch={profile?.branch}
+          />
         </div>
       </div>
 
@@ -119,6 +185,7 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
           <TableHeader>
             <TableRow>
               <TableHead>Year</TableHead>
+              <TableHead>Sem</TableHead>
               <TableHead>Branch</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Subject</TableHead>
@@ -132,8 +199,9 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
           <TableBody>
             {items.map((r) => (
               <TableRow key={r.id}>
-                <TableCell>{3}</TableCell>
-                <TableCell>{'CSE'}</TableCell>
+                <TableCell>{r.year ?? '-'}</TableCell>
+                <TableCell>{r.semester ?? '-'}</TableCell>
+                <TableCell>{r.branch ?? '-'}</TableCell>
                 <TableCell>{r.category}</TableCell>
                 <TableCell>{r.subject}</TableCell>
                 <TableCell className="font-medium">{r.name}</TableCell>
@@ -160,7 +228,7 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
   )
 }
 
-function CreateResourceDialog({ onCreated, defaultArchived = false }: { onCreated: () => void; defaultArchived?: boolean }) {
+function CreateResourceDialog({ onCreated, defaultArchived = false, defaultYear, defaultBranch }: { onCreated: () => void; defaultArchived?: boolean; defaultYear?: number; defaultBranch?: string }) {
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -171,8 +239,9 @@ function CreateResourceDialog({ onCreated, defaultArchived = false }: { onCreate
   const [subject, setSubject] = useState('')
   const [unit, setUnit] = useState<number>(1)
   const [type, setType] = useState('')
-  const [year, setYear] = useState<number | ''>('')
-  const [branch, setBranch] = useState<string | ''>('')
+  const [year, setYear] = useState<number | ''>(defaultYear ?? '')
+  const [branch, setBranch] = useState<string | ''>(defaultBranch ?? '')
+  const [semester, setSemester] = useState<number | ''>('')
   const [file, setFile] = useState<File | null>(null)
 
   async function onSubmit(e: React.FormEvent) {
@@ -180,6 +249,9 @@ function CreateResourceDialog({ onCreated, defaultArchived = false }: { onCreate
     setSaving(true)
     setError(null)
     try {
+      if (!year || !branch) {
+        throw new Error('Year and Branch are required for uploads')
+      }
       const form = new FormData()
       form.set('name', name)
       form.set('description', description)
@@ -187,8 +259,9 @@ function CreateResourceDialog({ onCreated, defaultArchived = false }: { onCreate
       form.set('subject', subject)
       form.set('unit', String(unit))
       if (type) form.set('type', type)
-      if (year) form.set('year', String(year))
-      if (branch) form.set('branch', String(branch))
+      form.set('year', String(year))
+      if (semester) form.set('semester', String(semester))
+      form.set('branch', String(branch))
       if (defaultArchived) form.set('archived', 'true')
       if (file) form.set('file', file)
 
@@ -198,7 +271,7 @@ function CreateResourceDialog({ onCreated, defaultArchived = false }: { onCreate
       setOpen(false)
       onCreated()
       // reset
-      setName(''); setDescription(''); setCategory('notes'); setSubject(''); setUnit(1); setType(''); setYear(''); setBranch(''); setFile(null)
+      setName(''); setDescription(''); setCategory('notes'); setSubject(''); setUnit(1); setType(''); setYear(defaultYear ?? ''); setSemester(''); setBranch(defaultBranch ?? ''); setFile(null)
     } catch (e: any) {
       setError(e?.message || 'Failed to create')
     } finally {
@@ -251,6 +324,18 @@ function CreateResourceDialog({ onCreated, defaultArchived = false }: { onCreate
                 <SelectContent>
                   <SelectItem value="none">None</SelectItem>
                   {[1,2,3,4].map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Semester</Label>
+              <Select value={semester ? String(semester) : 'none'} onValueChange={(v) => setSemester(v === 'none' ? '' : Number(v))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {[1,2].map((s) => <SelectItem key={s} value={String(s)}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

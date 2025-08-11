@@ -3,8 +3,12 @@ import Link from "next/link"
 import { Header } from '@/components/Header'
 import ChatBubble from '@/components/ChatBubble'
 import { FileText, BookOpen, FileCheck, Database, ChevronRight } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useState } from 'react'
 
 export default function ArchivePage() {
+  const [year, setYear] = useState<number | 'all'>('all')
+  const [semester, setSemester] = useState<number | 'all'>('all')
   const categories = [
     {
       name: "Notes",
@@ -59,7 +63,10 @@ export default function ArchivePage() {
     <div className="space-y-6">
       <div className="space-y-2">
       <Header/>
-        <h1 className="text-3xl pt-10 font-bold tracking-tight">Archive</h1>
+        <div className="flex items-start justify-between pt-10">
+          <h1 className="text-3xl font-bold tracking-tight">Archive</h1>
+          <span className="text-sm text-muted-foreground">{year !== 'all' ? `${year} Year` : 'All Years'}{semester !== 'all' ? `, ${semester} Sem` : ''}</span>
+        </div>
         <p className="text-muted-foreground">Access previous semester materials and resources</p>
       </div>
 
@@ -87,6 +94,30 @@ export default function ArchivePage() {
           <CardDescription>Access archived materials by semester</CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="flex flex-wrap gap-3 mb-4">
+            <div className="min-w-[140px]">
+              <Select value={year === 'all' ? 'all' : String(year)} onValueChange={(v) => setYear(v === 'all' ? 'all' : Number(v))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Years</SelectItem>
+                  {[1,2,3,4].map((y) => <SelectItem key={y} value={String(y)}>Year {y}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="min-w-[160px]">
+              <Select value={semester === 'all' ? 'all' : String(semester)} onValueChange={(v) => setSemester(v === 'all' ? 'all' : Number(v))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Semester" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Semesters</SelectItem>
+                  {[1,2].map((s) => <SelectItem key={s} value={String(s)}>Semester {s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <div className="space-y-2">
             {semesters.map((semester) => (
               <Link key={semester.name} href={semester.path}>
