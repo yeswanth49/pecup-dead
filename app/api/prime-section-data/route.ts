@@ -47,14 +47,14 @@ export async function GET() {
     console.log(`API Route: /api/prime-section-data called at ${new Date().toISOString()}`);
     
     try {
-        // Compute date range [today .. today + threshold] as YYYY-MM-DD
-        const todayLocal = new Date();
-        todayLocal.setHours(0, 0, 0, 0);
-        const pad = (n: number) => String(n).padStart(2, '0');
-        const startDateStr = `${todayLocal.getFullYear()}-${pad(todayLocal.getMonth() + 1)}-${pad(todayLocal.getDate())}`;
-        const endLocal = new Date(todayLocal);
-        endLocal.setDate(endLocal.getDate() + UPCOMING_EXAM_DAYS_THRESHOLD);
-        const endDateStr = `${endLocal.getFullYear()}-${pad(endLocal.getMonth() + 1)}-${pad(endLocal.getDate())}`;
+        // Compute date range [today .. today + threshold] as YYYY-MM-DD (UTC, timezone-independent)
+        const startUtc = new Date();
+        startUtc.setUTCHours(0, 0, 0, 0);
+        const endUtc = new Date(startUtc);
+        endUtc.setUTCDate(endUtc.getUTCDate() + UPCOMING_EXAM_DAYS_THRESHOLD);
+
+        const startDateStr = startUtc.toISOString().slice(0, 10);
+        const endDateStr = endUtc.toISOString().slice(0, 10);
 
         // Fetch upcoming exams from Supabase (DB-side filtering and selecting only needed columns)
         const { data: examData, error: examError } = await supabaseAdmin

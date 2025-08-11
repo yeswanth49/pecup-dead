@@ -6,7 +6,7 @@ import { authOptions } from '../auth/[...nextauth]/route';
 import { google } from 'googleapis';
 import { Readable } from 'stream';
 import { createSupabaseAdmin } from '@/lib/supabase';
-const supabaseAdmin = createSupabaseAdmin();
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { validateFile, getFileExtension } from '@/lib/file-validation';
 
 // Debug logging prefix
@@ -18,6 +18,26 @@ const GOOGLE_DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID;
 const SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
 ];
+
+// Upload constraints
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25MB hard limit to avoid memory blowups
+
+// Lazy initializer for Supabase admin client (no module-scope side effects)
+let cachedSupabaseAdmin: SupabaseClient | null = null;
+async function getSupabaseAdmin(): Promise<SupabaseClient> {
+  if (cachedSupabaseAdmin) return cachedSupabaseAdmin;
+  try {
+    const client = createSupabaseAdmin();
+    if (!client || typeof (client as any).from !== 'function') {
+      throw new Error('Supabase admin client failed validation.');
+    }
+    cachedSupabaseAdmin = client;
+    return client;
+  } catch (err: any) {
+    console.error(`${DEBUG_PREFIX} Failed to initialize Supabase admin client:`, err?.message || err);
+    throw new Error('Server configuration error: Supabase admin initialization failed.');
+  }
+}
 
 async function getGoogleAuthClient() {
   const FN_DEBUG_PREFIX = `${DEBUG_PREFIX} [getGoogleAuthClient]`;
@@ -142,7 +162,16 @@ export async function POST(request: Request) {
     const originalFilename = file.name;
     const clientProvidedMime = file.type;
 
-    // Read buffer early so we can validate content before any processing/storage
+    // File size validation BEFORE reading into memory
+    const fileSizeBytes = (file as any).size as number | undefined;
+    if (typeof fileSizeBytes === 'number' && Number.isFinite(fileSizeBytes)) {
+      if (fileSizeBytes > MAX_UPLOAD_BYTES) {
+        console.warn(`${REQ_DEBUG_PREFIX} File too large: ${fileSizeBytes} bytes > MAX_UPLOAD_BYTES=${MAX_UPLOAD_BYTES}`);
+        return NextResponse.json({ error: 'File too large. Please upload a smaller file.' }, { status: 413 });
+      }
+    }
+
+    // Read buffer after size validation
     const fileBuffer: Buffer = Buffer.from(await file.arrayBuffer());
 
     // Centralized whitelist validation (MIME, extension, and magic bytes)
@@ -171,6 +200,15 @@ export async function POST(request: Request) {
     console.log(`${REQ_DEBUG_PREFIX} File details - Name: ${originalFilename}, Size: ${file.size}, Client MIME: ${clientProvidedMime}, Effective MIME: ${effectiveMime}, Is PDF: ${isPdf}`);
 
     let finalUrl = '';
+
+    // Initialize Supabase admin at runtime (after auth) and handle failures
+    let supabaseAdmin: SupabaseClient;
+    try {
+      supabaseAdmin = await getSupabaseAdmin();
+    } catch (initErr: any) {
+      console.error(`${REQ_DEBUG_PREFIX} Supabase admin initialization error:`, initErr?.message || initErr);
+      return NextResponse.json({ error: 'Server configuration error. Please try again later.' }, { status: 500 });
+    }
 
     if (isPdf) {
       // Upload PDFs to Google Drive

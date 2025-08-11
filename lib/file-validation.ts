@@ -4,6 +4,7 @@
 export type ValidationResult = {
   ok: boolean;
   detectedMime?: string | null;
+  clientMime?: string | null;
   reason?: string;
 };
 
@@ -60,6 +61,7 @@ export function sniffMimeFromMagicBytes(buffer: Buffer): string | null {
 
   // PDF: %PDF-
   if (
+    buffer.length >= 5 &&
     buffer[0] === 0x25 &&
     buffer[1] === 0x50 &&
     buffer[2] === 0x44 &&
@@ -142,7 +144,7 @@ export function validateFile(
   const mimeAllowed = clientMime ? allowedMimes.has(clientMime) : false;
 
   if (extAllowed && mimeAllowed) {
-    return { ok: true, detectedMime: clientMime || null };
+    return { ok: true, detectedMime: null, clientMime: clientMime || null };
   }
 
   // Unsupported
@@ -157,7 +159,8 @@ export function validateFile(
 
   return {
     ok: false,
-    detectedMime: clientMime || null,
+    detectedMime: null,
+    clientMime: clientMime || null,
     reason,
   };
 }
