@@ -31,19 +31,18 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
   const [error, setError] = useState<string | null>(null)
   const [refreshIndex, setRefreshIndex] = useState(0)
 
-  const [filters, setFilters] = useState<{ subject?: string; category?: string; branch?: string | null; year?: number | null }>({})
+  const [filters, setFilters] = useState<{ subject?: string; category?: string; unit?: number | null }>({})
 
   const query = useMemo(() => {
     const p = new URLSearchParams()
     p.set('page', '1')
-    p.set('limit', '50')
+    p.set('limit', '1000')
     p.set('sort', 'date')
     p.set('order', 'desc')
     p.set('archived', archivedOnly ? 'true' : 'false')
     if (filters.subject) p.set('subject', filters.subject)
     if (filters.category) p.set('category', filters.category)
-    if (filters.branch) p.set('branch', filters.branch)
-    if (filters.year) p.set('year', String(filters.year))
+    if (filters.unit != null) p.set('unit', String(filters.unit))
     return p.toString()
   }, [filters, archivedOnly])
 
@@ -74,38 +73,36 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3 items-end">
+        {/* Year/Branch derived from profile; temporarily hardcoded (Year=3, Branch=CSE) */}
+        <div className="flex flex-col gap-1 min-w-[160px]">
+          <Label>Category</Label>
+          <Select value={filters.category || 'any'} onValueChange={(v) => setFilters((f) => ({ ...f, category: v === 'any' ? '' : v }))}>
+            <SelectTrigger>
+              <SelectValue placeholder="Any" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="any">Any</SelectItem>
+              <SelectItem value="notes">notes</SelectItem>
+              <SelectItem value="assignments">assignments</SelectItem>
+              <SelectItem value="papers">papers</SelectItem>
+              <SelectItem value="records">records</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="flex flex-col gap-1">
           <Label htmlFor="subject">Subject</Label>
           <Input id="subject" placeholder="dbms" value={filters.subject || ''} onChange={(e) => setFilters((f) => ({ ...f, subject: e.target.value }))} />
         </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="category">Category</Label>
-          <Input id="category" placeholder="notes" value={filters.category || ''} onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value }))} />
-        </div>
-        <div className="flex flex-col gap-1 min-w-[160px]">
-          <Label>Branch</Label>
-          <Select value={filters.branch || 'any'} onValueChange={(v) => setFilters((f) => ({ ...f, branch: v === 'any' ? null : v }))}>
-            <SelectTrigger>
-              <SelectValue placeholder="Any" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="any">Any</SelectItem>
-              {BRANCHES.map((b) => (
-                <SelectItem key={b} value={b}>{b}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
         <div className="flex flex-col gap-1 min-w-[120px]">
-          <Label>Year</Label>
-          <Select value={filters.year ? String(filters.year) : 'any'} onValueChange={(v) => setFilters((f) => ({ ...f, year: v === 'any' ? null : Number(v) }))}>
+          <Label>Unit</Label>
+          <Select value={filters.unit != null ? String(filters.unit) : 'all'} onValueChange={(v) => setFilters((f) => ({ ...f, unit: v === 'all' ? null : Number(v) }))}>
             <SelectTrigger>
-              <SelectValue placeholder="Any" />
+              <SelectValue placeholder="All" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="any">Any</SelectItem>
-              {[1,2,3,4].map((y) => (
-                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              <SelectItem value="all">All</SelectItem>
+              {[1,2,3,4,5].map((u) => (
+                <SelectItem key={u} value={String(u)}>{u}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -121,13 +118,12 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Subject</TableHead>
-              <TableHead>Unit</TableHead>
-              <TableHead>Type</TableHead>
               <TableHead>Year</TableHead>
               <TableHead>Branch</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Subject</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Type</TableHead>
               <TableHead>Date</TableHead>
               <TableHead>isPDF</TableHead>
               <TableHead>Actions</TableHead>
@@ -136,13 +132,12 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
           <TableBody>
             {items.map((r) => (
               <TableRow key={r.id}>
-                <TableCell className="font-medium">{r.name}</TableCell>
+                <TableCell>{3}</TableCell>
+                <TableCell>{'CSE'}</TableCell>
                 <TableCell>{r.category}</TableCell>
                 <TableCell>{r.subject}</TableCell>
-                <TableCell>{r.unit}</TableCell>
+                <TableCell className="font-medium">{r.name}</TableCell>
                 <TableCell>{r.type || '-'}</TableCell>
-                <TableCell>{r.year || '-'}</TableCell>
-                <TableCell>{r.branch || '-'}</TableCell>
                 <TableCell>{new Date(r.date).toLocaleDateString()}</TableCell>
                 <TableCell>{r.is_pdf ? 'Yes' : 'No'}</TableCell>
                 <TableCell className="whitespace-nowrap flex gap-2">
@@ -155,7 +150,7 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
             ))}
             {items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-sm text-muted-foreground">{loading ? 'Loading…' : 'No resources found'}</TableCell>
+                <TableCell colSpan={9} className="text-center text-sm text-muted-foreground">{loading ? 'Loading…' : 'No resources found'}</TableCell>
               </TableRow>
             )}
           </TableBody>

@@ -27,6 +27,10 @@ export function createSupabaseAdmin() {
 
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceRoleKey) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[supabase] SUPABASE_SERVICE_ROLE_KEY missing; using anon key fallback in development');
+      return createClient(publicSupabaseUrl as string, publicSupabaseAnonKey as string);
+    }
     throw new Error(
       'Missing required environment variable: SUPABASE_SERVICE_ROLE_KEY. ' +
         'The admin client bypasses RLS and must only be used server-side (API routes, server actions, middleware, or SSR).'
