@@ -27,9 +27,19 @@ export function createSupabaseAdmin() {
 
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceRoleKey) {
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('[supabase] SUPABASE_SERVICE_ROLE_KEY missing; using anon key fallback in development');
-      return createClient(publicSupabaseUrl as string, publicSupabaseAnonKey as string);
+    if (
+      process.env.NODE_ENV === 'development' &&
+      process.env.SUPABASE_ALLOW_DEV_ANON_FALLBACK === 'true'
+    ) {
+      console.warn(
+        '[supabase] SUPABASE_SERVICE_ROLE_KEY missing; using anon key fallback in development (explicitly allowed via SUPABASE_ALLOW_DEV_ANON_FALLBACK)'
+      );
+      return createClient(publicSupabaseUrl as string, publicSupabaseAnonKey as string, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      });
     }
     throw new Error(
       'Missing required environment variable: SUPABASE_SERVICE_ROLE_KEY. ' +
@@ -37,5 +47,10 @@ export function createSupabaseAdmin() {
     );
   }
 
-  return createClient(publicSupabaseUrl as string, serviceRoleKey);
+  return createClient(publicSupabaseUrl as string, serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
 }
