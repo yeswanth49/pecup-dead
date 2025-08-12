@@ -39,10 +39,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Missing context (year/branch/semester).' }, { status: 400 })
     }
 
-    // Query offerings for given context
+    // Query offerings for given context (using R23 regulation)
     const { data: offerings, error: offeringsError } = await supabase
       .from('subject_offerings')
       .select('subject_id, display_order, active')
+      .eq('regulation', 'R23')
       .eq('year', parseInt(year, 10))
       .eq('branch', branch)
       .eq('semester', parseInt(semester, 10))
