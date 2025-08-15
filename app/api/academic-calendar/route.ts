@@ -93,15 +93,16 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ calendar: data });
-  } catch (error: any) {
-    if (error.message === 'Forbidden') {
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message === 'Forbidden') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-    if (error.message === 'Unauthorized') {
+    if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    console.error('Academic calendar API error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Academic calendar API error:', errorMessage);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -141,7 +142,8 @@ export async function PUT(request: Request) {
     let newSemesterId = currentCalendar.current_semester_id;
 
     // Logic for semester progression
-    if (currentCalendar.current_semester.semester_number === 1) {
+    const currentSemester = Array.isArray(currentCalendar.current_semester) ? currentCalendar.current_semester[0] : currentCalendar.current_semester;
+    if (currentSemester?.semester_number === 1) {
       // Move from semester 1 to semester 2 of the same year
       const { data: nextSemester } = await supabaseAdmin
         .from('semesters')
@@ -150,12 +152,18 @@ export async function PUT(request: Request) {
         .eq('semester_number', 2)
         .maybeSingle();
       
-      if (nextSemester) {
-        newSemesterId = nextSemester.id;
+      newSemesterId = nextSemester ? nextSemester.id : null;
+      
+      if (!nextSemester) {
+        console.warn('Semester progression warning: Semester 2 not found for current year');
+        return NextResponse.json({ 
+          error: 'Semester 2 not found for current year. Please create it first.' 
+        }, { status: 404 });
       }
     } else {
       // Move from semester 2 to semester 1 of the next year
-      const currentBatchYear = currentCalendar.current_year.batch_year;
+      const currentYear = Array.isArray(currentCalendar.current_year) ? currentCalendar.current_year[0] : currentCalendar.current_year;
+      const currentBatchYear = currentYear?.batch_year;
       const { data: nextYear } = await supabaseAdmin
         .from('years')
         .select('id')
@@ -214,15 +222,16 @@ export async function PUT(request: Request) {
       calendar: data,
       message: 'Semester progressed successfully'
     });
-  } catch (error: any) {
-    if (error.message === 'Forbidden') {
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message === 'Forbidden') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-    if (error.message === 'Unauthorized') {
+    if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    console.error('Semester progression API error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Semester progression API error:', errorMessage);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

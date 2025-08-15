@@ -23,6 +23,11 @@ export async function GET(request: Request) {
     const status = searchParams.get('status')?.trim() || null;
     let year = searchParams.get('year');
     let branch = searchParams.get('branch');
+    
+    // Validate year parameter if provided
+    if (year && !/^\d+$/.test(year)) {
+      return NextResponse.json({ error: 'Invalid year parameter' }, { status: 400 });
+    }
 
     console.log(
       `API Route (Reminders): Querying Supabase for reminders${status ? ` with status=${status}` : ''}...`
@@ -32,16 +37,18 @@ export async function GET(request: Request) {
     // Infer year/branch from profile if missing
     if (!year || !branch) {
       const session = await getServerSession(authOptions);
-      const email = session?.user?.email?.toLowerCase();
-      if (email) {
-        const { data: profile } = await supabaseAdmin
-          .from('profiles')
-          .select('year,branch')
-          .eq('email', email)
-          .maybeSingle();
-        if (profile) {
-          year = year || String(profile.year);
-          branch = branch || String(profile.branch);
+      if (session) {
+        const email = session.user?.email?.toLowerCase();
+        if (email) {
+          const { data: profile } = await supabaseAdmin
+            .from('profiles')
+            .select('year,branch')
+            .eq('email', email)
+            .maybeSingle();
+          if (profile) {
+            year = year || String(profile.year);
+            branch = branch || String(profile.branch);
+          }
         }
       }
     }
@@ -56,7 +63,12 @@ export async function GET(request: Request) {
       query = query.eq('status', status);
     }
 
-    if (year) query = query.eq('year', parseInt(year, 10));
+    if (year) {
+      const parsedYear = parseInt(year, 10);
+      if (Number.isFinite(parsedYear)) {
+        query = query.eq('year', parsedYear);
+      }
+    }
     if (branch) query = query.eq('branch', branch);
 
     const { data: reminders, error } = await query;

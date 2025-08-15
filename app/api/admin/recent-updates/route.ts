@@ -18,8 +18,17 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10))
   const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '20', 10)))
-  const sort = (url.searchParams.get('sort') || 'created_at') as 'created_at' | 'date' | 'title'
-  const order = (url.searchParams.get('order') || 'desc') as 'asc' | 'desc'
+  
+  // Validate sort parameter
+  const ALLOWED_SORTS = new Set(['created_at', 'date', 'title'])
+  const sortParam = url.searchParams.get('sort')
+  const sort = (sortParam && ALLOWED_SORTS.has(sortParam)) ? sortParam as 'created_at' | 'date' | 'title' : 'created_at'
+  
+  // Validate order parameter
+  const ALLOWED_ORDERS = new Set(['asc', 'desc'])
+  const orderParam = url.searchParams.get('order')
+  const order = (orderParam && ALLOWED_ORDERS.has(orderParam)) ? orderParam as 'asc' | 'desc' : 'desc'
+  
   const from = (page - 1) * limit
   const to = from + limit - 1
 
@@ -64,7 +73,10 @@ export async function POST(request: Request) {
         const allowed = scopes && scopes.some((s: any) => s.year === payload.year && s.branch === payload.branch)
         if (!allowed) return NextResponse.json({ error: 'Forbidden: outside your scope' }, { status: 403 })
       }
-    } catch {}
+    } catch (scopeError) {
+      console.error('Failed to validate admin scope:', scopeError)
+      return NextResponse.json({ error: 'Internal error during authorization' }, { status: 500 })
+    }
 
     const { data, error } = await supabase.from('recent_updates').insert(payload).select('id').single()
     if (error) throw error

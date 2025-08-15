@@ -17,18 +17,21 @@ export async function requireAdmin(minRole: 'admin' | 'superadmin' = 'admin'): P
     .maybeSingle()
 
   if (error || !data) {
-    // Dev-only fallback: allow NEXT_PUBLIC_AUTHORIZED_EMAILS or AUTHORIZED_EMAILS as superadmin in development
+    // Dev-only fallback: allow AUTHORIZED_EMAILS as superadmin in development
     const isDev = process.env.NODE_ENV === 'development'
-    const listFromPublic = (process.env.NEXT_PUBLIC_AUTHORIZED_EMAILS || '')
-      .split(',')
-      .map((e) => e.trim().toLowerCase())
-      .filter(Boolean)
     const listFromServer = (process.env.AUTHORIZED_EMAILS || '')
       .split(',')
       .map((e) => e.trim().toLowerCase())
       .filter(Boolean)
-    const isAuthorizedByEnv = [...listFromPublic, ...listFromServer].includes(email)
+    const isAuthorizedByEnv = listFromServer.includes(email)
     if (isDev && isAuthorizedByEnv) {
+      // Log the development-only authorization bypass
+      console.warn('Development auth bypass:', {
+        email,
+        source: 'AUTHORIZED_EMAILS',
+        role: 'superadmin',
+        nodeEnv: process.env.NODE_ENV
+      })
       return { email, role: 'superadmin' }
     }
     throw new Error('Forbidden')

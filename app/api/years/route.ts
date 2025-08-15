@@ -6,10 +6,9 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { Year } from '@/lib/types';
 
-const supabaseAdmin = createSupabaseAdmin();
-
 export async function GET() {
   try {
+    const supabaseAdmin = createSupabaseAdmin();
     const { data, error } = await supabaseAdmin
       .from('years')
       .select('*')
@@ -32,6 +31,8 @@ export async function POST(request: Request) {
     // Require admin access to create years
     await requireAdmin('admin');
     
+    const supabaseAdmin = createSupabaseAdmin();
+    
     const body = await request.json();
     const { batch_year, display_name } = body;
 
@@ -49,7 +50,8 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    // Insert the new year
+    // Use transaction-like approach: create year and semesters together
+    // First, insert the new year
     const { data: yearData, error: yearError } = await supabaseAdmin
       .from('years')
       .insert({ batch_year: yearNum, display_name })
@@ -80,8 +82,17 @@ export async function POST(request: Request) {
       .insert(semesterInserts);
 
     if (semesterError) {
-      console.warn('Warning: Failed to create semesters for new year:', semesterError);
-      // Don't fail the request, just warn
+      console.error('Failed to create semesters for new year:', semesterError);
+      
+      // Rollback: delete the created year
+      await supabaseAdmin
+        .from('years')
+        .delete()
+        .eq('id', yearData.id);
+      
+      return NextResponse.json({ 
+        error: 'Failed to create year and semesters' 
+      }, { status: 500 });
     }
 
     // Return the created year with semesters

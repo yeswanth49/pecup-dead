@@ -8,11 +8,10 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { Resource, ResourceFilters } from '@/lib/types';
 
-const supabaseAdmin = createSupabaseAdmin();
-
 export async function GET(request: Request) {
   console.log(`\nAPI Route: Received request at ${new Date().toISOString()}`);
-
+  
+  const supabaseAdmin = createSupabaseAdmin();
   const { searchParams } = new URL(request.url);
   const category = searchParams.get('category')?.toLowerCase();
   const encodedSubject = searchParams.get('subject');
@@ -75,8 +74,17 @@ export async function GET(request: Request) {
     
     if (!year_id && year_number) {
       const yearNum = parseInt(year_number, 10);
-      // Map old year numbers (1,2,3,4) to batch years (2024,2023,2022,2021)
-      const batchYear = yearNum === 1 ? 2024 : yearNum === 2 ? 2023 : yearNum === 3 ? 2022 : yearNum === 4 ? 2021 : 2024;
+      
+      // Validate year number is within expected bounds
+      if (yearNum < 1 || yearNum > 4) {
+        console.warn(`Invalid year number: ${yearNum}. Expected 1-4.`);
+        return NextResponse.json({ error: 'Invalid year number. Expected 1-4.' }, { status: 400 });
+      }
+      
+      // Map old year numbers (1,2,3,4) to batch years dynamically based on current year
+      const currentYear = new Date().getFullYear();
+      const batchYear = currentYear - (yearNum - 1);
+      
       const { data: year } = await supabaseAdmin
         .from('years')
         .select('id')
@@ -96,8 +104,8 @@ export async function GET(request: Request) {
       semester_id = semester?.id;
     }
 
-    subject = decodeURIComponent(encodedSubject);
-    console.log(`API Route: Decoded subject: ${subject}`);
+    subject = decodeURIComponent(encodedSubject).trim().toLowerCase();
+    console.log(`API Route: Decoded and normalized subject: ${subject}`);
   } catch (error) {
     console.error(`API Route: Invalid subject parameter encoding: ${encodedSubject}`, error);
     return NextResponse.json({ error: 'Invalid subject parameter encoding' }, { status: 400 });
@@ -138,7 +146,7 @@ export async function GET(request: Request) {
         uploader:students(id, name, roll_number)
       `)
       .eq('category', category)
-      .eq('subject', subject.toLowerCase())
+      .eq('subject', subject)
       .eq('unit', unitNumber)
       .order('created_at', { ascending: false });
 
@@ -163,7 +171,7 @@ export async function GET(request: Request) {
     console.log(`API Route: Found ${resources?.length || 0} matching resources`);
 
     // Transform the data to match both new and legacy expected formats
-    const transformedResources: Resource[] = (resources || []).map(resource => ({
+    const transformedResources = (resources || []).map(resource => ({
       id: resource.id,
       title: resource.title,
       description: resource.description || '',
@@ -183,15 +191,15 @@ export async function GET(request: Request) {
       type: resource.file_type,
       url: resource.drive_link,
       is_pdf: resource.is_pdf,
-      // Include relationship data
-      branch: resource.branch,
-      year: resource.year,
-      semester: resource.semester,
-      uploader: resource.uploader
+      // Include relationship data (convert arrays to single objects)
+      branch: Array.isArray(resource.branch) ? resource.branch[0] : resource.branch,
+      year: Array.isArray(resource.year) ? resource.year[0] : resource.year,
+      semester: Array.isArray(resource.semester) ? resource.semester[0] : resource.semester,
+      uploader: Array.isArray(resource.uploader) ? resource.uploader[0] : resource.uploader
     }));
 
     console.log(`API Route: Returning ${transformedResources.length} resources`);
-    return NextResponse.json(transformedResources);
+    return NextResponse.json(transformedResources as unknown as Resource[]);
 
   } catch (error: any) {
     console.error('API Error during Supabase query:', error);

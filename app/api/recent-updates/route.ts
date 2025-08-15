@@ -24,17 +24,34 @@ export async function GET(request: Request) {
         let branch = url.searchParams.get('branch')
         // Infer from profile if missing
         if (!year || !branch) {
-          const session = await getServerSession(authOptions)
-          const email = session?.user?.email?.toLowerCase()
-          if (email) {
-            const { data: profile } = await supabaseAdmin
-              .from('profiles')
-              .select('year,branch')
-              .eq('email', email)
-              .maybeSingle()
-            if (profile) {
-              year = year || String(profile.year)
-              branch = branch || String(profile.branch)
+          const session = await getServerSession(authOptions);
+          
+          if (!session?.user?.email) {
+            console.warn('No session or email found for profile lookup');
+          } else {
+            const email = session.user.email.toLowerCase();
+            
+            try {
+              const { data: profile, error: profileError } = await supabaseAdmin
+                .from('profiles')
+                .select('year,branch')
+                .eq('email', email)
+                .maybeSingle();
+                
+              if (profileError) {
+                console.error('Profile lookup error:', profileError.message);
+                return NextResponse.json({ error: 'Failed to load user profile' }, { status: 500 });
+              }
+              
+              if (!profile) {
+                console.warn(`No profile found for email: ${email}`);
+              } else {
+                year = year || (profile.year != null ? String(profile.year) : '');
+                branch = branch || (profile.branch != null ? String(profile.branch) : '');
+              }
+            } catch (dbError) {
+              console.error('Database error during profile lookup:', dbError instanceof Error ? dbError.message : 'Unknown error');
+              return NextResponse.json({ error: 'Database error' }, { status: 500 });
             }
           }
         }

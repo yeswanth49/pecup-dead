@@ -10,12 +10,24 @@ export async function logAudit(entry: {
   message?: string
   before_data?: unknown
   after_data?: unknown
-}) {
-  const supabase = createSupabaseAdmin()
-  await supabase.from('audit_logs').insert({
-    ...entry,
-    success: entry.success ?? true,
-  })
+}): Promise<boolean> {
+  try {
+    const supabase = createSupabaseAdmin()
+    const { error } = await supabase.from('audit_logs').insert({
+      ...entry,
+      success: entry.success ?? true,
+    })
+    
+    if (error) {
+      console.error('Audit log insertion failed:', error)
+      return false
+    }
+    
+    return true
+  } catch (error) {
+    console.error('Audit log insertion error:', error)
+    return false
+  }
 }
 
 

@@ -1,6 +1,9 @@
 -- Database Refactoring Phase 1: Create New Lookup Tables
 -- This migration creates the new normalized lookup tables to replace ENUM-based approach
 
+-- Enable required extensions
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- Phase 1.1: Create branches lookup table
 CREATE TABLE IF NOT EXISTS branches (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -61,18 +64,21 @@ CREATE TABLE IF NOT EXISTS academic_calendar (
   current_year_id uuid NOT NULL REFERENCES years(id) ON DELETE RESTRICT,
   current_semester_id uuid NOT NULL REFERENCES semesters(id) ON DELETE RESTRICT,
   last_updated timestamptz NOT NULL DEFAULT now(),
-  updated_by uuid REFERENCES admins(id) ON DELETE SET NULL
+  updated_by uuid REFERENCES admins(id) ON DELETE SET NULL,
+  singleton boolean DEFAULT true NOT NULL,
+  UNIQUE (singleton)
 );
 
 -- Set initial academic calendar (adjust current year/semester as needed)
-INSERT INTO academic_calendar (current_year_id, current_semester_id)
+INSERT INTO academic_calendar (current_year_id, current_semester_id, singleton)
 SELECT 
   y.id as current_year_id,
-  s.id as current_semester_id
+  s.id as current_semester_id,
+  true as singleton
 FROM years y
 JOIN semesters s ON s.year_id = y.id
 WHERE y.batch_year = 2024 AND s.semester_number = 1
-ON CONFLICT DO NOTHING;
+ON CONFLICT (singleton) DO NOTHING;
 
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_semesters_year ON semesters(year_id);

@@ -39,10 +39,17 @@ export default function ProfilePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
-    if (status === 'unauthenticated') router.replace('/login')
+    if (status !== 'loading' && status === 'unauthenticated') {
+      router.replace('/login')
+    }
   }, [status, router])
 
   useEffect(() => {
+    // Only fetch profile when user is authenticated (not loading or unauthenticated)
+    if (status !== 'authenticated') {
+      return
+    }
+    
     const load = async () => {
       setLoading(true)
       setError(null)
@@ -66,7 +73,7 @@ export default function ProfilePage() {
       }
     }
     load()
-  }, [router])
+  }, [status, router])
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

@@ -81,12 +81,10 @@ export async function POST(request: Request) {
     // Handle uniqueness violations (e.g., roll_number)
     // Postgres error code 23505 is unique_violation
     const isUniqueViolation = (error as any)?.code === '23505'
-    const message = isUniqueViolation ? 'Roll number or email already exists' : 'Database error'
+    const message = isUniqueViolation ? 'Roll number or email already exists' : 'Internal server error'
     return NextResponse.json({ 
-      error: message, 
-      details: error.message,
-      code: error.code 
-    }, { status: 400 })
+      error: message
+    }, { status: isUniqueViolation ? 400 : 500 })
   }
 
   return NextResponse.json({ profile: data })

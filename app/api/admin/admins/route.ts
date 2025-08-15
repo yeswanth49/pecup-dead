@@ -6,7 +6,18 @@ import { logAudit } from '@/lib/audit'
 export const runtime = 'nodejs'
 
 export async function GET(request: Request) {
-  await requireAdmin('superadmin')
+  try {
+    await requireAdmin('superadmin')
+  } catch (error: any) {
+    if (error.message === 'Forbidden') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    if (error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    console.error('Admin auth error:', error)
+    return NextResponse.json({ error: 'Authentication failed' }, { status: 500 })
+  }
   const supabase = createSupabaseAdmin()
   const url = new URL(request.url)
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10))
@@ -27,7 +38,19 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const admin = await requireAdmin('superadmin')
+  let admin
+  try {
+    admin = await requireAdmin('superadmin')
+  } catch (error: any) {
+    if (error.message === 'Forbidden') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    if (error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    console.error('Admin auth error:', error)
+    return NextResponse.json({ error: 'Authentication failed' }, { status: 500 })
+  }
   const supabase = createSupabaseAdmin()
   try {
     const body = await request.json()
@@ -41,7 +64,14 @@ export async function POST(request: Request) {
     }
 
     const { data, error } = await supabase.from('admins').insert({ email, role }).select('id,email,role,created_at').single()
-    if (error) throw error
+    if (error) {
+      // Handle unique constraint violation (duplicate email)
+      if (error.code === '23505') {
+        await logAudit({ actor_email: admin.email, actor_role: admin.role, action: 'create', entity: 'admin', success: false, message: 'Email already exists' })
+        return NextResponse.json({ error: 'Email already exists' }, { status: 409 })
+      }
+      throw error
+    }
 
     await logAudit({ actor_email: admin.email, actor_role: admin.role, action: 'create', entity: 'admin', entity_id: data.id, after_data: data })
     return NextResponse.json(data)

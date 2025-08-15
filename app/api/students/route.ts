@@ -6,12 +6,12 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { Student, StudentFilters } from '@/lib/types';
 
-const supabaseAdmin = createSupabaseAdmin();
-
 export async function GET(request: Request) {
   try {
     // Require admin access to view all students
     await requireAdmin('admin');
+    
+    const supabaseAdmin = createSupabaseAdmin();
     
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
@@ -90,12 +90,61 @@ export async function POST(request: Request) {
     // Require admin access to create students
     await requireAdmin('admin');
     
+    const supabaseAdmin = createSupabaseAdmin();
+    
     const body = await request.json();
     const { roll_number, name, email, branch_id, year_id, semester_id, section } = body;
 
+    // Basic presence validation
     if (!roll_number || !name || !email || !branch_id || !year_id || !semester_id) {
       return NextResponse.json({ 
         error: 'Missing required fields: roll_number, name, email, branch_id, year_id, semester_id' 
+      }, { status: 400 });
+    }
+
+    // Enhanced input validation
+    const validationErrors: string[] = [];
+    
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      validationErrors.push('Invalid email format');
+    }
+    
+    // Field length constraints
+    const trimmedName = name.trim();
+    const trimmedRollNumber = roll_number.trim();
+    const trimmedEmail = email.trim();
+    
+    if (trimmedName.length === 0 || trimmedName.length > 100) {
+      validationErrors.push('Name must be 1-100 characters');
+    }
+    if (trimmedRollNumber.length === 0 || trimmedRollNumber.length > 20) {
+      validationErrors.push('Roll number must be 1-20 characters');
+    }
+    if (trimmedEmail.length > 254) {
+      validationErrors.push('Email must not exceed 254 characters');
+    }
+    
+    // ID validation
+    const parsedBranchId = typeof branch_id === 'string' ? branch_id : String(branch_id);
+    const parsedYearId = typeof year_id === 'string' ? year_id : String(year_id);
+    const parsedSemesterId = typeof semester_id === 'string' ? semester_id : String(semester_id);
+    
+    if (!parsedBranchId || parsedBranchId.trim().length === 0) {
+      validationErrors.push('Invalid branch ID');
+    }
+    if (!parsedYearId || parsedYearId.trim().length === 0) {
+      validationErrors.push('Invalid year ID');
+    }
+    if (!parsedSemesterId || parsedSemesterId.trim().length === 0) {
+      validationErrors.push('Invalid semester ID');
+    }
+    
+    if (validationErrors.length > 0) {
+      return NextResponse.json({ 
+        error: 'Validation failed',
+        details: validationErrors 
       }, { status: 400 });
     }
 
@@ -106,6 +155,21 @@ export async function POST(request: Request) {
       supabaseAdmin.from('semesters').select('id').eq('id', semester_id).eq('year_id', year_id).maybeSingle()
     ]);
 
+    // Check for query errors first
+    if (branchCheck.error) {
+      console.error('Branch validation error:', branchCheck.error.message);
+      return NextResponse.json({ error: 'Database error during branch validation' }, { status: 500 });
+    }
+    if (yearCheck.error) {
+      console.error('Year validation error:', yearCheck.error.message);
+      return NextResponse.json({ error: 'Database error during year validation' }, { status: 500 });
+    }
+    if (semesterCheck.error) {
+      console.error('Semester validation error:', semesterCheck.error.message);
+      return NextResponse.json({ error: 'Database error during semester validation' }, { status: 500 });
+    }
+
+    // Check for data existence
     if (!branchCheck.data) {
       return NextResponse.json({ error: 'Invalid branch ID' }, { status: 400 });
     }

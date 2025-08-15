@@ -1,6 +1,8 @@
 -- Database Refactoring Phase 2: Create New Students Table
 -- This migration creates the students table to replace profiles with proper foreign key relationships
 
+BEGIN;
+
 -- Phase 2.1: Create students table with proper relationships
 CREATE TABLE IF NOT EXISTS students (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -15,12 +17,10 @@ CREATE TABLE IF NOT EXISTS students (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- Create indexes for performance
+-- Create indexes for performance (excluding email and roll_number as they already have unique constraints with automatic indexes)
 CREATE INDEX IF NOT EXISTS idx_students_branch ON students(branch_id);
 CREATE INDEX IF NOT EXISTS idx_students_year ON students(year_id);
 CREATE INDEX IF NOT EXISTS idx_students_semester ON students(semester_id);
-CREATE INDEX IF NOT EXISTS idx_students_email ON students(email);
-CREATE INDEX IF NOT EXISTS idx_students_roll_number ON students(roll_number);
 
 -- Add updated_at trigger (reuse existing function)
 DROP TRIGGER IF EXISTS trg_students_updated_at ON students;
@@ -53,15 +53,7 @@ SELECT
   p.updated_at
 FROM profiles p
 JOIN branches b ON b.code = p.branch::text
-JOIN years y ON y.batch_year = (
-  CASE 
-    WHEN p.year = 1 THEN 2024
-    WHEN p.year = 2 THEN 2023
-    WHEN p.year = 3 THEN 2022
-    WHEN p.year = 4 THEN 2021
-    ELSE 2024
-  END
-)
+JOIN years y ON y.batch_year = (EXTRACT(YEAR FROM current_date) - (p.year - 1))
 JOIN semesters s ON s.year_id = y.id AND s.semester_number = 1 -- Default to semester 1
 WHERE p.role = 'student' -- Only migrate students, not admins
 ON CONFLICT (roll_number) DO NOTHING;
@@ -77,8 +69,9 @@ SELECT 'Migrated students:' as status, COUNT(*) as count FROM students;
 SELECT 'Unmigrated profiles:' as status, COUNT(*) as count
 FROM profiles p 
 WHERE p.role = 'student' 
+AND p.roll_number IS NOT NULL
 AND NOT EXISTS (
-  SELECT 1 FROM students s WHERE s.email = p.email
+  SELECT 1 FROM students s WHERE s.roll_number = p.roll_number
 );
 
 -- Show sample migrated data with relationships
@@ -96,3 +89,5 @@ JOIN branches b ON s.branch_id = b.id
 JOIN years y ON s.year_id = y.id
 JOIN semesters sem ON s.semester_id = sem.id
 LIMIT 5;
+
+COMMIT;

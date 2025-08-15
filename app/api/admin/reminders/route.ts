@@ -16,10 +16,19 @@ export async function GET(request: Request) {
   await requireAdmin('admin')
   const supabase = createSupabaseAdmin()
   const url = new URL(request.url)
-  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10))
-  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '20', 10)))
-  const sort = (url.searchParams.get('sort') || 'due_date') as 'due_date' | 'title' | 'created_at'
-  const order = (url.searchParams.get('order') || 'asc') as 'asc' | 'desc'
+  // Parse and validate pagination parameters
+  const rawPage = parseInt(url.searchParams.get('page') || '1', 10)
+  const rawLimit = parseInt(url.searchParams.get('limit') || '20', 10)
+  const page = Number.isFinite(rawPage) ? Math.max(1, rawPage) : 1
+  const limit = Number.isFinite(rawLimit) ? Math.min(100, Math.max(1, rawLimit)) : 20
+  
+  // Validate sort and order parameters
+  const allowedSort = ['due_date', 'title', 'created_at'] as const
+  const allowedOrder = ['asc', 'desc'] as const
+  const rawSort = url.searchParams.get('sort')
+  const rawOrder = url.searchParams.get('order')
+  const sort = (rawSort && allowedSort.includes(rawSort as any)) ? rawSort as typeof allowedSort[number] : 'due_date'
+  const order = (rawOrder && allowedOrder.includes(rawOrder as any)) ? rawOrder as typeof allowedOrder[number] : 'asc'
   const from = (page - 1) * limit
   const to = from + limit - 1
   const status = url.searchParams.get('status')
@@ -46,9 +55,20 @@ export async function POST(request: Request) {
   const supabase = createSupabaseAdmin()
   try {
     const body = await request.json()
-    const title = String(body.title || '')
-    const due_date = String(body.due_date || '')
+    const title = String(body.title || '').trim()
+    const due_date = String(body.due_date || '').trim()
     if (!title || !due_date) return NextResponse.json({ error: 'title and due_date are required' }, { status: 400 })
+    
+    // Validate due_date format (YYYY-MM-DD)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(due_date)) {
+      return NextResponse.json({ error: 'due_date must be in YYYY-MM-DD format' }, { status: 400 })
+    }
+    
+    // Validate due_date is a real date
+    const dateObj = new Date(due_date)
+    if (isNaN(dateObj.getTime())) {
+      return NextResponse.json({ error: 'due_date must be a valid date' }, { status: 400 })
+    }
     const payload = {
       title,
       due_date,
@@ -69,7 +89,18 @@ export async function POST(request: Request) {
         const allowed = scopes && scopes.some((s: any) => s.year === payload.year && s.branch === payload.branch)
         if (!allowed) return NextResponse.json({ error: 'Forbidden: outside your scope' }, { status: 403 })
       }
-    } catch {}
+    } catch (error) {
+      console.error('Admin scope check failed:', error)
+      await logAudit({ 
+        actor_email: admin.email, 
+        actor_role: admin.role, 
+        action: 'create', 
+        entity: 'reminder', 
+        success: false, 
+        message: `Scope check failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      })
+      return NextResponse.json({ error: 'Forbidden: scope check failed' }, { status: 403 })
+    }
 
     const { data, error } = await supabase.from('reminders').insert(payload).select('id').single()
     if (error) throw error

@@ -86,9 +86,29 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this resource?')) return
-    const res = await fetch(`/api/admin/resources/${id}`, { method: 'DELETE' })
-    if (res.ok) setRefreshIndex((i) => i + 1)
-    else alert('Delete failed')
+    try {
+      const res = await fetch(`/api/admin/resources/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setRefreshIndex((i) => i + 1)
+      } else {
+        let errorMessage = 'Delete failed'
+        try {
+          const errorData = await res.json()
+          errorMessage = errorData.error || errorMessage
+        } catch {
+          try {
+            errorMessage = await res.text() || errorMessage
+          } catch {
+            // Keep default message
+          }
+        }
+        console.error('Delete failed:', { status: res.status, statusText: res.statusText, error: errorMessage })
+        alert(`Delete failed: ${errorMessage}`)
+      }
+    } catch (error) {
+      console.error('Network error during delete:', error)
+      alert('Delete failed: Network error')
+    }
   }
 
   return (
@@ -218,7 +238,7 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
             ))}
             {items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-sm text-muted-foreground">{loading ? 'Loading…' : 'No resources found'}</TableCell>
+                <TableCell colSpan={10} className="text-center text-sm text-muted-foreground">{loading ? 'Loading…' : 'No resources found'}</TableCell>
               </TableRow>
             )}
           </TableBody>

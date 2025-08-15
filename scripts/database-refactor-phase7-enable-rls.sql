@@ -7,6 +7,7 @@ ALTER TABLE years ENABLE ROW LEVEL SECURITY;
 ALTER TABLE semesters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE academic_calendar ENABLE ROW LEVEL SECURITY;
+ALTER TABLE resources ENABLE ROW LEVEL SECURITY;
 
 -- Phase 7.2: Create RLS policies for branches table
 -- Branches: public read, admin write

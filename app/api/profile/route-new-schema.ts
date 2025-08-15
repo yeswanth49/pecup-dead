@@ -10,6 +10,35 @@ import { Student, StudentCreateInput, StudentUpdateInput } from '@/lib/types';
 
 const supabaseAdmin = createSupabaseAdmin();
 
+// Helper function to map batch year to year level
+function mapBatchYearToYearLevel(batchYear: number | undefined): number {
+  if (!batchYear) return 1;
+  switch (batchYear) {
+    case 2024: return 1;
+    case 2023: return 2;
+    case 2022: return 3;
+    case 2021: return 4;
+    default: return 1;
+  }
+}
+
+// Helper function to sanitize payload for logging
+function sanitizeForLogging(payload: any): any {
+  if (!payload || typeof payload !== 'object') return payload;
+  
+  const sensitiveKeys = ['password', 'email', 'ssn', 'token', 'secret', 'key', 'auth'];
+  const sanitized = { ...payload };
+  
+  Object.keys(sanitized).forEach(key => {
+    const lowerKey = key.toLowerCase();
+    if (sensitiveKeys.some(sensitive => lowerKey.includes(sensitive))) {
+      sanitized[key] = '[REDACTED]';
+    }
+  });
+  
+  return sanitized;
+}
+
 interface ProfilePayload {
   name: string;
   branch_id: string;
@@ -70,11 +99,8 @@ export async function GET() {
     profile = {
       ...data,
       // Legacy compatibility fields
-      year: data.year?.batch_year === 2024 ? 1 : 
-            data.year?.batch_year === 2023 ? 2 : 
-            data.year?.batch_year === 2022 ? 3 : 
-            data.year?.batch_year === 2021 ? 4 : 1,
-      branch: data.branch?.code || '',
+      year: mapBatchYearToYearLevel((data.year as any)?.batch_year),
+      branch: (data.branch as any)?.code || '',
       role: 'student' as const
     };
   }
@@ -107,14 +133,38 @@ export async function POST(request: Request) {
     supabase.from('semesters').select('id').eq('id', payload.semester_id).maybeSingle()
   ]);
 
+  // Check for database errors first
+  if (branchCheck.error) {
+    console.error('Branch validation error:', branchCheck.error);
+    return NextResponse.json({ 
+      error: 'Database error during branch validation', 
+      details: branchCheck.error.message 
+    }, { status: 500 });
+  }
+  if (yearCheck.error) {
+    console.error('Year validation error:', yearCheck.error);
+    return NextResponse.json({ 
+      error: 'Database error during year validation', 
+      details: yearCheck.error.message 
+    }, { status: 500 });
+  }
+  if (semesterCheck.error) {
+    console.error('Semester validation error:', semesterCheck.error);
+    return NextResponse.json({ 
+      error: 'Database error during semester validation', 
+      details: semesterCheck.error.message 
+    }, { status: 500 });
+  }
+
+  // Check for missing records
   if (!branchCheck.data) {
-    return NextResponse.json({ error: 'Invalid branch ID' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid branch ID' }, { status: 422 });
   }
   if (!yearCheck.data) {
-    return NextResponse.json({ error: 'Invalid year ID' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid year ID' }, { status: 422 });
   }
   if (!semesterCheck.data) {
-    return NextResponse.json({ error: 'Invalid semester ID' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid semester ID' }, { status: 422 });
   }
 
   const { data, error } = await supabase
@@ -138,13 +188,14 @@ export async function POST(request: Request) {
     .single();
 
   if (error) {
-    // Log the full error for debugging
+    // Log the error for debugging (with sanitized payload)
     console.error('Profile update error:', {
       code: error.code,
       message: error.message,
       details: error.details,
       hint: error.hint,
-      payload
+      payload: sanitizeForLogging(payload),
+      userId: email // Safe identifier for debugging
     });
     
     // Handle uniqueness violations (e.g., roll_number)
@@ -161,37 +212,13 @@ export async function POST(request: Request) {
   const profile = {
     ...data,
     // Legacy compatibility fields
-    year: data.year?.batch_year === 2024 ? 1 : 
-          data.year?.batch_year === 2023 ? 2 : 
-          data.year?.batch_year === 2022 ? 3 : 
-          data.year?.batch_year === 2021 ? 4 : 1,
-    branch: data.branch?.code || '',
+    year: mapBatchYearToYearLevel((data.year as any)?.batch_year),
+    branch: (data.branch as any)?.code || '',
     role: 'student' as const
   };
 
   return NextResponse.json({ profile });
 }
 
-// New endpoints for the refactored schema
-
-// GET /api/profile/lookup-data - Get branches, years, semesters for forms
-export async function getLookupData() {
-  const supabase = createSupabaseAdmin();
-  
-  const [branchesResult, yearsResult, semestersResult] = await Promise.all([
-    supabase.from('branches').select('*').order('code'),
-    supabase.from('years').select('*').order('batch_year', { ascending: false }),
-    supabase.from('semesters').select(`
-      id,
-      semester_number,
-      year_id,
-      year:years(id, batch_year, display_name)
-    `).order('year_id, semester_number')
-  ]);
-
-  return NextResponse.json({
-    branches: branchesResult.data || [],
-    years: yearsResult.data || [],
-    semesters: semestersResult.data || []
-  });
-}
+// Note: Lookup data endpoint has been moved to /api/profile/lookup-data/route.ts
+// This follows Next.js App Router conventions for separate API endpoints

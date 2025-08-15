@@ -87,7 +87,10 @@ export async function GET(request: Request) {
         }
       }
     }
-  } catch {}
+  } catch (err) {
+    console.error('Admin scope check error in resources GET:', err instanceof Error ? err.message : 'Unknown error');
+    // Continue with unfiltered query on error - admin scope enforcement is optional for listing
+  }
 
   const { data, error, count } = await query.range(from, to)
   if (error) {
@@ -102,7 +105,18 @@ async function uploadToDrive(fileBuffer: Buffer, fileName: string, mime: string,
   const settings = await getSettings()
   const driveFolderId = settings?.drive_folder_id || process.env.GOOGLE_DRIVE_FOLDER_ID
   if (!driveFolderId) throw new Error('Drive folder id not configured')
-  const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON || '{}')
+  let credentials;
+  try {
+    credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON || '{}');
+    // Validate required keys for Google service account
+    if (!credentials.client_email || !credentials.private_key) {
+      throw new Error('Invalid Google credentials: missing required fields');
+    }
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Failed to parse Google credentials';
+    console.error('Google credentials validation error:', errorMessage);
+    throw new Error('Google Drive configuration error');
+  }
   const auth = new google.auth.GoogleAuth({ credentials, scopes: ['https://www.googleapis.com/auth/drive'] })
   const drive = google.drive({ version: 'v3', auth })
   const fileReadable = Readable.from(fileBuffer)
@@ -212,7 +226,10 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: 'Forbidden: outside your assigned year/branch' }, { status: 403 })
         }
       }
-    } catch {}
+    } catch (err) {
+      console.error('Admin scope enforcement error in resources POST:', err instanceof Error ? err.message : 'Unknown error');
+      return NextResponse.json({ error: 'Failed to validate admin scope' }, { status: 500 });
+    }
 
     const { data, error } = await supabase.from('resources').insert(insertPayload).select('id').single()
     if (error) throw error

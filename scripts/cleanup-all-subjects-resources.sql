@@ -26,6 +26,17 @@ BEGIN
     END IF;
 END $$;
 
+-- Step 2: Remove all resources first (to handle foreign key constraints)
+DO $$ 
+BEGIN
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'resources') THEN
+        DELETE FROM resources;
+        RAISE NOTICE 'Deleted all records from resources';
+    ELSE
+        RAISE NOTICE 'Table resources does not exist, skipping';
+    END IF;
+END $$;
+
 -- Remove all subject offerings (if table exists)
 DO $$ 
 BEGIN
@@ -56,17 +67,6 @@ BEGIN
         RAISE NOTICE 'Deleted all records from regulations';
     ELSE
         RAISE NOTICE 'Table regulations does not exist, skipping';
-    END IF;
-END $$;
-
--- Step 2: Remove all resources (if table exists)
-DO $$ 
-BEGIN
-    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'resources') THEN
-        DELETE FROM resources;
-        RAISE NOTICE 'Deleted all records from resources';
-    ELSE
-        RAISE NOTICE 'Table resources does not exist, skipping';
     END IF;
 END $$;
 

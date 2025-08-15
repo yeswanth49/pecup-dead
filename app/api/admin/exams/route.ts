@@ -65,7 +65,10 @@ export async function POST(request: Request) {
         const allowed = scopes && scopes.some((s: any) => s.year === payload.year && s.branch === payload.branch)
         if (!allowed) return NextResponse.json({ error: 'Forbidden: outside your scope' }, { status: 403 })
       }
-    } catch {}
+    } catch (error) {
+      console.error('Scope check failed:', error)
+      return NextResponse.json({ error: 'Scope check failed' }, { status: 500 })
+    }
 
     const { data, error } = await supabase.from('exams').insert(payload).select('id').single()
     if (error) throw error
