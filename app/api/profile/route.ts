@@ -10,7 +10,6 @@ interface ProfilePayload {
   year: number
   branch: BranchType
   roll_number: string
-  role?: 'student' | 'admin' | 'superadmin'
 }
 
 function validatePayload(body: any): { ok: true; data: ProfilePayload } | { ok: false; error: string } {
@@ -19,7 +18,6 @@ function validatePayload(body: any): { ok: true; data: ProfilePayload } | { ok: 
   const year = Number(body.year)
   const branch = body.branch as BranchType
   const rollNumber = (body.roll_number ?? '').trim()
-  const role = (body.role ?? 'student') as 'student' | 'admin' | 'superadmin'
 
   const validBranches: BranchType[] = ['CSE', 'AIML', 'DS', 'AI', 'ECE', 'EEE', 'MEC', 'CE']
   if (!name) return { ok: false, error: 'Name is required' }
@@ -27,7 +25,7 @@ function validatePayload(body: any): { ok: true; data: ProfilePayload } | { ok: 
   if (!validBranches.includes(branch)) return { ok: false, error: 'Invalid branch' }
   if (!rollNumber) return { ok: false, error: 'Roll number is required' }
 
-  return { ok: true, data: { name, year, branch, roll_number: rollNumber, role } }
+  return { ok: true, data: { name, year, branch, roll_number: rollNumber } }
 }
 
 export async function GET() {
@@ -71,11 +69,24 @@ export async function POST(request: Request) {
     .single()
 
   if (error) {
+    // Log the full error for debugging
+    console.error('Profile update error:', {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      payload
+    })
+    
     // Handle uniqueness violations (e.g., roll_number)
     // Postgres error code 23505 is unique_violation
     const isUniqueViolation = (error as any)?.code === '23505'
     const message = isUniqueViolation ? 'Roll number or email already exists' : 'Database error'
-    return NextResponse.json({ error: message, details: error.message }, { status: 400 })
+    return NextResponse.json({ 
+      error: message, 
+      details: error.message,
+      code: error.code 
+    }, { status: 400 })
   }
 
   return NextResponse.json({ profile: data })

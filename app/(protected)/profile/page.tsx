@@ -30,6 +30,7 @@ export default function ProfilePage() {
   const { data: session, status } = useSession()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
 
   const [name, setName] = useState('')
   const [year, setYear] = useState<number | undefined>(undefined)
@@ -70,6 +71,7 @@ export default function ProfilePage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    setSuccess(null)
     setIsSubmitting(true)
     try {
       const response = await fetch('/api/profile', {
@@ -78,9 +80,15 @@ export default function ProfilePage() {
         body: JSON.stringify({ name, year, branch, roll_number: rollNumber }),
       })
       const json = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(json?.error || 'Failed to save profile')
+      if (!response.ok) {
+        throw new Error(json?.error || 'Failed to save profile')
+      }
+      setSuccess('Profile updated successfully!')
+      // Auto-redirect after 2 seconds
+      setTimeout(() => router.push('/home'), 2000)
     } catch (err: any) {
       setError(err.message || 'Something went wrong')
+      console.error('Profile update error:', err)
     } finally {
       setIsSubmitting(false)
     }
@@ -105,6 +113,11 @@ export default function ProfilePage() {
           {error && (
             <Alert variant="destructive" className="mb-4">
               <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {success && (
+            <Alert className="mb-4">
+              <AlertDescription>{success}</AlertDescription>
             </Alert>
           )}
           <form className="space-y-4" onSubmit={onSubmit}>

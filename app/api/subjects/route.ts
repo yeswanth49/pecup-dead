@@ -39,10 +39,21 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Missing context (year/branch/semester).' }, { status: 400 })
     }
 
-    // Query offerings for given context (using R23 regulation)
+    // Try to get subjects from subject_offerings first (proper way)
+    console.log(`[DEBUG] Subjects API - Looking for offerings: regulation=R23, year=${year}, branch=${branch}, semester=${semester}`)
+    
     const { data: offerings, error: offeringsError } = await supabase
       .from('subject_offerings')
-      .select('subject_id, display_order, active')
+      .select(`
+        subject_id,
+        display_order,
+        active,
+        subjects (
+          id,
+          code,
+          name
+        )
+      `)
       .eq('regulation', 'R23')
       .eq('year', parseInt(year, 10))
       .eq('branch', branch)
@@ -50,55 +61,56 @@ export async function GET(request: Request) {
       .eq('active', true)
       .order('display_order', { ascending: true })
 
-    if (offeringsError) {
-      return NextResponse.json({ error: 'Failed to load subject offerings' }, { status: 500 })
+    console.log(`[DEBUG] Subjects API - Found ${offerings?.length || 0} offerings:`, offerings)
+
+    // If subject_offerings works, use that
+    if (!offeringsError && offerings && offerings.length > 0) {
+      const subjects = offerings
+        .map((offering: any) => offering.subjects)
+        .filter(Boolean)
+        .map((subject: any) => ({
+          code: subject.code,
+          name: subject.name
+        }))
+      
+      console.log(`[DEBUG] Subjects API - Returning ${subjects.length} subjects from offerings:`, subjects)
+      return NextResponse.json({ subjects })
     }
 
-    const subjectIds = (offerings || []).map((o) => o.subject_id)
-    if (subjectIds.length === 0) {
-      // Fallback: derive subjects from resources in the same context
-      let resQuery = supabase
-        .from('resources')
-        .select('subject')
-        .eq('year', parseInt(year, 10))
-        .eq('branch', branch)
-        .is('deleted_at', null)
-      if (semester) resQuery = resQuery.eq('semester', parseInt(semester, 10))
-      const { data: resSubjects, error: resErr } = await resQuery
-      if (resErr) {
-        return NextResponse.json({ subjects: [] })
-      }
-      const codes = Array.from(
-        new Set((resSubjects || []).map((r: any) => String(r.subject || '').toLowerCase()).filter(Boolean))
-      )
-      if (codes.length === 0) return NextResponse.json({ subjects: [] })
-      const { data: subjRows } = await supabase
-        .from('subjects')
-        .select('code,name')
-        .in('code', codes)
-      const codeToName: Record<string, string> = {}
-      for (const s of subjRows || []) codeToName[String(s.code).toLowerCase()] = s.name as string
-      const derived = codes.map((code) => ({ code, name: codeToName[code] || code.toUpperCase() }))
-      return NextResponse.json({ subjects: derived })
+    // Fallback to resources if subject_offerings table doesn't exist or has no data
+    console.log(`[DEBUG] Subjects API - No offerings found (${offeringsError?.message || 'empty'}), falling back to resources...`)
+    
+    let resQuery = supabase
+      .from('resources')
+      .select('subject')
+      .eq('year', parseInt(year, 10))
+      .eq('branch', branch)
+      .is('deleted_at', null)
+    if (semester) resQuery = resQuery.eq('semester', parseInt(semester, 10))
+    
+    const { data: resSubjects, error: resErr } = await resQuery
+    console.log(`[DEBUG] Subjects API - Found ${resSubjects?.length || 0} resources`)
+    
+    if (resErr) {
+      return NextResponse.json({ subjects: [] })
     }
-
-    const { data: subjects, error: subjectsError } = await supabase
-      .from('subjects')
-      .select('id, code, name')
-      .in('id', subjectIds)
-
-    if (subjectsError) {
-      return NextResponse.json({ error: 'Failed to load subjects' }, { status: 500 })
+    
+    const codes = Array.from(
+      new Set((resSubjects || []).map((r: any) => String(r.subject || '').toLowerCase()).filter(Boolean))
+    )
+    
+    if (codes.length === 0) {
+      return NextResponse.json({ subjects: [] })
     }
-
-    // Preserve display order using offerings order
-    const idToSubject: Record<string, { id: string; code: string; name: string }> = {}
-    for (const s of subjects || []) idToSubject[s.id] = s as any
-    const ordered = (offerings || [])
-      .map((o) => idToSubject[o.subject_id as string])
-      .filter(Boolean)
-
-    return NextResponse.json({ subjects: ordered })
+    
+    // Create subject objects from the resource data
+    const subjects = codes.map((code) => ({ 
+      code, 
+      name: code.toUpperCase().replace(/_/g, ' ')
+    }))
+    
+    console.log(`[DEBUG] Subjects API - Returning ${subjects.length} subjects from resources:`, subjects)
+    return NextResponse.json({ subjects })
   } catch (e) {
     return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 })
   }

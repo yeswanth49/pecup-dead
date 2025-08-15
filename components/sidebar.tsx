@@ -14,10 +14,12 @@ import {
   Menu,
   X,
   LogOut,
-  AppWindowMac
+  AppWindowMac,
+  RotateCcw
 } from "lucide-react"
 import { useState } from "react"
 import { useSession, signOut } from "next-auth/react"
+import { useRouter } from "next/navigation"
 
 const routes = [
   {
@@ -56,11 +58,17 @@ export function Sidebar() {
   const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
   const { data: session } = useSession()
+  const router = useRouter()
 
   const handleClickOutside = (e: React.MouseEvent) => {
     if (isOpen && e.target === e.currentTarget) {
       setIsOpen(false)
     }
+  }
+
+  const handleResetProfile = () => {
+    setIsOpen(false)
+    router.push('/profile')
   }
 
   return (
@@ -113,7 +121,15 @@ export function Sidebar() {
           </ScrollArea>
 
           {session && (
-            <div className="p-4 border-t">
+            <div className="p-4 border-t space-y-2">
+              <Button
+                variant="ghost"
+                className="w-full flex justify-start gap-2 text-sm"
+                onClick={handleResetProfile}
+              >
+                <RotateCcw className="h-4 w-4" />
+                Reset Year & Branch
+              </Button>
               <Button
                 variant="ghost"
                 className="w-full flex justify-start gap-2 text-sm"
