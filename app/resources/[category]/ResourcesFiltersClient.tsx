@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ChevronRight } from "lucide-react"
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { Skeleton } from '@/components/ui/skeleton'
 
 interface Subject {
   code: string
@@ -104,7 +105,35 @@ export default function ResourcesFiltersClient({ category, categoryData }: Resou
         <div className="text-sm text-muted-foreground">No subjects configured for your context.</div>
       )}
       {loading && (
-        <div className="text-sm text-muted-foreground">Loading subjects...</div>
+        <>
+          <Card className="h-full">
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
+              <Skeleton className="h-4 w-40" />
+            </CardHeader>
+            <CardContent className="flex justify-end">
+              <Skeleton className="h-5 w-5" />
+            </CardContent>
+          </Card>
+          <Card className="h-full">
+            <CardHeader>
+              <Skeleton className="h-6 w-28" />
+              <Skeleton className="h-4 w-36" />
+            </CardHeader>
+            <CardContent className="flex justify-end">
+              <Skeleton className="h-5 w-5" />
+            </CardContent>
+          </Card>
+          <Card className="h-full">
+            <CardHeader>
+              <Skeleton className="h-6 w-36" />
+              <Skeleton className="h-4 w-44" />
+            </CardHeader>
+            <CardContent className="flex justify-end">
+              <Skeleton className="h-5 w-5" />
+            </CardContent>
+          </Card>
+        </>
       )}
     </div>
   )
