@@ -7,28 +7,23 @@ import ChatBubble from '@/components/ChatBubble'
 import { FileText, BookOpen, FileCheck, Database } from "lucide-react"
 
 import { useEffect, useMemo, useState } from 'react'
+import { useProfile } from '@/lib/profile-context'
 
 export default function ResourcesPage() {
+  const { profile } = useProfile()
   const [year, setYear] = useState<number | 'all'>('all')
   const [semester, setSemester] = useState<number | 'all'>('all')
   const [branch, setBranch] = useState<string | ''>('')
 
   useEffect(() => {
-    async function initFromProfile() {
-      try {
-        const res = await fetch('/api/profile', { cache: 'no-store' })
-        if (!res.ok) return
-        const json = await res.json()
-        const profile = json?.profile
-        if (!profile) return
-        if (year === 'all') setYear(profile.year as number)
-        const month = new Date().getMonth() // 0..11; > July => month >= 7 => Sem 2
-        if (semester === 'all') setSemester(month >= 7 ? 2 : 1)
-        if (!branch) setBranch(profile.branch as string)
-      } catch {}
+    // Use cached profile data instead of fetching
+    if (profile) {
+      if (year === 'all') setYear(profile.year)
+      const month = new Date().getMonth() // 0..11; > July => month >= 7 => Sem 2
+      if (semester === 'all') setSemester(month >= 7 ? 2 : 1)
+      if (!branch) setBranch(profile.branch)
     }
-    initFromProfile()
-  }, [])
+  }, [profile, year, semester, branch])
 
   const query = useMemo(() => {
     const p = new URLSearchParams()

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import { useProfile } from '@/lib/profile-context'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -29,7 +30,7 @@ interface ProfileResponse {
 export default function ProfilePage() {
   const router = useRouter()
   const { data: session, status } = useSession()
-  const [loading, setLoading] = useState(true)
+  const { profile, loading: profileLoading, error: profileError, refetch } = useProfile()
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
@@ -46,35 +47,17 @@ export default function ProfilePage() {
   }, [status, router])
 
   useEffect(() => {
-    // Only fetch profile when user is authenticated (not loading or unauthenticated)
-    if (status !== 'authenticated') {
-      return
+    // Use cached profile data from context
+    if (profile) {
+      setName(profile.name)
+      setYear(profile.year)
+      setBranch(profile.branch as BranchType)
+      setRollNumber(profile.roll_number)
+    } else if (profileError && status === 'authenticated') {
+      // If profile missing, send to onboarding
+      router.replace('/onboarding')
     }
-    
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const res = await fetch('/api/profile')
-        if (!res.ok) throw new Error('Failed to load profile')
-        const json: ProfileResponse = await res.json()
-        if (!json.profile) {
-          // If profile missing, send to onboarding
-          router.replace('/onboarding')
-          return
-        }
-        setName(json.profile.name)
-        setYear(json.profile.year)
-        setBranch(json.profile.branch)
-        setRollNumber(json.profile.roll_number)
-      } catch (e: any) {
-        setError(e.message || 'Error loading profile')
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [status, router])
+  }, [profile, profileError, status, router])
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -92,6 +75,8 @@ export default function ProfilePage() {
         throw new Error(json?.error || 'Failed to save profile')
       }
       setSuccess('Profile updated successfully!')
+      // Refetch profile to update context
+      await refetch()
       // Auto-redirect after 2 seconds
       setTimeout(() => router.push('/home'), 2000)
     } catch (err: any) {
@@ -102,7 +87,7 @@ export default function ProfilePage() {
     }
   }
 
-  if (status === 'loading' || loading) {
+  if (status === 'loading' || profileLoading) {
     return (
       <div className="mx-auto max-w-xl">
         <Card>
