@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 
 export interface Profile {
@@ -21,14 +21,48 @@ interface ProfileContextType {
 
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined)
 
+const PROFILE_STORAGE_KEY = 'user_profile_cache'
+
 export function ProfileProvider({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const hasFetched = useRef(false)
 
-  const fetchProfile = async () => {
+  // Load profile from sessionStorage if available
+  useEffect(() => {
+    if (typeof window !== 'undefined' && status === 'authenticated') {
+      try {
+        const cached = sessionStorage.getItem(PROFILE_STORAGE_KEY)
+        if (cached) {
+          const cachedProfile = JSON.parse(cached)
+          // Verify the cached profile belongs to the current user
+          if (cachedProfile.email === session?.user?.email) {
+            setProfile(cachedProfile)
+            setLoading(false)
+            hasFetched.current = true
+            return
+          } else {
+            // Different user, clear cache
+            sessionStorage.removeItem(PROFILE_STORAGE_KEY)
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load cached profile:', err)
+        sessionStorage.removeItem(PROFILE_STORAGE_KEY)
+      }
+    }
+  }, [status, session?.user?.email])
+
+  const fetchProfile = async (force = false) => {
     if (status !== 'authenticated') {
+      setLoading(false)
+      return
+    }
+
+    // If we already have profile data and not forcing refresh, skip fetch
+    if (!force && hasFetched.current && profile) {
       setLoading(false)
       return
     }
@@ -43,7 +77,19 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       }
       
       const json = await res.json()
-      setProfile(json?.profile || null)
+      const profileData = json?.profile || null
+      
+      setProfile(profileData)
+      hasFetched.current = true
+      
+      // Cache the profile data in sessionStorage
+      if (profileData && typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profileData))
+        } catch (err) {
+          console.warn('Failed to cache profile:', err)
+        }
+      }
     } catch (err: any) {
       setError(err.message || 'Error loading profile')
       console.error('Profile fetch error:', err)
@@ -53,11 +99,27 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    fetchProfile()
+    // Only fetch if we don't have cached data
+    if (status === 'authenticated' && !hasFetched.current) {
+      fetchProfile()
+    } else if (status !== 'authenticated') {
+      // Clear cache on logout
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem(PROFILE_STORAGE_KEY)
+      }
+      setProfile(null)
+      setLoading(false)
+      hasFetched.current = false
+    }
   }, [status])
 
   const refetch = async () => {
-    await fetchProfile()
+    // Clear cache before refetching
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem(PROFILE_STORAGE_KEY)
+    }
+    hasFetched.current = false
+    await fetchProfile(true)
   }
 
   return (
