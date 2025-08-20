@@ -25,9 +25,23 @@ interface Resource {
     url: string;
 }
 
+interface GroupedResourceItem {
+    name: string;
+    description: string;
+    date: string;
+    type: string;
+    url: string;
+}
+
+interface GroupedResources {
+    notes: Record<string, GroupedResourceItem[]>;
+    assignments: Record<string, GroupedResourceItem[]>;
+    papers: Record<string, GroupedResourceItem[]>;
+}
+
 interface PrimeSectionData {
-    upcomingExams: Exam[];
-    resources: Resource[];
+    data: GroupedResources | null;
+    triggeringSubjects: string[];
 }
 
 // Helper function to check if a date is within the specified threshold
@@ -49,10 +63,11 @@ export async function GET(request: Request) {
     console.log(`API Route: /api/prime-section-data called at ${new Date().toISOString()}`);
     
     try {
-        // Compute date range [today .. today + threshold] as YYYY-MM-DD (UTC, timezone-independent)
+        // Set start date to today (no past exams)
         const startUtc = new Date();
         startUtc.setUTCHours(0, 0, 0, 0);
-        const endUtc = new Date(startUtc);
+        const endUtc = new Date();
+        endUtc.setUTCHours(0, 0, 0, 0);
         endUtc.setUTCDate(endUtc.getUTCDate() + UPCOMING_EXAM_DAYS_THRESHOLD);
 
         const startDateStr = startUtc.toISOString().slice(0, 10);
@@ -78,16 +93,13 @@ export async function GET(request: Request) {
           }
         }
 
-        // Fetch upcoming exams from Supabase within user's context
-        let examQuery = supabaseAdmin
+        // Fetch upcoming exams from Supabase - get all exams since table doesn't have year/branch filtering yet
+        const { data: examData, error: examError } = await supabaseAdmin
             .from('exams')
             .select('subject, exam_date')
             .gte('exam_date', startDateStr)
             .lte('exam_date', endDateStr)
-            .order('exam_date', { ascending: true });
-        if (yearParam) examQuery = examQuery.eq('year', parseInt(yearParam, 10))
-        if (branchParam) examQuery = examQuery.eq('branch', branchParam)
-        const { data: examData, error: examError } = await examQuery
+            .order('exam_date', { ascending: true })
 
         if (examError) {
             console.error('API Error: Failed to fetch exams:', examError);
@@ -103,19 +115,12 @@ export async function GET(request: Request) {
 
         console.log(`API Prime: Found ${upcomingExamsData.length} exams within the ${UPCOMING_EXAM_DAYS_THRESHOLD}-day window.`);
 
-        // Select ALL exams on the SOONEST date
-        let examsToDisplay: Exam[] = [];
-        let uniqueUpcomingSubjects: string[] = [];
+        // Only show truly upcoming exams
+        let examsToDisplay: Exam[] = upcomingExamsData;
+        let uniqueUpcomingSubjects: string[] = Array.from(new Set(upcomingExamsData.map(exam => exam.subject))).filter(Boolean);
 
         if (upcomingExamsData.length > 0) {
-            // Find the earliest exam date
-            const earliestDate = upcomingExamsData[0].examDate;
-            
-            // Get all exams on that earliest date
-            examsToDisplay = upcomingExamsData.filter(exam => exam.examDate === earliestDate);
-            uniqueUpcomingSubjects = Array.from(new Set(examsToDisplay.map(exam => exam.subject))).filter(Boolean);
-            
-            console.log(`API Prime: Selected ${examsToDisplay.length} exams on the soonest date (${earliestDate}): ${uniqueUpcomingSubjects.join(', ')}`);
+            console.log(`API Prime: Found ${examsToDisplay.length} total exams for subjects: ${uniqueUpcomingSubjects.join(', ')}`);
         }
 
         // Fetch resources for the upcoming exam subjects
@@ -149,9 +154,41 @@ export async function GET(request: Request) {
 
         console.log(`API Prime: Found ${relevantResources.length} relevant resources for subjects: ${uniqueUpcomingSubjects.join(', ')}`);
 
+        // Group resources by type
+        const groupedResources: GroupedResources = {
+            notes: {},
+            assignments: {},
+            papers: {}
+        };
+
+        relevantResources.forEach(resource => {
+            const subject = uniqueUpcomingSubjects.find(subj => 
+                resource.name.toLowerCase().includes(subj.toLowerCase()) ||
+                resource.description.toLowerCase().includes(subj.toLowerCase())
+            ) || 'General';
+
+            const resourceType = resource.type.toLowerCase();
+            if (resourceType.includes('note')) {
+                if (!groupedResources.notes[subject]) groupedResources.notes[subject] = [];
+                groupedResources.notes[subject].push(resource);
+            } else if (resourceType.includes('assignment')) {
+                if (!groupedResources.assignments[subject]) groupedResources.assignments[subject] = [];
+                groupedResources.assignments[subject].push(resource);
+            } else if (resourceType.includes('paper') || resourceType.includes('exam')) {
+                if (!groupedResources.papers[subject]) groupedResources.papers[subject] = [];
+                groupedResources.papers[subject].push(resource);
+            } else {
+                // Default to notes for unknown types
+                if (!groupedResources.notes[subject]) groupedResources.notes[subject] = [];
+                groupedResources.notes[subject].push(resource);
+            }
+        });
+
         const responseData: PrimeSectionData = {
-            upcomingExams: examsToDisplay,
-            resources: relevantResources
+            data: Object.keys(groupedResources.notes).length > 0 || 
+                  Object.keys(groupedResources.assignments).length > 0 || 
+                  Object.keys(groupedResources.papers).length > 0 ? groupedResources : null,
+            triggeringSubjects: uniqueUpcomingSubjects
         };
 
         const endTime = Date.now();
