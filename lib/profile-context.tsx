@@ -29,31 +29,31 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const hasFetched = useRef(false)
+  const isInitialized = useRef(false)
 
-  // Load profile from sessionStorage if available
+  // Immediately try to load from cache on mount
   useEffect(() => {
-    if (typeof window !== 'undefined' && status === 'authenticated') {
+    console.log('ProfileContext: Mount effect running')
+    if (typeof window !== 'undefined') {
       try {
         const cached = sessionStorage.getItem(PROFILE_STORAGE_KEY)
+        console.log('ProfileContext: Cached data found:', !!cached)
         if (cached) {
           const cachedProfile = JSON.parse(cached)
-          // Verify the cached profile belongs to the current user
-          if (cachedProfile.email === session?.user?.email) {
-            setProfile(cachedProfile)
-            setLoading(false)
-            hasFetched.current = true
-            return
-          } else {
-            // Different user, clear cache
-            sessionStorage.removeItem(PROFILE_STORAGE_KEY)
-          }
+          console.log('ProfileContext: Setting cached profile:', cachedProfile)
+          setProfile(cachedProfile)
+          setLoading(false)
+          hasFetched.current = true
+          return
         }
       } catch (err) {
-        console.warn('Failed to load cached profile:', err)
+        console.warn('Failed to load cached profile on mount:', err)
         sessionStorage.removeItem(PROFILE_STORAGE_KEY)
       }
     }
-  }, [status, session?.user?.email])
+    console.log('ProfileContext: No cache found, setting loading to false')
+    setLoading(false) // If no cache, set loading to false initially
+  }, [])
 
   const fetchProfile = async (force = false) => {
     if (status !== 'authenticated') {
@@ -98,20 +98,45 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Handle authentication state changes
   useEffect(() => {
-    // Only fetch if we don't have cached data
-    if (status === 'authenticated' && !hasFetched.current) {
-      fetchProfile()
-    } else if (status !== 'authenticated') {
-      // Clear cache on logout
+    if (status === 'authenticated' && !hasFetched.current && !profile) {
+      // Only fetch if we don't have cached profile data and haven't fetched yet
+      if (session?.user?.email) {
+        // Verify cached profile belongs to current user
+        if (typeof window !== 'undefined') {
+          const cached = sessionStorage.getItem(PROFILE_STORAGE_KEY)
+          if (cached) {
+            try {
+              const cachedProfile = JSON.parse(cached)
+              if (cachedProfile.email !== session.user.email) {
+                // Different user, clear cache and fetch
+                sessionStorage.removeItem(PROFILE_STORAGE_KEY)
+                setProfile(null)
+                fetchProfile()
+              }
+              // If same user, we already loaded from cache in the mount effect
+            } catch (err) {
+              sessionStorage.removeItem(PROFILE_STORAGE_KEY)
+              setProfile(null)
+              fetchProfile()
+            }
+          } else {
+            // No cache, need to fetch
+            fetchProfile()
+          }
+        }
+      }
+    } else if (status === 'unauthenticated') {
+      // Clear everything on logout
+      setLoading(false)
+      setProfile(null)
+      hasFetched.current = false
       if (typeof window !== 'undefined') {
         sessionStorage.removeItem(PROFILE_STORAGE_KEY)
       }
-      setProfile(null)
-      setLoading(false)
-      hasFetched.current = false
     }
-  }, [status])
+  }, [status, session?.user?.email])
 
   const refetch = async () => {
     // Clear cache before refetching
