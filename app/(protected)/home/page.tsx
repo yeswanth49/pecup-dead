@@ -49,6 +49,9 @@ export default function HomePage() {
   const [permissions, setPermissions] = useState<UserPermissions | null>(null)
   const [isLoadingUser, setIsLoadingUser] = useState(true)
 
+  const [usersCount, setUsersCount] = useState<number>(0)
+  const [isLoadingUsersCount, setIsLoadingUsersCount] = useState(true)
+
   useEffect(() => {
     if (sessionStatus === 'authenticated') {
       // Fetch user context first
@@ -108,14 +111,49 @@ export default function HomePage() {
         }
       }
 
+      const fetchUsersCount = async () => {
+        setIsLoadingUsersCount(true)
+        try {
+          const response = await fetch('/api/users-count')
+          if (!response.ok) throw new Error(`Users count fetch failed: ${response.status}`)
+          const data = await response.json()
+          setUsersCount(data.totalUsers)
+        } catch (error: any) {
+          console.error('Error fetching users count:', error)
+        } finally {
+          setIsLoadingUsersCount(false)
+        }
+      }
+
       fetchUserContext()
       fetchUpdates()
       fetchPrimeSectionData()
+      fetchUsersCount()
     } else if (sessionStatus === 'unauthenticated') {
       setIsLoadingUpdates(false)
       setIsLoadingPrime(false)
       setIsLoadingUser(false)
+      setIsLoadingUsersCount(false)
     }
+  }, [sessionStatus])
+
+  // Set up periodic refresh for users count every 30 seconds
+  useEffect(() => {
+    if (sessionStatus !== 'authenticated') return
+
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch('/api/users-count')
+        if (response.ok) {
+          const data = await response.json()
+          setUsersCount(data.totalUsers)
+        }
+      } catch (error) {
+        console.error('Error refreshing users count:', error)
+      }
+    }, 30000) // 30 seconds
+
+    return () => clearInterval(interval)
   }, [sessionStatus])
 
   if (sessionStatus === 'loading') {
@@ -240,11 +278,22 @@ export default function HomePage() {
           <div>
             <p className="text-muted-foreground">Your central location for all educational resources and information</p>
           </div>
-          {userContext && (
-            <div className="flex items-center gap-4">
-              {getRoleDisplay(userContext.role)}
+          <div className="flex items-center gap-4">
+            {userContext && getRoleDisplay(userContext.role)}
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-muted/50 rounded-md">
+              <Users className="h-3 w-3 text-primary" />
+              <div className="flex items-center gap-1">
+                <span className="font-medium text-sm">
+                  {isLoadingUsersCount ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    usersCount.toLocaleString()
+                  )}
+                </span>
+                <span className="text-xs text-muted-foreground">users</span>
+              </div>
             </div>
-          )}
+          </div>
         </div>
 
 
