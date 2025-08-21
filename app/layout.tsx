@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { Sidebar } from "@/components/sidebar"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { Providers } from "./providers" // ✅ Import Providers
 import { Analytics } from "@vercel/analytics/react"
 import { SpeedInsights } from "@vercel/speed-insights/next"
@@ -26,6 +27,7 @@ export default function RootLayout({
         <Providers> {/* ✅ Wrap with Providers */}
           <div className="flex min-h-screen">
             <Sidebar />
+            <ThemeToggle />
             <main className="flex-1 p-6 md:p-8">{children}</main>
           </div>
         </Providers>
