@@ -57,28 +57,20 @@ export async function GET(request: Request) {
         }
 
         // Query Supabase for recent updates
-        // Try with deleted_at filter; fallback if column doesn't exist (code 42703)
-        let updatesRes = await supabaseAdmin
+        let query = supabaseAdmin
           .from('recent_updates')
           .select('*')
-          .is('deleted_at', null)
           .order('created_at', { ascending: false })
           .limit(10)
-        if (year) updatesRes = await supabaseAdmin
-          .from('recent_updates')
-          .select('*')
-          .is('deleted_at', null)
-          .eq('year', parseInt(year, 10))
-          .eq('branch', branch as any)
-          .order('created_at', { ascending: false })
-          .limit(10)
-        if (updatesRes.error && updatesRes.error.code === '42703') {
-          updatesRes = await supabaseAdmin
-            .from('recent_updates')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(10)
+
+        // If user has year and branch, filter by them, otherwise show all updates
+        if (year && branch) {
+          query = query
+            .eq('year', parseInt(year, 10))
+            .eq('branch', branch)
         }
+
+        const updatesRes = await query
         if (updatesRes.error) {
           console.error('API Error: Supabase query failed:', updatesRes.error)
           return NextResponse.json({ error: 'Failed to load recent updates from database' }, { status: 500 })
