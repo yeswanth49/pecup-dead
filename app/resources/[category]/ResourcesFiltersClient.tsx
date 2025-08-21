@@ -91,8 +91,8 @@ export default function ResourcesFiltersClient({ category, categoryData }: Resou
           <Link key={s.code} href={`/resources/${category}/${encodeURIComponent(s.code)}${q ? `?${q}` : ''}`} className="block">
             <Card className="h-full transition-all-smooth hover-lift">
               <CardHeader>
-                <CardTitle>{s.name}</CardTitle>
-                <CardDescription>Access {s.name} {categoryData.title.toUpperCase()}</CardDescription>
+                <CardTitle>{s.code}</CardTitle>
+                <CardDescription>Access {s.code} {categoryData.title.toUpperCase()}</CardDescription>
               </CardHeader>
               <CardContent className="flex justify-end">
                 <ChevronRight className="h-5 w-5 text-primary" />
