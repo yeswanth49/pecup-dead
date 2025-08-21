@@ -11,6 +11,7 @@ export async function GET(request: Request) {
   let year = url.searchParams.get('year')
   let branch = url.searchParams.get('branch')
   let semester = url.searchParams.get('semester')
+  const resourceType = url.searchParams.get('resource_type') // 'resources', 'records', or null for all
 
   try {
     console.log(`[DEBUG] Initial params - year: ${year}, branch: ${branch}, semester: ${semester}`)
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
       }
     }
 
-    console.log(`[DEBUG] Final params - year: ${year}, branch: ${branch}, semester: ${semester}`)
+    console.log(`[DEBUG] Final params - year: ${year}, branch: ${branch}, semester: ${semester}, resource_type: ${resourceType}`)
 
     if (!year || !branch || !semester) {
       return NextResponse.json({ error: 'Missing context (year/branch/semester).' }, { status: 400 })
@@ -77,12 +78,19 @@ export async function GET(request: Request) {
       return NextResponse.json({ subjects: [] })
     }
 
-    // Get subjects separately
+    // Get subjects separately with resource_type filtering
     const subjectIds = offeringsData.map((offering: any) => offering.subject_id)
-    const { data: subjectsData, error: subjectsError } = await supabase
+    let subjectsQuery = supabase
       .from('subjects')
-      .select('id, code, name')
+      .select('id, code, name, resource_type')
       .in('id', subjectIds)
+    
+    // Apply resource_type filter if specified
+    if (resourceType && (resourceType === 'resources' || resourceType === 'records')) {
+      subjectsQuery = subjectsQuery.eq('resource_type', resourceType)
+    }
+    
+    const { data: subjectsData, error: subjectsError } = await subjectsQuery
 
     if (subjectsError) {
       console.error(`[ERROR] Subjects API - Failed to fetch subjects:`, subjectsError)
@@ -99,10 +107,11 @@ export async function GET(request: Request) {
       .filter(Boolean)
       .map((subject: any) => ({
         code: subject.code,
-        name: subject.name
+        name: subject.name,
+        resource_type: subject.resource_type
       }))
     
-    console.log(`[DEBUG] Subjects API - Returning ${subjects.length} subjects from offerings:`, subjects)
+    console.log(`[DEBUG] Subjects API - Returning ${subjects.length} subjects from offerings (filtered by resource_type: ${resourceType}):`, subjects)
     return NextResponse.json({ subjects })
   } catch (e) {
     return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 })

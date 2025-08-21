@@ -8,6 +8,7 @@ import { notFound } from "next/navigation"
 import { Header } from '@/components/Header'
 import ChatBubble from '@/components/ChatBubble'
 import { ChevronRight, FileText } from "lucide-react"
+import { buildSubjectsQuery } from '@/lib/resource-utils'
 
 const CATEGORY_TITLES: Record<string, string> = {
   notes: 'Notes',
@@ -51,10 +52,12 @@ export default function SubjectPage({
   useEffect(() => {
     async function load() {
       try {
-        const qp = new URLSearchParams()
-        if (typeof searchParams.year === 'string') qp.set('year', searchParams.year)
-        if (typeof searchParams.semester === 'string') qp.set('semester', searchParams.semester)
-        if (typeof searchParams.branch === 'string') qp.set('branch', searchParams.branch)
+        const searchParamsObj = new URLSearchParams()
+        if (typeof searchParams.year === 'string') searchParamsObj.set('year', searchParams.year)
+        if (typeof searchParams.semester === 'string') searchParamsObj.set('semester', searchParams.semester)
+        if (typeof searchParams.branch === 'string') searchParamsObj.set('branch', searchParams.branch)
+        
+        const qp = buildSubjectsQuery(searchParamsObj, category)
         const res = await fetch(`/api/subjects?${qp.toString()}`, { cache: 'no-store' })
         const json = await res.json().catch(() => ({}))
         const subjects = Array.isArray(json?.subjects) ? json.subjects : []
@@ -63,7 +66,7 @@ export default function SubjectPage({
       } catch {}
     }
     load()
-  }, [decodedSubject, searchParams.year, searchParams.semester, searchParams.branch])
+  }, [decodedSubject, searchParams.year, searchParams.semester, searchParams.branch, category])
 
   return (
     <div className="space-y-6">

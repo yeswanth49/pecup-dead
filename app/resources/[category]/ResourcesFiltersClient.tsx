@@ -6,11 +6,8 @@ import { ChevronRight } from "lucide-react"
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Skeleton } from '@/components/ui/skeleton'
-
-interface Subject {
-  code: string
-  name: string
-}
+import { Subject } from '@/lib/types'
+import { getResourceTypeForCategory, buildSubjectsQuery, getSubjectFilterDescription } from '@/lib/resource-utils'
 
 interface ResourcesFiltersClientProps {
   category: string
@@ -31,13 +28,7 @@ export default function ResourcesFiltersClient({ category, categoryData }: Resou
       setLoading(true)
       setError(null)
       try {
-        const qp = new URLSearchParams()
-        const year = searchParams.get('year')
-        const semester = searchParams.get('semester')
-        const branch = searchParams.get('branch')
-        if (year) qp.set('year', year)
-        if (semester) qp.set('semester', semester)
-        if (branch) qp.set('branch', branch)
+        const qp = buildSubjectsQuery(searchParams, category)
         const res = await fetch(`/api/subjects?${qp.toString()}`, { cache: 'no-store' })
         const json = await res.json()
         setSubjects(json?.subjects || [])
@@ -50,7 +41,7 @@ export default function ResourcesFiltersClient({ category, categoryData }: Resou
       }
     }
     load()
-  }, [searchParams])
+  }, [searchParams, category])
 
   const handleRetry = () => {
     setError(null)
@@ -76,7 +67,11 @@ export default function ResourcesFiltersClient({ category, categoryData }: Resou
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="space-y-4">
+      <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg border">
+        {getSubjectFilterDescription(category)}
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {!loading && subjects.map((s) => {
         const qp = new URLSearchParams()
         const year = searchParams.get('year')
@@ -135,6 +130,7 @@ export default function ResourcesFiltersClient({ category, categoryData }: Resou
           </Card>
         </>
       )}
+      </div>
     </div>
   )
 }

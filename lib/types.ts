@@ -104,6 +104,10 @@ export interface SemestersResponse {
   semesters: Semester[];
 }
 
+export interface SubjectsResponse {
+  subjects: Subject[];
+}
+
 export interface AcademicCalendarResponse {
   calendar: AcademicCalendar;
 }
@@ -170,6 +174,34 @@ export interface LegacyProfile {
   role: 'student' | 'admin' | 'superadmin';
   created_at: string;
   updated_at: string;
+}
+
+// Subject types
+export type ResourceType = 'resources' | 'records';
+
+export interface Subject {
+  id: string;
+  code: string;
+  name: string;
+  full_name?: string;
+  default_units: number;
+  resource_type: ResourceType;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SubjectOffering {
+  id: string;
+  regulation: string;
+  branch: string;
+  year: number;
+  semester: number;
+  subject_id: string;
+  display_order?: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  subject?: Subject;
 }
 
 // Utility types
