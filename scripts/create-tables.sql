@@ -241,12 +241,21 @@ CREATE TABLE IF NOT EXISTS regulations (
   notes text
 );
 
+-- Resource type enum for subjects
+DO $$ BEGIN
+  CREATE TYPE resource_type AS ENUM ('resources', 'records');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
 -- Canonical subject catalog
 CREATE TABLE IF NOT EXISTS subjects (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   code text NOT NULL UNIQUE, -- lowercase key used in URLs/resources.subject
   name text NOT NULL,
+  full_name text,
   default_units smallint NOT NULL DEFAULT 5,
+  resource_type resource_type NOT NULL DEFAULT 'resources',
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -301,3 +310,4 @@ CREATE TABLE IF NOT EXISTS paper_templates (
 CREATE INDEX IF NOT EXISTS idx_subject_offerings_context
   ON subject_offerings(regulation, branch, year, semester);
 CREATE INDEX IF NOT EXISTS idx_subjects_code ON subjects(code);
+CREATE INDEX IF NOT EXISTS idx_subjects_resource_type ON subjects(resource_type);
