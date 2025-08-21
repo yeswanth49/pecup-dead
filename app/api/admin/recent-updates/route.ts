@@ -39,7 +39,6 @@ export async function GET(request: Request) {
   let query = supabase
     .from('recent_updates')
     .select('id,title,date,description,year,branch,created_at', { count: 'exact' })
-    .is('deleted_at', null)
     .order(sort, { ascending: order === 'asc' })
 
   const year = toInt(url.searchParams.get('year'))

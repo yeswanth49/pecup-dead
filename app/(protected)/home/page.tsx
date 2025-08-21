@@ -192,8 +192,9 @@ export default function HomePage() {
 
     // Management dashboard for representatives and admins
     if (userContext?.role === 'representative' || userContext?.role === 'admin' || userContext?.role === 'superadmin') {
+      const dashboardHref = userContext.role === 'representative' ? '/dev-dashboard' : '/dashboard'
       cards.push(
-        <Link key="dashboard" href="/dashboard" className="block">
+        <Link key="dashboard" href={dashboardHref} className="block">
           <Card className="h-full transition-all duration-200 ease-in-out hover:shadow-lg hover:-translate-y-1">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-lg font-medium">Management</CardTitle>
@@ -212,19 +213,22 @@ export default function HomePage() {
       )
     }
 
-    cards.push(
-      <Link key="contact" href="/contact" className="block">
-        <Card className="h-full transition-all duration-200 ease-in-out hover:shadow-lg hover:-translate-y-1">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-lg font-medium">Contact</CardTitle>
-            <Phone className="h-5 w-5 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <CardDescription>Get in touch with administration</CardDescription>
-          </CardContent>
-        </Card>
-      </Link>
-    )
+    // Contact card - only show for non-representatives
+    if (userContext?.role !== 'representative') {
+      cards.push(
+        <Link key="contact" href="/contact" className="block">
+          <Card className="h-full transition-all duration-200 ease-in-out hover:shadow-lg hover:-translate-y-1">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-lg font-medium">Contact</CardTitle>
+              <Phone className="h-5 w-5 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <CardDescription>Get in touch with administration</CardDescription>
+            </CardContent>
+          </Card>
+        </Link>
+      )
+    }
 
     return cards
   }
@@ -241,9 +245,11 @@ export default function HomePage() {
           {userContext && (
             <div className="flex items-center gap-4">
               {getRoleDisplay(userContext.role)}
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/profile">Profile</Link>
-              </Button>
+              {userContext.role !== 'representative' && (
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/profile">Profile</Link>
+                </Button>
+              )}
             </div>
           )}
         </div>

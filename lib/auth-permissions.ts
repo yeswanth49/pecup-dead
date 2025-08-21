@@ -14,6 +14,12 @@ export interface UserContext {
   yearId?: string;
   semesterId?: string;
   representatives?: Representative[];
+  representativeAssignments?: Array<{
+    branch_id: string;
+    year_id: string;
+    branch_code: string;
+    admission_year: number;
+  }>;
 }
 
 export interface AdminContext {
@@ -71,6 +77,14 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
     representatives = repData || []
   }
 
+  // Transform representatives data for frontend
+  const representativeAssignments = representatives.map(rep => ({
+    branch_id: rep.branch_id,
+    year_id: rep.year_id,
+    branch_code: (rep.branches as any)?.code || '',
+    admission_year: (rep.years as any)?.batch_year || 0
+  }))
+
   return {
     id: profile.id,
     email: profile.email,
@@ -78,7 +92,8 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
     role: profile.role as UserRole,
     year: profile.year,
     branch: profile.branch,
-    representatives
+    representatives,
+    representativeAssignments
   }
 }
 

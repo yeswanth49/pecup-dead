@@ -24,9 +24,27 @@ type Resource = {
   archived: boolean
 }
 
+type UserContext = {
+  role: 'student' | 'representative' | 'admin' | 'superadmin'
+  email: string
+  name: string
+  representativeAssignments?: Array<{
+    branch_id: string
+    year_id: string
+    branch_code: string
+    admission_year: number
+  }>
+}
+
 const BRANCHES = ['CSE','AIML','DS','AI','ECE','EEE','MEC','CE']
 
-export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: boolean }) {
+export function ResourcesSection({ 
+  archivedOnly = false, 
+  userContext 
+}: { 
+  archivedOnly?: boolean
+  userContext: UserContext | null
+}) {
   const [items, setItems] = useState<Resource[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -69,20 +87,29 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
   useEffect(() => { load() }, [query, refreshIndex])
 
   useEffect(() => {
-    // Prefill filters with admin's assigned scope if available
-    async function initProfile() {
-      try {
-        const res = await fetch('/api/profile', { cache: 'no-store' })
-        const json = await res.json().catch(() => ({}))
-        const p = json?.profile
-        if (p?.year && p?.branch) {
-          setProfile({ year: p.year, branch: p.branch })
-          setFilters((f) => ({ ...f, year: f.year ?? p.year, branch: f.branch || p.branch }))
-        }
-      } catch {}
+    // For representatives, prefill and lock filters to their assigned scope
+    if (userContext?.role === 'representative' && userContext.representativeAssignments) {
+      const assignments = userContext.representativeAssignments
+      if (assignments.length === 1) {
+        // Single assignment - lock to that branch/year
+        const assignment = assignments[0]
+        setFilters((f) => ({ 
+          ...f, 
+          year: assignment.admission_year, 
+          branch: assignment.branch_code 
+        }))
+      } else if (assignments.length > 1) {
+        // Multiple assignments - allow selection within assigned scope only
+        // Default to first assignment
+        const assignment = assignments[0]
+        setFilters((f) => ({ 
+          ...f, 
+          year: f.year ?? assignment.admission_year, 
+          branch: f.branch || assignment.branch_code 
+        }))
+      }
     }
-    initProfile()
-  }, [])
+  }, [userContext])
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this resource?')) return
@@ -150,15 +177,31 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
         </div>
         <div className="flex flex-col gap-1 min-w-[120px]">
           <Label>Year</Label>
-          <Select value={filters.year != null ? String(filters.year) : 'all'} onValueChange={(v) => setFilters((f) => ({ ...f, year: v === 'all' ? null : Number(v) }))}>
+          <Select 
+            value={filters.year != null ? String(filters.year) : 'all'} 
+            onValueChange={(v) => setFilters((f) => ({ ...f, year: v === 'all' ? null : Number(v) }))}
+            disabled={userContext?.role === 'representative' && userContext.representativeAssignments?.length === 1}
+          >
             <SelectTrigger>
               <SelectValue placeholder="All" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              {[1,2,3,4].map((y) => (
-                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-              ))}
+              {userContext?.role === 'representative' && userContext.representativeAssignments ? (
+                // Representatives can only see their assigned years
+                userContext.representativeAssignments.map((assignment) => (
+                  <SelectItem key={assignment.admission_year} value={String(assignment.admission_year)}>
+                    {assignment.admission_year} Batch
+                  </SelectItem>
+                ))
+              ) : (
+                // Admins can see all years
+                <>
+                  <SelectItem value="all">All</SelectItem>
+                  {[2021, 2022, 2023, 2024].map((y) => (
+                    <SelectItem key={y} value={String(y)}>{y} Batch</SelectItem>
+                  ))}
+                </>
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -178,13 +221,29 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
         </div>
         <div className="flex flex-col gap-1 min-w-[160px]">
           <Label>Branch</Label>
-          <Select value={filters.branch || 'any'} onValueChange={(v) => setFilters((f) => ({ ...f, branch: v === 'any' ? '' : v }))}>
+          <Select 
+            value={filters.branch || 'any'} 
+            onValueChange={(v) => setFilters((f) => ({ ...f, branch: v === 'any' ? '' : v }))}
+            disabled={userContext?.role === 'representative' && userContext.representativeAssignments?.length === 1}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Any" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="any">Any</SelectItem>
-              {BRANCHES.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+              {userContext?.role === 'representative' && userContext.representativeAssignments ? (
+                // Representatives can only see their assigned branches
+                userContext.representativeAssignments.map((assignment) => (
+                  <SelectItem key={assignment.branch_code} value={assignment.branch_code}>
+                    {assignment.branch_code}
+                  </SelectItem>
+                ))
+              ) : (
+                // Admins can see all branches
+                <>
+                  <SelectItem value="any">Any</SelectItem>
+                  {BRANCHES.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                </>
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -193,8 +252,7 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
           <CreateResourceDialog
             onCreated={() => setRefreshIndex((i) => i + 1)}
             defaultArchived={archivedOnly}
-            defaultYear={profile?.year}
-            defaultBranch={profile?.branch}
+            userContext={userContext}
           />
         </div>
       </div>
@@ -248,7 +306,15 @@ export function ResourcesSection({ archivedOnly = false }: { archivedOnly?: bool
   )
 }
 
-function CreateResourceDialog({ onCreated, defaultArchived = false, defaultYear, defaultBranch }: { onCreated: () => void; defaultArchived?: boolean; defaultYear?: number; defaultBranch?: string }) {
+function CreateResourceDialog({ 
+  onCreated, 
+  defaultArchived = false, 
+  userContext 
+}: { 
+  onCreated: () => void
+  defaultArchived?: boolean
+  userContext: UserContext | null
+}) {
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -259,10 +325,16 @@ function CreateResourceDialog({ onCreated, defaultArchived = false, defaultYear,
   const [subject, setSubject] = useState('')
   const [unit, setUnit] = useState<number>(1)
   const [type, setType] = useState('')
-  const [year, setYear] = useState<number | ''>(defaultYear ?? '')
-  const [branch, setBranch] = useState<string | ''>(defaultBranch ?? '')
+  
+  // For representatives, default to their first assignment
+  const defaultAssignment = userContext?.representativeAssignments?.[0]
+  const [year, setYear] = useState<number | ''>(defaultAssignment?.admission_year ?? '')
+  const [branch, setBranch] = useState<string | ''>(defaultAssignment?.branch_code ?? '')
   const [semester, setSemester] = useState<number | ''>('')
   const [file, setFile] = useState<File | null>(null)
+  
+  const isRepresentative = userContext?.role === 'representative'
+  const assignments = userContext?.representativeAssignments || []
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -336,14 +408,32 @@ function CreateResourceDialog({ onCreated, defaultArchived = false, defaultYear,
               <Input value={type} onChange={(e) => setType(e.target.value)} />
             </div>
             <div>
-              <Label>Year</Label>
-              <Select value={year ? String(year) : 'none'} onValueChange={(v) => setYear(v === 'none' ? '' : Number(v))}>
+              <Label>Year (Admission Batch)</Label>
+              <Select 
+                value={year ? String(year) : 'none'} 
+                onValueChange={(v) => setYear(v === 'none' ? '' : Number(v))}
+                disabled={isRepresentative && assignments.length === 1}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {[1,2,3,4].map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                  {isRepresentative && assignments.length > 0 ? (
+                    // Representatives can only upload for their assigned years
+                    assignments.map((assignment) => (
+                      <SelectItem key={assignment.admission_year} value={String(assignment.admission_year)}>
+                        {assignment.admission_year} Batch
+                      </SelectItem>
+                    ))
+                  ) : (
+                    // Admins can upload for any year
+                    <>
+                      <SelectItem value="none">None</SelectItem>
+                      {[2021, 2022, 2023, 2024].map((y) => (
+                        <SelectItem key={y} value={String(y)}>{y} Batch</SelectItem>
+                      ))}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -361,13 +451,29 @@ function CreateResourceDialog({ onCreated, defaultArchived = false, defaultYear,
             </div>
             <div>
               <Label>Branch</Label>
-              <Select value={branch || 'none'} onValueChange={(v) => setBranch(v === 'none' ? '' : v)}>
+              <Select 
+                value={branch || 'none'} 
+                onValueChange={(v) => setBranch(v === 'none' ? '' : v)}
+                disabled={isRepresentative && assignments.length === 1}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {BRANCHES.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                  {isRepresentative && assignments.length > 0 ? (
+                    // Representatives can only upload for their assigned branches
+                    assignments.map((assignment) => (
+                      <SelectItem key={assignment.branch_code} value={assignment.branch_code}>
+                        {assignment.branch_code}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    // Admins can upload for any branch
+                    <>
+                      <SelectItem value="none">None</SelectItem>
+                      {BRANCHES.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>

@@ -29,13 +29,40 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from('exams')
-    .select('id,subject,exam_date,description,year,branch', { count: 'exact' })
-    .is('deleted_at', null)
+    .select('id,subject,exam_date,year,branch', { count: 'exact' })
     .order(sort, { ascending: order === 'asc' })
 
   const year = toInt(url.searchParams.get('year'))
-  if (year) query = query.eq('year', year)
   const branch = url.searchParams.get('branch')
+
+  // Apply representative scope filtering
+  if (userContext.role === 'representative') {
+    const assignments = userContext.representatives || []
+    if (assignments.length > 0) {
+      // Get the years and branches from assignments
+      const allowedYears = assignments.map(a => a.years?.batch_year).filter(Boolean)
+      const allowedBranches = assignments.map(a => a.branches?.code).filter(Boolean)
+      
+      // If specific year/branch requested, validate it's in their scope
+      if (year && !allowedYears.includes(year)) {
+        return NextResponse.json({ error: 'Access denied: year outside your scope' }, { status: 403 })
+      }
+      if (branch && !allowedBranches.includes(branch)) {
+        return NextResponse.json({ error: 'Access denied: branch outside your scope' }, { status: 403 })
+      }
+      
+      // Apply scope filtering only if no specific filters requested
+      if (!year && allowedYears.length > 0) {
+        query = query.in('year', allowedYears)
+      }
+      if (!branch && allowedBranches.length > 0) {
+        query = query.in('branch', allowedBranches)
+      }
+    }
+  }
+
+  // Apply URL parameter filters
+  if (year) query = query.eq('year', year)
   if (branch) query = query.eq('branch', branch)
 
   const { data, error, count } = await query.range(from, to)
@@ -54,7 +81,6 @@ export async function POST(request: Request) {
     const payload = {
       subject,
       exam_date,
-      description: body.description ? String(body.description) : null,
       year: body.year ? toInt(body.year) : null,
       branch: body.branch || null,
     }

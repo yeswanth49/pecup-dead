@@ -10,7 +10,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 
 type Reminder = { id: string; title: string; due_date: string; status?: string | null; year?: number | null; branch?: string | null }
 
-export function RemindersSection() {
+type UserContext = {
+  role: 'student' | 'representative' | 'admin' | 'superadmin'
+  email: string
+  name: string
+  representativeAssignments?: Array<{
+    branch_id: string
+    year_id: string
+    branch_code: string
+    admission_year: number
+  }>
+}
+
+export function RemindersSection({ userContext }: { userContext: UserContext | null }) {
   const [items, setItems] = useState<Reminder[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -23,10 +35,22 @@ export function RemindersSection() {
     p.set('page', '1')
     p.set('limit', '50')
     if (status) p.set('status', status)
-    if (profile?.year) p.set('year', String(profile.year))
-    if (profile?.branch) p.set('branch', profile.branch as string)
+    
+    // For representatives, always filter by their assigned scope
+    if (userContext?.role === 'representative' && userContext.representativeAssignments) {
+      const assignment = userContext.representativeAssignments[0] // Use first assignment
+      if (assignment) {
+        p.set('year', String(assignment.admission_year))
+        p.set('branch', assignment.branch_code)
+      }
+    } else if (profile?.year || profile?.branch) {
+      // For admins, use profile if available
+      if (profile.year) p.set('year', String(profile.year))
+      if (profile.branch) p.set('branch', profile.branch)
+    }
+    
     return p.toString()
-  }, [status, profile])
+  }, [status, profile, userContext])
 
   async function load() {
     setLoading(true)
@@ -45,15 +69,14 @@ export function RemindersSection() {
   useEffect(() => { load() }, [query, refreshIndex])
 
   useEffect(() => {
-    async function initProfile() {
-      try {
-        const res = await fetch('/api/profile', { cache: 'no-store' })
-        const json = await res.json().catch(() => ({}))
-        setProfile(json?.profile || null)
-      } catch {}
+    // For representatives, set profile to their first assignment
+    if (userContext?.role === 'representative' && userContext.representativeAssignments) {
+      const assignment = userContext.representativeAssignments[0]
+      if (assignment) {
+        setProfile({ year: assignment.admission_year, branch: assignment.branch_code })
+      }
     }
-    initProfile()
-  }, [])
+  }, [userContext])
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this reminder?')) return
@@ -71,7 +94,7 @@ export function RemindersSection() {
         </div>
         <div className="ml-auto flex gap-2">
           <Button variant="secondary" onClick={() => setRefreshIndex((i) => i + 1)} disabled={loading}>Refresh</Button>
-          <CreateReminderDialog onCreated={() => setRefreshIndex((i) => i + 1)} />
+          <CreateReminderDialog onCreated={() => setRefreshIndex((i) => i + 1)} userContext={userContext} />
         </div>
       </div>
       {error && <div className="text-sm text-red-500">{error}</div>}
@@ -108,7 +131,13 @@ export function RemindersSection() {
   )
 }
 
-function CreateReminderDialog({ onCreated }: { onCreated: () => void }) {
+function CreateReminderDialog({ 
+  onCreated, 
+  userContext 
+}: { 
+  onCreated: () => void
+  userContext: UserContext | null
+}) {
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -116,8 +145,14 @@ function CreateReminderDialog({ onCreated }: { onCreated: () => void }) {
   const [title, setTitle] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [status, setStatus] = useState('')
-  const [year, setYear] = useState<number | ''>('')
-  const [branch, setBranch] = useState<string | ''>('')
+  
+  // For representatives, default to their assignment
+  const defaultAssignment = userContext?.representativeAssignments?.[0]
+  const [year, setYear] = useState<number | ''>(defaultAssignment?.admission_year ?? '')
+  const [branch, setBranch] = useState<string | ''>(defaultAssignment?.branch_code ?? '')
+  
+  const isRepresentative = userContext?.role === 'representative'
+  const assignments = userContext?.representativeAssignments || []
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -162,20 +197,64 @@ function CreateReminderDialog({ onCreated }: { onCreated: () => void }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Year</Label>
-              <Select value={year ? String(year) : 'none'} onValueChange={(v) => setYear(v === 'none' ? '' : Number(v))}>
+              <Label>Year (Admission Batch)</Label>
+              <Select 
+                value={year ? String(year) : 'none'} 
+                onValueChange={(v) => setYear(v === 'none' ? '' : Number(v))}
+                disabled={isRepresentative && assignments.length === 1}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {[1,2,3,4].map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                  {isRepresentative && assignments.length > 0 ? (
+                    // Representatives can only create for their assigned years
+                    assignments.map((assignment) => (
+                      <SelectItem key={assignment.admission_year} value={String(assignment.admission_year)}>
+                        {assignment.admission_year} Batch
+                      </SelectItem>
+                    ))
+                  ) : (
+                    // Admins can create for any year
+                    <>
+                      <SelectItem value="none">None</SelectItem>
+                      {[2021, 2022, 2023, 2024].map((y) => (
+                        <SelectItem key={y} value={String(y)}>{y} Batch</SelectItem>
+                      ))}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>
             <div>
               <Label>Branch</Label>
-              <Input placeholder="e.g., CSE" value={branch} onChange={(e) => setBranch(e.target.value)} />
+              <Select 
+                value={branch || 'none'} 
+                onValueChange={(v) => setBranch(v === 'none' ? '' : v)}
+                disabled={isRepresentative && assignments.length === 1}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select" />
+                </SelectTrigger>
+                <SelectContent>
+                  {isRepresentative && assignments.length > 0 ? (
+                    // Representatives can only create for their assigned branches
+                    assignments.map((assignment) => (
+                      <SelectItem key={assignment.branch_code} value={assignment.branch_code}>
+                        {assignment.branch_code}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    // Admins can create for any branch
+                    <>
+                      <SelectItem value="none">None</SelectItem>
+                      {['CSE','AIML','DS','AI','ECE','EEE','MEC','CE'].map((b) => (
+                        <SelectItem key={b} value={b}>{b}</SelectItem>
+                      ))}
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">

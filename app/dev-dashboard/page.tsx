@@ -11,11 +11,17 @@ import { ExamsSection } from './_components/ExamsSection'
 import { SettingsSection } from './_components/SettingsSection'
 import { AdminsSection } from './_components/AdminsSection'
 
-// 1) Read & parse authorized emails from your env
-const authorizedEmails = (process.env.NEXT_PUBLIC_AUTHORIZED_EMAILS || '')
-  .split(',')
-  .map((e) => e.trim().toLowerCase())
-  .filter(Boolean)
+type UserContext = {
+  role: 'student' | 'representative' | 'admin' | 'superadmin'
+  email: string
+  name: string
+  representativeAssignments?: Array<{
+    branch_id: string
+    year_id: string
+    branch_code: string
+    admission_year: number
+  }>
+}
 
 // Simple Card (replace with your UI lib if you have one)
 const Card = ({
@@ -32,6 +38,7 @@ const Card = ({
 
 export default function DeveloperDashboardPage() {
   const { data: session, status } = useSession()
+  const [userContext, setUserContext] = useState<UserContext | null>(null)
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null)
   const isLoading = status === 'loading'
 
@@ -45,10 +52,26 @@ export default function DeveloperDashboardPage() {
       return
     }
 
-    // signed in – check against our authorizedEmails list
-    const email = session.user?.email?.toLowerCase() || ''
-    const allowed = authorizedEmails.includes(email)
-    setIsAuthorized(allowed)
+    // Fetch user context and role
+    async function fetchUserContext() {
+      try {
+        const res = await fetch('/api/user/context')
+        if (res.ok) {
+          const data = await res.json()
+          setUserContext(data.userContext)
+          // Allow representatives, admins, and superadmins
+          const allowed = ['representative', 'admin', 'superadmin'].includes(data.userContext.role)
+          setIsAuthorized(allowed)
+        } else {
+          setIsAuthorized(false)
+        }
+      } catch (error) {
+        console.error('Failed to fetch user context:', error)
+        setIsAuthorized(false)
+      }
+    }
+
+    fetchUserContext()
   }, [session, isLoading])
 
   // 2) Loading state
@@ -86,10 +109,10 @@ export default function DeveloperDashboardPage() {
             Access Denied
           </h1>
           <p className="mb-4">
-            Your account ({session.user?.email}) is not on the approved
-            developer list.
+            Your account ({session.user?.email}) does not have the required permissions
+            to access the developer dashboard.
           </p>
-          <p className="mb-6">Please login with a developer‑approved email.</p>
+          <p className="mb-6">You need to be assigned as a representative, admin, or superadmin.</p>
         <button
           onClick={() =>
             signOut({
@@ -107,12 +130,24 @@ export default function DeveloperDashboardPage() {
   }
 
   // 5) Signed in & authorized → show dashboard
+  const isAdmin = userContext?.role === 'admin' || userContext?.role === 'superadmin'
+  const isRepresentative = userContext?.role === 'representative'
+  
   return (
     <div className="container mx-auto p-4 md:p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Developer Dashboard</h1>
+        <h1 className="text-3xl font-bold mb-2">
+          {isRepresentative ? 'Representative Dashboard' : 'Developer Dashboard'}
+        </h1>
         <p className="text-muted-foreground">
-          Welcome, {session.user?.name}! Manage resources below.
+          Welcome, {session.user?.name}! 
+          {isRepresentative && userContext?.representativeAssignments && (
+            <span className="block mt-1 text-sm">
+              Managing: {userContext.representativeAssignments.map(a => 
+                `${a.branch_code} ${a.admission_year} Batch`
+              ).join(', ')}
+            </span>
+          )}
         </p>
       </div>
       <Tabs defaultValue="resources" className="space-y-6">
@@ -122,30 +157,35 @@ export default function DeveloperDashboardPage() {
           <TabsTrigger value="reminders">Reminders</TabsTrigger>
           <TabsTrigger value="updates">Recent Updates</TabsTrigger>
           <TabsTrigger value="exams">Exams</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
-          <TabsTrigger value="admins">Admins</TabsTrigger>
+          {/* Admin-only tabs */}
+          {isAdmin && <TabsTrigger value="settings">Settings</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="admins">Admins</TabsTrigger>}
         </TabsList>
         <TabsContent value="resources">
-          <Card className="p-4"><ResourcesSection /></Card>
+          <Card className="p-4"><ResourcesSection userContext={userContext} /></Card>
         </TabsContent>
         <TabsContent value="archive">
-          <Card className="p-4"><ResourcesSection archivedOnly /></Card>
+          <Card className="p-4"><ResourcesSection archivedOnly userContext={userContext} /></Card>
         </TabsContent>
         <TabsContent value="reminders">
-          <Card className="p-4"><RemindersSection /></Card>
+          <Card className="p-4"><RemindersSection userContext={userContext} /></Card>
         </TabsContent>
         <TabsContent value="updates">
-          <Card className="p-4"><RecentUpdatesSection /></Card>
+          <Card className="p-4"><RecentUpdatesSection userContext={userContext} /></Card>
         </TabsContent>
         <TabsContent value="exams">
-          <Card className="p-4"><ExamsSection /></Card>
+          <Card className="p-4"><ExamsSection userContext={userContext} /></Card>
         </TabsContent>
-        <TabsContent value="settings">
-          <Card className="p-4"><SettingsSection /></Card>
-        </TabsContent>
-        <TabsContent value="admins">
-          <Card className="p-4"><AdminsSection /></Card>
-        </TabsContent>
+        {isAdmin && (
+          <TabsContent value="settings">
+            <Card className="p-4"><SettingsSection /></Card>
+          </TabsContent>
+        )}
+        {isAdmin && (
+          <TabsContent value="admins">
+            <Card className="p-4"><AdminsSection /></Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   )
