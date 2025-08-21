@@ -4,7 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { google } from 'googleapis'
 import { Readable } from 'stream'
 import { createSupabaseAdmin } from '@/lib/supabase'
-import { requireAdmin, getSettings } from '@/lib/admin-auth'
+import { requireAdmin, getSettings, getCurrentUserContext, canManageResources, requirePermission } from '@/lib/admin-auth'
 import { logAudit } from '@/lib/audit'
 import { validateFile, getFileExtension } from '@/lib/file-validation'
 import { tryParseDriveIdFromUrl, tryParseStoragePathFromUrl } from '@/lib/files'
@@ -21,9 +21,18 @@ function toInt(value: unknown): number | null {
 }
 
 export async function GET(request: Request) {
-  // Require admin; in development, fall back to allowing access so lists can load
+  // Check user permissions - allow admins and representatives
+  let userContext
   try {
-    await requireAdmin('admin')
+    userContext = await getCurrentUserContext()
+    if (!userContext) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    
+    // Only allow admins and representatives to access this admin endpoint
+    if (!['admin', 'superadmin', 'representative'].includes(userContext.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
   } catch (err) {
     const isDev = process.env.NODE_ENV === 'development'
     if (!isDev) {
@@ -63,33 +72,21 @@ export async function GET(request: Request) {
   if (archivedParam === 'true') query = query.eq('archived', true)
   if (archivedParam === 'false') query = query.eq('archived', false)
 
-  // Enforce admin scope: if admin_scopes exist for this user, limit results
-  try {
-    const session = await getServerSession(authOptions)
-    const email = session?.user?.email?.toLowerCase()
-    if (email) {
-      const { data: adminRow } = await supabase
-        .from('admins')
-        .select('id,role')
-        .eq('email', email)
-        .maybeSingle()
-      if (adminRow && adminRow.role !== 'superadmin') {
-        const { data: scopes } = await supabase
-          .from('admin_scopes')
-          .select('year,branch')
-          .eq('admin_id', adminRow.id)
-        if (scopes && scopes.length > 0) {
-          // If filters already set, they further narrow; otherwise apply in() clauses
-          const years = [...new Set(scopes.map((s: any) => s.year))]
-          const branches = [...new Set(scopes.map((s: any) => s.branch))]
-          if (year === null) query = query.in('year', years)
-          if (!branch) query = query.in('branch', branches)
-        }
+  // Apply role-based filtering
+  if (userContext) {
+    if (userContext.role === 'representative') {
+      // Representatives can only see resources for their assigned branches/years
+      const assignedBranchIds = userContext.representatives?.map(rep => rep.branch_id) || []
+      const assignedYearIds = userContext.representatives?.map(rep => rep.year_id) || []
+      
+      if (assignedBranchIds.length > 0) {
+        query = query.in('branch_id', assignedBranchIds)
+      }
+      if (assignedYearIds.length > 0) {
+        query = query.in('year_id', assignedYearIds)
       }
     }
-  } catch (err) {
-    console.error('Admin scope check error in resources GET:', err instanceof Error ? err.message : 'Unknown error');
-    // Continue with unfiltered query on error - admin scope enforcement is optional for listing
+    // Admins see everything, no additional filtering needed
   }
 
   const { data, error, count } = await query.range(from, to)
@@ -143,7 +140,17 @@ async function uploadToStorage(fileBuffer: Buffer, fileName: string, mime?: stri
 }
 
 export async function POST(request: Request) {
-  const admin = await requireAdmin('admin')
+  // Check permissions - allow admins and representatives
+  let userContext
+  try {
+    userContext = await requirePermission('write', 'resources')
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('Unauthorized')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const supabase = createSupabaseAdmin()
   const contentType = request.headers.get('content-type') || ''
 
@@ -210,33 +217,68 @@ export async function POST(request: Request) {
       is_pdf,
     }
 
-    // Enforce scope for non-superadmin: require year+branch be within admin_scopes
-    try {
-      const { data: adminRow } = await supabase.from('admins').select('id,role').eq('email', admin.email).maybeSingle()
-      if (adminRow && adminRow.role !== 'superadmin') {
-        const { data: scopes } = await supabase
-          .from('admin_scopes')
-          .select('year,branch')
-          .eq('admin_id', adminRow.id)
-        if (!scopes || scopes.length === 0) {
-          return NextResponse.json({ error: 'Forbidden: no scope assigned' }, { status: 403 })
-        }
-        const allowed = scopes.some((s: any) => s.year === insertPayload.year && s.branch === insertPayload.branch)
-        if (!allowed) {
-          return NextResponse.json({ error: 'Forbidden: outside your assigned year/branch' }, { status: 403 })
-        }
+    // Enforce scope for representatives: must be within their assigned branch/year
+    if (userContext.role === 'representative') {
+      // For representatives, we need to validate branchId and yearId
+      // Convert legacy branch/year to IDs if needed
+      let branchId = payload.branch_id
+      let yearId = payload.year_id
+      
+      if (!branchId && payload.branch) {
+        // Convert branch code to ID
+        const { data: branchData } = await supabase
+          .from('branches')
+          .select('id')
+          .eq('code', payload.branch)
+          .single()
+        branchId = branchData?.id
       }
-    } catch (err) {
-      console.error('Admin scope enforcement error in resources POST:', err instanceof Error ? err.message : 'Unknown error');
-      return NextResponse.json({ error: 'Failed to validate admin scope' }, { status: 500 });
+      
+      if (!yearId && payload.year) {
+        // Convert year number to ID (assuming it's batch year)
+        const { data: yearData } = await supabase
+          .from('years')
+          .select('id')
+          .eq('batch_year', payload.year)
+          .single()
+        yearId = yearData?.id
+      }
+
+      if (!branchId || !yearId) {
+        return NextResponse.json({ error: 'Branch and year must be specified for representatives' }, { status: 400 })
+      }
+
+      const canManage = await canManageResources(branchId, yearId)
+      if (!canManage) {
+        return NextResponse.json({ error: 'Forbidden: Cannot manage resources for this branch/year' }, { status: 403 })
+      }
     }
 
     const { data, error } = await supabase.from('resources').insert(insertPayload).select('id').single()
     if (error) throw error
-    await logAudit({ actor_email: admin.email, actor_role: admin.role, action: 'create', entity: 'resource', entity_id: data.id, after_data: insertPayload })
+    
+    // Log the audit with proper role handling
+    const auditRole = userContext.role === 'representative' ? 'admin' : userContext.role as 'admin' | 'superadmin'
+    await logAudit({ 
+      actor_email: userContext.email, 
+      actor_role: auditRole, 
+      action: 'create', 
+      entity: 'resource', 
+      entity_id: data.id, 
+      after_data: insertPayload 
+    })
+    
     return NextResponse.json({ id: data.id, ...insertPayload })
   } catch (err: any) {
-    await logAudit({ actor_email: admin.email, actor_role: admin.role, action: 'create', entity: 'resource', success: false, message: err?.message })
+    const auditRole = userContext?.role === 'representative' ? 'admin' : userContext?.role as 'admin' | 'superadmin' || 'admin'
+    await logAudit({ 
+      actor_email: userContext?.email || 'unknown', 
+      actor_role: auditRole, 
+      action: 'create', 
+      entity: 'resource', 
+      success: false, 
+      message: err?.message 
+    })
     return NextResponse.json({ error: 'Failed to create resource' }, { status: 500 })
   }
 }

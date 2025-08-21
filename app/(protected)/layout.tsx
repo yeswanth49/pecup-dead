@@ -12,9 +12,9 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
   const email = session.user.email.toLowerCase()
 
   const supabase = createSupabaseAdmin()
-  const { data, error } = await supabase
+  const { data: profile, error } = await supabase
     .from('profiles')
-    .select('email')
+    .select('email, role')
     .eq('email', email)
     .maybeSingle()
 
@@ -22,7 +22,7 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
     // On DB error, be safe and send to onboarding to re-attempt later
     redirect('/onboarding')
   }
-  if (!data) {
+  if (!profile) {
     redirect('/onboarding')
   }
 

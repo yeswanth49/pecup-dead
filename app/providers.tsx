@@ -10,7 +10,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ProfileProvider>
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="light"
           enableSystem
           disableTransitionOnChange
         >
