@@ -173,22 +173,20 @@ export default function HomePage() {
       </Link>
     )
 
-    // Archive for non-students
-    if (userContext?.role !== 'student') {
-      cards.push(
-        <Link key="archive" href="/archive" className="block">
-          <Card className="h-full transition-all duration-200 ease-in-out hover:shadow-lg hover:-translate-y-1">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-medium">Archive</CardTitle>
-              <Archive className="h-5 w-5 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <CardDescription>Previous semester materials and resources</CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
-      )
-    }
+    // Archive for all users
+    cards.push(
+      <Link key="archive" href="/archive" className="block">
+        <Card className="h-full transition-all duration-200 ease-in-out hover:shadow-lg hover:-translate-y-1">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-lg font-medium">Archive</CardTitle>
+            <Archive className="h-5 w-5 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <CardDescription>Previous semester materials and resources</CardDescription>
+          </CardContent>
+        </Card>
+      </Link>
+    )
 
     // Management dashboard for representatives and admins
     if (userContext?.role === 'representative' || userContext?.role === 'admin' || userContext?.role === 'superadmin') {
@@ -245,27 +243,11 @@ export default function HomePage() {
           {userContext && (
             <div className="flex items-center gap-4">
               {getRoleDisplay(userContext.role)}
-              {userContext.role !== 'representative' && (
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/profile">Profile</Link>
-                </Button>
-              )}
             </div>
           )}
         </div>
 
-        {/* Role-specific information */}
-        {userContext?.role === 'student' && (
-          <Card className="p-4">
-            <h3 className="font-semibold mb-2">Student Information</h3>
-            <p className="text-sm text-muted-foreground">
-              Year: {userContext.year} | Branch: {userContext.branch}
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">
-              You have access to view resources, reminders, updates, and exams for your year and branch.
-            </p>
-          </Card>
-        )}
+
 
         {userContext?.role === 'representative' && (
           <Card className="p-4">
