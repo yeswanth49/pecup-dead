@@ -4,10 +4,51 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import Link from "next/link"
 import { Header } from '@/components/Header'
 import ChatBubble from '@/components/ChatBubble'
-import { FileText, BookOpen, FileCheck, Database } from "lucide-react"
+import { FileText, BookOpen, FileCheck, Database, Users, Loader2 } from "lucide-react"
 
 import { useEffect, useMemo, useState } from 'react'
 import { useProfile } from '@/lib/profile-context'
+import { useEffect as useEffectClient } from 'react'
+import { useSession } from 'next-auth/react'
+import { useState as useStateClient } from 'react'
+import { useCallback } from 'react'
+import { use } from 'react'
+
+function LiveUsersCount() {
+  const [count, setCount] = useStateClient<number | null>(null)
+  const [isLoading, setIsLoading] = useStateClient(true)
+
+  useEffectClient(() => {
+    let mounted = true
+    async function fetchCount() {
+      try {
+        const res = await fetch('/api/users-count')
+        if (!res.ok) return
+        const data = await res.json()
+        if (mounted) setCount(data.totalUsers)
+      } catch (e) {
+        // ignore
+      } finally {
+        if (mounted) setIsLoading(false)
+      }
+    }
+    fetchCount()
+    const i = setInterval(fetchCount, 30000)
+    return () => { mounted = false; clearInterval(i) }
+  }, [])
+
+  return (
+    <div className="flex items-center gap-1.5 px-2 py-1 bg-muted/50 rounded-md">
+      <Users className="h-3 w-3 text-primary" />
+      <div className="flex items-center gap-1">
+        <span className="font-medium text-sm">
+          {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : (count ?? 0).toLocaleString()}
+        </span>
+        <span className="text-xs text-muted-foreground">users</span>
+      </div>
+    </div>
+  )
+}
 
 export default function ResourcesPage() {
   const { profile } = useProfile()
@@ -71,9 +112,9 @@ export default function ResourcesPage() {
     <div className="space-y-6">
       <div className="space-y-2">
       <Header/>
-        <div className="flex items-start justify-between pt-10">
+        <div className="flex items-start justify-between pt-2">
           <h1 className="text-3xl font-bold tracking-tight">Resources</h1>
-          <span className="text-sm text-muted-foreground">{year !== 'all' ? `${year} Year` : 'All Years'}{semester !== 'all' ? `, ${semester} Sem` : ''}</span>
+          <LiveUsersCount />
         </div>
         <p className="text-muted-foreground">Access all educational materials organized by category</p>
       </div>

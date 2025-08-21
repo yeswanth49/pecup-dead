@@ -21,7 +21,7 @@ export function Header() {
   if (shouldShowSkeleton) {
     return (
       <div className="flex flex-col gap-1">
-        <div className="pt-6 md:pt-10">
+        <div className="pt-2 md:pt-4">
           <Skeleton className="h-8 md:h-10 w-64 md:w-80" />
         </div>
         <Skeleton className="h-4 w-32" />
@@ -31,7 +31,7 @@ export function Header() {
 
   return (
     <div className="flex flex-col gap-1">
-      <h1 className="text-2xl md:text-3xl pt-6 md:pt-10 font-bold">
+      <h1 className="text-2xl md:text-3xl pt-2 md:pt-4 font-bold">
         Welcome, {session?.user?.name || 'User'}
       </h1>
       {profile?.year && profile?.branch && (

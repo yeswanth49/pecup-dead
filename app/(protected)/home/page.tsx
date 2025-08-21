@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { BookOpen, Bell, Archive, Phone, AlertCircle, Loader2, Star, ExternalLink, FileText, Edit, FileQuestion, Settings, Users, TrendingUp } from 'lucide-react'
-import { UserContext, UserPermissions } from '@/lib/types'
+import { UserPermissions } from '@/lib/types'
+import { UserContext } from '@/lib/auth-permissions'
 
 interface RecentUpdate {
   id: string | number
@@ -270,7 +271,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="space-y-8 p-4 md:p-6 lg:p-8">
+    <div className="space-y-4 p-4 md:p-6 lg:p-8">
       <Header />
 
       <div className="space-y-4">

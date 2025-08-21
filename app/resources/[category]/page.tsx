@@ -38,7 +38,7 @@ export default function CategoryPage({ params, searchParams }: {
     <div className="space-y-6">
       <div className="space-y-2">
         <Header/>
-        <div className="flex items-center pt-10 gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center pt-2 gap-2 text-sm text-muted-foreground">
           <Link href="/resources" className="hover:text-foreground">
             Resources
           </Link>

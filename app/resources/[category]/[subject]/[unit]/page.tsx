@@ -133,7 +133,7 @@ export default function UnitPage() {
         <div className="space-y-2">
           <Skeleton className="h-16 w-full" />
           {/* Breadcrumbs skeleton */}
-          <div className="flex flex-wrap items-center gap-2 pt-10">
+          <div className="flex flex-wrap items-center gap-2 pt-2">
             <Skeleton className="h-4 w-16" />
             <Skeleton className="h-4 w-4" />
             <Skeleton className="h-4 w-12" />

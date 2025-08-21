@@ -28,7 +28,7 @@ export default function RootLayout({
           <div className="flex min-h-screen">
             <Sidebar />
             <ThemeToggle />
-            <main className="flex-1 p-6 md:p-8">{children}</main>
+            <main className="flex-1 pt-10 md:pt-14 px-6 md:px-8 pb-6 md:pb-8">{children}</main>
           </div>
         </Providers>
         <Analytics/>
