@@ -36,7 +36,10 @@ export function Header() {
       </h1>
       {profile?.year && profile?.branch && (
         <div className="text-sm text-muted-foreground">
-          {`Year ${profile.year} • ${profile.branch}`}
+          {profile?.semester?.semester_number 
+            ? `Year ${profile.year} • Sem ${profile.semester.semester_number} • ${profile.branch}`
+            : `Year ${profile.year} • ${profile.branch}`
+          }
         </div>
       )}
     </div>

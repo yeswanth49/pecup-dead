@@ -10,6 +10,9 @@ export interface Profile {
   year: number
   branch: string
   roll_number: string
+  semester?: {
+    semester_number: number
+  }
 }
 
 interface ProfileContextType {

@@ -73,6 +73,13 @@ export async function GET() {
   if (data) {
     try {
       data.year = convertAdmissionYearToAcademicYear(data.year)
+      // Add current semester based on time of year
+      // Typically: Jan-Jun = Semester 2, Jul-Dec = Semester 1
+      const currentMonth = new Date().getMonth() + 1 // getMonth() returns 0-11
+      const currentSemester = currentMonth >= 7 ? 1 : 2
+      data.semester = {
+        semester_number: currentSemester
+      }
     } catch (conversionError) {
       console.warn(`Failed to convert admission year ${data.year} to academic year:`, conversionError)
       // Keep the original year if conversion fails
