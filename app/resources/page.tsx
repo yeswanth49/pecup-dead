@@ -19,8 +19,7 @@ export default function ResourcesPage() {
     // Use cached profile data instead of fetching
     if (profile) {
       if (year === 'all') setYear(profile.year)
-      const month = new Date().getMonth() // 0..11; > July => month >= 7 => Sem 2
-      if (semester === 'all') setSemester(month >= 7 ? 2 : 1)
+      if (semester === 'all') setSemester(1)
       if (!branch) setBranch(profile.branch)
     }
   }, [profile, year, semester, branch])

@@ -80,11 +80,8 @@ export default function SubjectPage({
           <span>{subjectName}</span>
         </div>
 
-        <div className="flex items-start justify-between">
+        <div className="flex items-start">
           <h1 className="text-3xl font-bold tracking-tight">{subjectName} {categoryTitle}</h1>
-          <span className="text-sm text-muted-foreground">
-            {typeof searchParams.year === 'string' ? `${searchParams.year} Year` : 'All Years'}{typeof searchParams.semester === 'string' ? `, ${searchParams.semester} Sem` : ''}
-          </span>
         </div>
         <p className="text-muted-foreground">Access all {subjectName} {categoryTitle} by unit</p>
       </div>

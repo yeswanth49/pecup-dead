@@ -36,9 +36,8 @@ export async function GET(request: Request) {
         }
       }
       if (!semester) {
-        // Approximate semester from current month if not provided
-        const month = new Date().getMonth() // 0..11
-        semester = month >= 7 ? '2' : '1'
+        // Default to Semester 1 when not specified
+        semester = '1'
       }
     }
 

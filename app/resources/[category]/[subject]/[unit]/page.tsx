@@ -214,9 +214,8 @@ export default function UnitPage() {
           <span>{unitName}{year ? ` • Year ${year}` : ''}{semester ? ` • Sem ${semester}` : ''}</span>
         </div>
         {/* Title */}
-        <div className="flex items-start justify-between">
+        <div className="flex items-start">
           <h1 className="text-3xl font-bold tracking-tight">{unitName}</h1>
-          <span className="text-sm text-muted-foreground">{year ? `${year} Year` : ''}{semester ? `${year ? ', ' : ''}${semester} Sem` : ''}</span>
         </div>
         <p className="text-muted-foreground">
           {subjectName} {categoryTitle} for {unitName}

@@ -45,11 +45,8 @@ export default function CategoryPage({ params, searchParams }: {
           <ChevronRight className="h-4 w-4" />
           <span>{categoryData.title}</span>
         </div>
-        <div className="flex items-start justify-between">
+        <div className="flex items-start">
           <h1 className="text-3xl font-bold tracking-tight">{categoryData.title}</h1>
-          <span className="text-sm text-muted-foreground">
-            {searchParams.year ? `${searchParams.year} Year` : 'All Years'}{searchParams.semester ? `, ${searchParams.semester} Sem` : ''}
-          </span>
         </div>
         <p className="text-muted-foreground">{categoryData.description}</p>
       </div>

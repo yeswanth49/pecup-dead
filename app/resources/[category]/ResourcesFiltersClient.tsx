@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Subject } from '@/lib/types'
-import { getResourceTypeForCategory, buildSubjectsQuery, getSubjectFilterDescription } from '@/lib/resource-utils'
+import { buildSubjectsQuery } from '@/lib/resource-utils'
 
 interface ResourcesFiltersClientProps {
   category: string
@@ -68,9 +68,6 @@ export default function ResourcesFiltersClient({ category, categoryData }: Resou
 
   return (
     <div className="space-y-4">
-      <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg border">
-        {getSubjectFilterDescription(category)}
-      </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {!loading && subjects.map((s) => {
         const qp = new URLSearchParams()
