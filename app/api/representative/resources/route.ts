@@ -250,14 +250,25 @@ async function uploadToDrive(fileBuffer: Buffer, fileName: string, mime: string,
   
   let credentials;
   try {
-    credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON || '{}');
+    const rawB64 = process.env.GOOGLE_APPLICATION_CREDENTIALS_B64
+    const rawJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
+    let raw = rawJson || '{}'
+    if (rawB64) {
+      try {
+        raw = Buffer.from(rawB64, 'base64').toString('utf8')
+      } catch (e) {
+        console.error('Failed to decode GOOGLE_APPLICATION_CREDENTIALS_B64:', e)
+        throw e
+      }
+    }
+    credentials = JSON.parse(raw)
     if (!credentials.client_email || !credentials.private_key) {
-      throw new Error('Invalid Google credentials: missing required fields');
+      throw new Error('Invalid Google credentials: missing required fields')
     }
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'Failed to parse Google credentials';
-    console.error('Google credentials validation error:', errorMessage);
-    throw new Error('Google Drive configuration error');
+    const errorMessage = err instanceof Error ? err.message : 'Failed to parse Google credentials'
+    console.error('Google credentials validation error:', errorMessage)
+    throw new Error('Google Drive configuration error')
   }
   
   const auth = new google.auth.GoogleAuth({ 

@@ -220,17 +220,28 @@ export async function PATCH(
 async function deleteDriveFile(driveId: string) {
   let credentials;
   try {
-    credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON || '{}');
+    const rawB64 = process.env.GOOGLE_APPLICATION_CREDENTIALS_B64
+    const rawJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
+    let raw = rawJson || '{}'
+    if (rawB64) {
+      try {
+        raw = Buffer.from(rawB64, 'base64').toString('utf8')
+      } catch (e) {
+        console.error('Failed to decode GOOGLE_APPLICATION_CREDENTIALS_B64:', e)
+        throw e
+      }
+    }
+    credentials = JSON.parse(raw)
     if (!credentials.client_email || !credentials.private_key) {
-      throw new Error('Invalid Google credentials');
+      throw new Error('Invalid Google credentials')
     }
   } catch (err) {
-    throw new Error('Google Drive configuration error');
+    throw new Error('Google Drive configuration error')
   }
   
-  const auth = new google.auth.GoogleAuth({ 
-    credentials, 
-    scopes: ['https://www.googleapis.com/auth/drive'] 
+  const auth = new google.auth.GoogleAuth({
+    credentials,
+    scopes: ['https://www.googleapis.com/auth/drive']
   })
   const drive = google.drive({ version: 'v3', auth })
   

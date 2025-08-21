@@ -43,17 +43,28 @@ async function getGoogleAuthClient() {
   const FN_DEBUG_PREFIX = `${DEBUG_PREFIX} [getGoogleAuthClient]`;
   try {
     console.log(`${FN_DEBUG_PREFIX} Attempting to get Google Auth Client...`);
+    const rawB64 = process.env.GOOGLE_APPLICATION_CREDENTIALS_B64
     const credentialsJSON = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+    let raw = credentialsJSON || '{}'
+    if (rawB64) {
+      try {
+        raw = Buffer.from(rawB64, 'base64').toString('utf8')
+        console.log(`${FN_DEBUG_PREFIX} Decoded GOOGLE_APPLICATION_CREDENTIALS_B64 successfully.`)
+      } catch (e) {
+        console.error(`${FN_DEBUG_PREFIX} Failed to decode GOOGLE_APPLICATION_CREDENTIALS_B64:`, e)
+        throw new Error('Server configuration error: Invalid base64 Google credentials.');
+      }
+    }
 
-    if (!credentialsJSON || typeof credentialsJSON !== 'string' || credentialsJSON.trim() === '') {
-      console.error(`${FN_DEBUG_PREFIX} API Setup Error: GOOGLE_APPLICATION_CREDENTIALS_JSON environment variable not set or empty.`);
+    if (!raw || typeof raw !== 'string' || raw.trim() === '') {
+      console.error(`${FN_DEBUG_PREFIX} API Setup Error: Google credentials not set or empty.`);
       throw new Error('Server configuration error: Google credentials missing or invalid.');
     }
 
     let credentials;
     try {
-      credentials = JSON.parse(credentialsJSON);
-      console.log(`${FN_DEBUG_PREFIX} Successfully parsed GOOGLE_CREDENTIALS_JSON.`);
+      credentials = JSON.parse(raw);
+      console.log(`${FN_DEBUG_PREFIX} Successfully parsed Google credentials.`);
     } catch (parseError: any) {
       console.error(`${FN_DEBUG_PREFIX} API Setup Error: Failed to parse Google credentials JSON.`, parseError.message);
       throw new Error('Server configuration error: Invalid Google credentials format.');
