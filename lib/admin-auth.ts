@@ -4,6 +4,16 @@ import { createSupabaseAdmin } from '@/lib/supabase'
 
 export type AdminContext = { email: string; role: 'admin' | 'superadmin' }
 
+// Re-export from auth-permissions for backward compatibility
+export { 
+  getCurrentUserContext, 
+  requirePermission, 
+  canManageResources, 
+  canPromoteSemester,
+  getUserPermissions,
+  canAssignRepresentatives
+} from './auth-permissions'
+
 export async function requireAdmin(minRole: 'admin' | 'superadmin' = 'admin'): Promise<AdminContext> {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email) throw new Error('Unauthorized')

@@ -171,7 +171,7 @@ export interface LegacyProfile {
   year: number;
   branch: string;
   roll_number: string;
-  role: 'student' | 'admin' | 'superadmin';
+  role: 'student' | 'representative' | 'admin' | 'superadmin';
   created_at: string;
   updated_at: string;
 }
@@ -208,7 +208,7 @@ export interface SubjectOffering {
 export type BranchCode = 'CSE' | 'AIML' | 'DS' | 'AI' | 'ECE' | 'EEE' | 'MEC' | 'CE';
 export type SemesterNumber = 1 | 2;
 export type AdminRole = 'admin' | 'superadmin';
-export type UserRole = 'student' | 'admin' | 'superadmin';
+export type UserRole = 'student' | 'representative' | 'admin' | 'superadmin';
 
 // Database query types
 export interface ResourceFilters {
@@ -244,4 +244,67 @@ export interface SchemaValidation {
   missing_columns?: string[];
   orphaned_references?: number;
   null_required_fields?: number;
+}
+
+// Representative and permission types
+export interface Representative {
+  id: string;
+  user_id: string;
+  branch_id: string;
+  year_id: string;
+  assigned_by?: string;
+  assigned_at: string;
+  active: boolean;
+  // Joined relations
+  user?: Student;
+  branch?: Branch;
+  year?: Year;
+  assigner?: { email: string; role: AdminRole };
+}
+
+export interface SemesterPromotion {
+  id: string;
+  promoted_by: string;
+  from_semester_id: string;
+  to_semester_id: string;
+  branch_id: string;
+  year_id: string;
+  promotion_date: string;
+  notes?: string;
+  created_at: string;
+  // Joined relations
+  promoter?: Student;
+  from_semester?: Semester;
+  to_semester?: Semester;
+  branch?: Branch;
+  year?: Year;
+}
+
+export interface UserPermissions {
+  canRead: {
+    resources: boolean;
+    reminders: boolean;
+    recentUpdates: boolean;
+    exams: boolean;
+    profiles: boolean;
+  };
+  canWrite: {
+    resources: boolean;
+    reminders: boolean;
+    recentUpdates: boolean;
+    exams: boolean;
+    profiles: boolean;
+  };
+  canDelete: {
+    resources: boolean;
+    reminders: boolean;
+    recentUpdates: boolean;
+    exams: boolean;
+    profiles: boolean;
+  };
+  canPromoteSemester: boolean;
+  scopeRestrictions?: {
+    branchIds?: string[];
+    yearIds?: string[];
+  };
 }

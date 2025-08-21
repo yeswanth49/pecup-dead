@@ -6,8 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Header } from '@/components/Header'
 import ChatBubble from '@/components/ChatBubble'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import Link from 'next/link'
-import { BookOpen, Bell, Archive, Phone, AlertCircle, Loader2, Star, ExternalLink, FileText, Edit, FileQuestion } from 'lucide-react'
+import { BookOpen, Bell, Archive, Phone, AlertCircle, Loader2, Star, ExternalLink, FileText, Edit, FileQuestion, Settings, Users, TrendingUp } from 'lucide-react'
+import { UserContext, UserPermissions } from '@/lib/types'
 
 interface RecentUpdate {
   id: string | number
@@ -42,8 +45,29 @@ export default function HomePage() {
   const [isLoadingPrime, setIsLoadingPrime] = useState(true)
   const [primeError, setPrimeError] = useState<string | null>(null)
 
+  const [userContext, setUserContext] = useState<UserContext | null>(null)
+  const [permissions, setPermissions] = useState<UserPermissions | null>(null)
+  const [isLoadingUser, setIsLoadingUser] = useState(true)
+
   useEffect(() => {
     if (sessionStatus === 'authenticated') {
+      // Fetch user context first
+      const fetchUserContext = async () => {
+        setIsLoadingUser(true)
+        try {
+          const response = await fetch('/api/user/context')
+          if (response.ok) {
+            const data = await response.json()
+            setUserContext(data.userContext)
+            setPermissions(data.permissions)
+          }
+        } catch (error) {
+          console.error('Failed to fetch user context:', error)
+        } finally {
+          setIsLoadingUser(false)
+        }
+      }
+
       const fetchUpdates = async () => {
         setIsLoadingUpdates(true)
         setUpdatesError(null)
@@ -84,11 +108,13 @@ export default function HomePage() {
         }
       }
 
+      fetchUserContext()
       fetchUpdates()
       fetchPrimeSectionData()
     } else if (sessionStatus === 'unauthenticated') {
       setIsLoadingUpdates(false)
       setIsLoadingPrime(false)
+      setIsLoadingUser(false)
     }
   }, [sessionStatus])
 
@@ -100,37 +126,57 @@ export default function HomePage() {
     )
   }
 
-  return (
-    <div className="space-y-8 p-4 md:p-6 lg:p-8">
-      <Header />
+  const getRoleDisplay = (role: string) => {
+    switch (role) {
+      case 'student':
+        return <Badge variant="secondary">Student</Badge>
+      case 'representative':
+        return <Badge variant="default">Representative</Badge>
+      case 'admin':
+        return <Badge variant="destructive">Admin</Badge>
+      case 'superadmin':
+        return <Badge variant="destructive">Super Admin</Badge>
+      default:
+        return <Badge variant="outline">{role}</Badge>
+    }
+  }
 
-      <div className="space-y-2">
-        <p className="text-muted-foreground">Your central location for all educational resources and information</p>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Link href="/reminders" className="block">
-          <Card className="h-full transition-all duration-200 ease-in-out hover:shadow-lg hover:-translate-y-1">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-medium">Reminders</CardTitle>
-              <Bell className="h-5 w-5 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <CardDescription>Important deadlines and announcements</CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/resources" className="block">
-          <Card className="h-full transition-all duration-200 ease-in-out hover:shadow-lg hover:-translate-y-1">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-medium">Resources</CardTitle>
-              <BookOpen className="h-5 w-5 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <CardDescription>Access notes, assignments, papers, and records</CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/archive" className="block">
+  const getNavigationCards = () => {
+    const cards = []
+
+    // Basic navigation for all users
+    cards.push(
+      <Link key="reminders" href="/reminders" className="block">
+        <Card className="h-full transition-all duration-200 ease-in-out hover:shadow-lg hover:-translate-y-1">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-lg font-medium">Reminders</CardTitle>
+            <Bell className="h-5 w-5 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <CardDescription>Important deadlines and announcements</CardDescription>
+          </CardContent>
+        </Card>
+      </Link>
+    )
+
+    cards.push(
+      <Link key="resources" href="/resources" className="block">
+        <Card className="h-full transition-all duration-200 ease-in-out hover:shadow-lg hover:-translate-y-1">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-lg font-medium">Resources</CardTitle>
+            <BookOpen className="h-5 w-5 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <CardDescription>Access notes, assignments, papers, and records</CardDescription>
+          </CardContent>
+        </Card>
+      </Link>
+    )
+
+    // Archive for non-students
+    if (userContext?.role !== 'student') {
+      cards.push(
+        <Link key="archive" href="/archive" className="block">
           <Card className="h-full transition-all duration-200 ease-in-out hover:shadow-lg hover:-translate-y-1">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-lg font-medium">Archive</CardTitle>
@@ -141,17 +187,115 @@ export default function HomePage() {
             </CardContent>
           </Card>
         </Link>
-        <Link href="/contact" className="block">
+      )
+    }
+
+    // Management dashboard for representatives and admins
+    if (userContext?.role === 'representative' || userContext?.role === 'admin' || userContext?.role === 'superadmin') {
+      cards.push(
+        <Link key="dashboard" href="/dashboard" className="block">
           <Card className="h-full transition-all duration-200 ease-in-out hover:shadow-lg hover:-translate-y-1">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-medium">Contact</CardTitle>
-              <Phone className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg font-medium">Management</CardTitle>
+              <Settings className="h-5 w-5 text-primary" />
             </CardHeader>
             <CardContent>
-              <CardDescription>Get in touch with administration</CardDescription>
+              <CardDescription>
+                {userContext.role === 'representative' 
+                  ? 'Manage resources and promote semesters'
+                  : 'Admin dashboard for system management'
+                }
+              </CardDescription>
             </CardContent>
           </Card>
         </Link>
+      )
+    }
+
+    cards.push(
+      <Link key="contact" href="/contact" className="block">
+        <Card className="h-full transition-all duration-200 ease-in-out hover:shadow-lg hover:-translate-y-1">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-lg font-medium">Contact</CardTitle>
+            <Phone className="h-5 w-5 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <CardDescription>Get in touch with administration</CardDescription>
+          </CardContent>
+        </Card>
+      </Link>
+    )
+
+    return cards
+  }
+
+  return (
+    <div className="space-y-8 p-4 md:p-6 lg:p-8">
+      <Header />
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-muted-foreground">Your central location for all educational resources and information</p>
+          </div>
+          {userContext && (
+            <div className="flex items-center gap-4">
+              {getRoleDisplay(userContext.role)}
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/profile">Profile</Link>
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Role-specific information */}
+        {userContext?.role === 'student' && (
+          <Card className="p-4">
+            <h3 className="font-semibold mb-2">Student Information</h3>
+            <p className="text-sm text-muted-foreground">
+              Year: {userContext.year} | Branch: {userContext.branch}
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              You have access to view resources, reminders, updates, and exams for your year and branch.
+            </p>
+          </Card>
+        )}
+
+        {userContext?.role === 'representative' && (
+          <Card className="p-4">
+            <h3 className="font-semibold mb-2">Representative Assignments</h3>
+            {userContext.representatives && userContext.representatives.length > 0 ? (
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  {userContext.representatives.map((rep: any) => (
+                    <Badge key={rep.id} variant="outline">
+                      {rep.branches?.code} - Year {rep.years?.batch_year}
+                    </Badge>
+                  ))}
+                </div>
+                <p className="text-sm text-muted-foreground mt-2">
+                  You can manage resources, reminders, updates, and exams for your assigned branches and years.
+                  You can also promote students to the next semester.
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No representative assignments found.</p>
+            )}
+          </Card>
+        )}
+
+        {(userContext?.role === 'admin' || userContext?.role === 'superadmin') && (
+          <Card className="p-4">
+            <h3 className="font-semibold mb-2">Admin Access</h3>
+            <p className="text-sm text-muted-foreground">
+              You have full access to manage all resources, users, and system settings across all branches and years.
+            </p>
+          </Card>
+        )}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {getNavigationCards()}
       </div>
 
       {isLoadingPrime && (
