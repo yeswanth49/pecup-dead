@@ -78,21 +78,51 @@ export async function GET(request: Request) {
       .from('resources')
       .select('*')
       .eq('category', category)
-      .eq('subject', subject.toLowerCase())
+      .ilike('subject', subject.toLowerCase())
       .eq('unit', unitNumber)
       .order('date', { ascending: false });
 
-    const yearNum = year ? parseInt(year, 10) : NaN;
-    if (!Number.isNaN(yearNum)) {
-      query = query.eq('year', yearNum);
+    // Treat `year` query param as batch_year (e.g., 2024). Do not attempt index -> batch mapping here.
+    const batchYear = year ? parseInt(year, 10) : NaN;
+    let resolvedYearId: string | null = null
+    let resolvedBatchYear: number | null = null
+    if (!Number.isNaN(batchYear)) {
+      resolvedBatchYear = batchYear
+      try {
+        const { data: yearRow } = await supabaseAdmin.from('years').select('id').eq('batch_year', resolvedBatchYear).maybeSingle()
+        if (yearRow && yearRow.id) resolvedYearId = yearRow.id
+      } catch (e) {
+        console.warn('Year lookup failed for batch_year:', e)
+      }
     }
     const semNum = semester ? parseInt(semester, 10) : NaN;
     if (!Number.isNaN(semNum)) {
+      // match either legacy semester number or normalized semester_id if needed (not implemented here)
       query = query.eq('semester', semNum);
     }
 
+    // Resolve branch -> branch_id if possible
+    let resolvedBranchId: string | null = null
     if (branch) {
-      query = query.eq('branch', branch);
+      try {
+        const { data: branchRow } = await supabaseAdmin.from('branches').select('id').eq('code', branch).maybeSingle()
+        if (branchRow && branchRow.id) resolvedBranchId = branchRow.id
+      } catch (e) {
+        console.warn('Branch lookup failed:', e)
+      }
+    }
+
+    // Apply filters preferring normalized *_id columns when available
+    if (resolvedYearId) {
+      query = query.eq('year_id', resolvedYearId)
+    } else if (resolvedBatchYear) {
+      query = query.eq('year', resolvedBatchYear)
+    }
+
+    if (resolvedBranchId) {
+      query = query.eq('branch_id', resolvedBranchId)
+    } else if (branch) {
+      query = query.eq('branch', branch)
     }
 
     const { data: resources, error } = await query;
@@ -104,8 +134,35 @@ export async function GET(request: Request) {
 
     console.log(`API Route: Found ${resources?.length || 0} matching resources`);
 
+    // If no results and we have a resolvedBatchYear, try an alternate nearby batch (fallback)
+    let finalResources = resources || []
+    if ((finalResources.length === 0) && resolvedBatchYear) {
+      try {
+        const altBatch = resolvedBatchYear + 1
+        console.debug('No results, trying alternate batch year', altBatch)
+        let altQuery = supabaseAdmin
+          .from('resources')
+          .select('*')
+          .eq('category', category)
+          .eq('subject', subject.toLowerCase())
+          .eq('unit', unitNumber)
+          .order('date', { ascending: false })
+        if (!Number.isNaN(semNum)) altQuery = altQuery.eq('semester', semNum)
+        if (resolvedBranchId) altQuery = altQuery.eq('branch_id', resolvedBranchId)
+        else if (branch) altQuery = altQuery.eq('branch', branch)
+        altQuery = altQuery.eq('year', altBatch)
+        const { data: altResources, error: altErr } = await altQuery
+        if (!altErr && altResources && altResources.length > 0) {
+          console.debug('Alternate batch query returned', altResources.length)
+          finalResources = altResources
+        }
+      } catch (e) {
+        console.warn('Alternate batch lookup failed', e)
+      }
+    }
+
     // Transform the data to match the expected format
-    const filteredResources: Resource[] = (resources || []).map(resource => ({
+    const filteredResources: Resource[] = (finalResources || []).map(resource => ({
       id: resource.id,
       category: resource.category,
       subject: resource.subject,
@@ -119,6 +176,19 @@ export async function GET(request: Request) {
     }));
 
     console.log(`API Route: Returning ${filteredResources.length} resources`);
+
+    // If debug flag provided and in development, return debug metadata to help trace mapping
+    const debugFlag = searchParams.get('debug')
+    if (process.env.NODE_ENV === 'development' && debugFlag === '1') {
+      const debugInfo = {
+        resolvedBatchYear: resolvedBatchYear || null,
+        resolvedYearId: resolvedYearId || null,
+        resolvedBranchId: resolvedBranchId || null,
+        queryCount: (resources || []).length
+      }
+      return NextResponse.json({ resources: filteredResources, _debug: debugInfo })
+    }
+
     return NextResponse.json(filteredResources);
 
   } catch (error: any) {

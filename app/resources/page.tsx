@@ -67,6 +67,7 @@ export default function ResourcesPage() {
 
   const query = useMemo(() => {
     const p = new URLSearchParams()
+    // Ensure we pass batch_year (e.g., 2024) not an index
     if (year !== 'all') p.set('year', String(year))
     if (semester !== 'all') p.set('semester', String(semester))
     if (branch) p.set('branch', branch)

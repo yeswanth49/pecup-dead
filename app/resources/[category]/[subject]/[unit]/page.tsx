@@ -94,7 +94,19 @@ export default function UnitPage() {
 
       // fetch from relative API route on the same origin
       const qs = new URLSearchParams({ category, subject: decodedSubject, unit: String(unitNum) })
-      if (qpYear) qs.set('year', qpYear)
+      if (qpYear) {
+        // Convert short academic year (1-4) to batch_year (e.g., 2 -> 2024)
+        const yearNum = parseInt(qpYear, 10)
+        if (!isNaN(yearNum) && yearNum >= 1 && yearNum <= 4) {
+          // Map academic year to batch year relative to current year
+          // Example: if current year is 2025, academic year 1 => batch 2025, 2 => 2024, etc.
+          const currentYear = new Date().getFullYear()
+          const batchYear = currentYear - (yearNum - 1)
+          qs.set('year', String(batchYear))
+        } else {
+          qs.set('year', qpYear)
+        }
+      }
       if (qpSem) qs.set('semester', qpSem)
       const qpBranch = currentUrl.searchParams.get('branch') || undefined
       if (qpBranch) qs.set('branch', qpBranch)
@@ -107,6 +119,9 @@ export default function UnitPage() {
           throw new Error(`Status ${res.status}: ${text}`)
         }
         const body = await res.json()
+        // Debug: log API response to help troubleshoot missing resources in UI
+        // (Remove this log after debugging)
+        console.debug('DEBUG: /api/resources response', body)
         // normalize two possible shapes
         if (Array.isArray(body)) {
           setResources(body)

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { google } from 'googleapis'
 import { Readable } from 'stream'
+import { promises as fs } from 'fs'
 import { createSupabaseAdmin } from '@/lib/supabase'
 import { requireAdmin, getSettings, getCurrentUserContext, canManageResources, requirePermission } from '@/lib/admin-auth'
 import { logAudit } from '@/lib/audit'
@@ -102,31 +103,22 @@ async function uploadToDrive(fileBuffer: Buffer, fileName: string, mime: string,
   const settings = await getSettings()
   const driveFolderId = settings?.drive_folder_id || process.env.GOOGLE_DRIVE_FOLDER_ID
   if (!driveFolderId) throw new Error('Drive folder id not configured')
-  let credentials;
-  try {
-    // Support base64-encoded credentials (safer in env files) or plain JSON
-    const rawB64 = process.env.GOOGLE_APPLICATION_CREDENTIALS_B64
-    const rawJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
-    let raw = rawJson || '{}'
-    if (rawB64) {
-      try {
-        raw = Buffer.from(rawB64, 'base64').toString('utf8')
-      } catch (e) {
-        console.error('Failed to decode GOOGLE_APPLICATION_CREDENTIALS_B64:', e)
-        throw e
-      }
-    }
-    credentials = JSON.parse(raw)
-    // Validate required keys for Google service account
-    if (!credentials.client_email || !credentials.private_key) {
-      throw new Error('Invalid Google credentials: missing required fields')
-    }
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'Failed to parse Google credentials'
-    console.error('Google credentials validation error:', errorMessage)
-    throw new Error('Google Drive configuration error')
+  // Support base64 JSON (e.g. on Vercel) or local key file
+  const rawB64 = process.env.GOOGLE_APPLICATION_CREDENTIALS_B64
+  const keyFile = process.env.GOOGLE_APPLICATION_CREDENTIALS
+  let auth: any
+  if (rawB64) {
+    // Decode and parse service account JSON
+    const raw = Buffer.from(rawB64, 'base64').toString('utf8')
+    const creds = JSON.parse(raw)
+    creds.private_key = creds.private_key.replace(/\\n/g, '\n')
+    auth = new google.auth.GoogleAuth({ credentials: creds, scopes: ['https://www.googleapis.com/auth/drive'] })
+  } else if (keyFile) {
+    // Load from file path
+    auth = new google.auth.GoogleAuth({ keyFilename: keyFile, scopes: ['https://www.googleapis.com/auth/drive'] })
+  } else {
+    throw new Error('Google Drive configuration error: no credentials provided')
   }
-  const auth = new google.auth.GoogleAuth({ credentials, scopes: ['https://www.googleapis.com/auth/drive'] })
   const drive = google.drive({ version: 'v3', auth })
   const fileReadable = Readable.from(fileBuffer)
   const { data } = await drive.files.create({
@@ -136,7 +128,7 @@ async function uploadToDrive(fileBuffer: Buffer, fileName: string, mime: string,
   })
   if (!data.id) throw new Error('Drive upload failed')
   await drive.permissions.create({ fileId: data.id, requestBody: { role: 'reader', type: 'anyone' } })
-  const url = data.webViewLink || `https://drive.google.com/file/d/${data.id}/view?usp=sharing`
+  const url = data.webViewLink ?? `https://drive.google.com/file/d/${data.id}/view?usp=sharing`
   return { url }
 }
 
@@ -169,6 +161,10 @@ export async function POST(request: Request) {
   try {
     let payload: any = {}
     let file: File | null = null
+    // Track resolved ids for insertion
+    let branchId: string | null = null
+    let yearId: string | null = null
+    let semesterId: string | null = null
 
     if (contentType.includes('multipart/form-data')) {
       const form = await request.formData()
@@ -176,17 +172,43 @@ export async function POST(request: Request) {
       for (const k of form.keys()) payload[k] = form.get(k)
       for (const k of required) if (!payload[k]) return NextResponse.json({ error: `Missing field ${k}` }, { status: 400 })
       file = (form.get('file') as unknown as File) || null
+      branchId = payload.branch_id || null
+      yearId = payload.year_id || null
+      semesterId = payload.semester_id || null
     } else {
       payload = await request.json()
       const required = ['category', 'subject', 'unit', 'name'] as const
       for (const k of required) if (!payload[k]) return NextResponse.json({ error: `Missing field ${k}` }, { status: 400 })
+      branchId = payload.branch_id || null
+      yearId = payload.year_id || null
+      semesterId = payload.semester_id || null
     }
 
     const unit = toInt(payload.unit)
     if (!unit || unit < 1) return NextResponse.json({ error: 'Invalid unit' }, { status: 400 })
+    
+    // Enforce scope for representatives early to avoid uploading files when the request will be rejected
+    if (userContext.role === 'representative') {
+      // If branch/year not provided, infer from their assigned representative records
+      if (!branchId || !yearId) {
+        const firstAssignment = (userContext.representatives && userContext.representatives[0]) || null
+        if (firstAssignment) {
+          branchId = firstAssignment.branch_id || branchId
+          yearId = firstAssignment.year_id || yearId
+        }
+      }
+      if (!branchId || !yearId) {
+        return NextResponse.json({ error: 'Branch and year must be specified for representatives' }, { status: 400 })
+      }
+      const canManage = await canManageResources(branchId, yearId)
+      if (!canManage) {
+        return NextResponse.json({ error: 'Forbidden: Cannot manage resources for this branch/year' }, { status: 403 })
+      }
+    }
 
     let url: string | undefined
     let is_pdf = false
+    let detectedMime: string | null = null
 
     if (file) {
       const originalName = (file as any).name as string
@@ -197,6 +219,7 @@ export async function POST(request: Request) {
       const validation = validateFile(buffer, originalName, clientMime)
       if (!validation.ok) return NextResponse.json({ error: 'Unsupported file type', reason: validation.reason }, { status: 415 })
       const effectiveMime = (validation.detectedMime || clientMime || '').toLowerCase()
+      detectedMime = effectiveMime
       is_pdf = effectiveMime === 'application/pdf' || originalName.toLowerCase().endsWith('.pdf')
 
       const settings = await getSettings()
@@ -214,7 +237,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Either file or url is required' }, { status: 400 })
     }
 
-    const insertPayload = {
+    const insertPayload: any = {
       category: String(payload.category),
       subject: String(payload.subject).toLowerCase(),
       unit,
@@ -228,44 +251,64 @@ export async function POST(request: Request) {
       url: url!,
       is_pdf,
     }
-
-    // Enforce scope for representatives: must be within their assigned branch/year
-    if (userContext.role === 'representative') {
-      // For representatives, we need to validate branchId and yearId
-      // Convert legacy branch/year to IDs if needed
-      let branchId = payload.branch_id
-      let yearId = payload.year_id
-      
-      if (!branchId && payload.branch) {
-        // Convert branch code to ID
-        const { data: branchData } = await supabase
-          .from('branches')
-          .select('id')
-          .eq('code', payload.branch)
-          .single()
-        branchId = branchData?.id
-      }
-      
-      if (!yearId && payload.year) {
-        // Convert year number to ID (assuming it's batch year)
-        const { data: yearData } = await supabase
-          .from('years')
-          .select('id')
-          .eq('batch_year', payload.year)
-          .single()
-        yearId = yearData?.id
-      }
-
-      if (!branchId || !yearId) {
-        return NextResponse.json({ error: 'Branch and year must be specified for representatives' }, { status: 400 })
-      }
-
-      const canManage = await canManageResources(branchId, yearId)
-      if (!canManage) {
-        return NextResponse.json({ error: 'Forbidden: Cannot manage resources for this branch/year' }, { status: 403 })
-      }
+    // Resolve and attach id fields and audit metadata
+    if (!branchId && payload.branch) {
+      const { data: branchData } = await supabase
+        .from('branches')
+        .select('id')
+        .eq('code', payload.branch)
+        .single()
+      branchId = branchData?.id || branchId
+    }
+    if (!yearId && payload.year) {
+      const { data: yearData } = await supabase
+        .from('years')
+        .select('id')
+        .eq('batch_year', payload.year)
+        .single()
+      yearId = yearData?.id || yearId
     }
 
+    insertPayload['branch_id'] = branchId
+    insertPayload['year_id'] = yearId
+    insertPayload['semester_id'] = semesterId
+    // Resolve uploader_id: prefer UUID; if userContext.id is not a UUID, try to look up profile id by email
+    // Resolve uploader_id: only set if the user corresponds to a student record
+    let resolvedUploaderId: string | null = null
+    try {
+      if (userContext?.email) {
+        const { data: studentRecord } = await supabase.from('students').select('id').eq('email', userContext.email).maybeSingle()
+        if (studentRecord && studentRecord.id) resolvedUploaderId = studentRecord.id
+      }
+    } catch (e) {
+      console.warn('Student lookup failed for uploader resolution:', e)
+    }
+    insertPayload['uploader_id'] = resolvedUploaderId
+
+    // created_by must reference admins.id (foreign key). Only set if the user is an admin.
+    let resolvedCreatedBy: string | null = null
+    try {
+      if (userContext?.email) {
+        const { data: adminRecord } = await supabase.from('admins').select('id').eq('email', userContext.email).maybeSingle()
+        if (adminRecord && adminRecord.id) resolvedCreatedBy = adminRecord.id
+      }
+    } catch (e) {
+      console.warn('Admin lookup failed for created_by resolution:', e)
+    }
+    insertPayload['created_by'] = resolvedCreatedBy
+    insertPayload['file_type'] = detectedMime || ((file as any)?.type || null)
+    insertPayload['title'] = payload.title ? String(payload.title) : String(payload.name)
+    // For Drive uploads, store drive link separately if the url is a Drive link
+    insertPayload['drive_link'] = url && url.toLowerCase().includes('drive.google.com') ? url : null
+
+    // Debug: print resolved user and payload to help diagnose uuid insertion errors
+    console.debug('Creating resource - userContext:', { id: (userContext as any)?.id, email: userContext?.email, role: userContext?.role })
+    console.debug('Creating resource - insertPayload preview:', {
+      branch_id: insertPayload['branch_id'],
+      year_id: insertPayload['year_id'],
+      uploader_id: insertPayload['uploader_id'],
+      created_by: insertPayload['created_by']
+    })
     const { data, error } = await supabase.from('resources').insert(insertPayload).select('id').single()
     if (error) throw error
     
@@ -282,6 +325,8 @@ export async function POST(request: Request) {
     
     return NextResponse.json({ id: data.id, ...insertPayload })
   } catch (err: any) {
+    // Log error to server console for debugging
+    console.error('Create resource error:', err)
     const auditRole = userContext?.role === 'representative' ? 'admin' : userContext?.role as 'admin' | 'superadmin' || 'admin'
     await logAudit({ 
       actor_email: userContext?.email || 'unknown', 
@@ -291,6 +336,10 @@ export async function POST(request: Request) {
       success: false, 
       message: err?.message 
     })
+    // In development, return error message to client to aid debugging; keep generic in production
+    if (process.env.NODE_ENV === 'development') {
+      return NextResponse.json({ error: 'Failed to create resource', reason: err?.message || String(err) }, { status: 500 })
+    }
     return NextResponse.json({ error: 'Failed to create resource' }, { status: 500 })
   }
 }

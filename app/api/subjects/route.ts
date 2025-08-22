@@ -73,8 +73,37 @@ export async function GET(request: Request) {
     }
 
     if (!offeringsData || offeringsData.length === 0) {
-      console.log(`[DEBUG] Subjects API - No offerings found for context`)
-      return NextResponse.json({ subjects: [] })
+      console.log(`[DEBUG] Subjects API - No offerings found for context, falling back to resources table`)
+
+      // Fallback: try to find subjects from resources for this context so frontend still shows available subjects
+      try {
+        let resourcesQuery = supabase
+          .from('resources')
+          .select('subject')
+          .eq('category', 'notes')
+          .eq('unit', 1)
+          .neq('subject', null)
+          .limit(1000)
+
+        // Apply context filters if available
+        if (branch) resourcesQuery = resourcesQuery.eq('branch', branch)
+        if (year) resourcesQuery = resourcesQuery.eq('year', parseInt(year, 10))
+        if (semester) resourcesQuery = resourcesQuery.eq('semester', parseInt(semester, 10))
+
+        const { data: resourcesData, error: resourcesError } = await resourcesQuery
+        if (resourcesError) {
+          console.warn('[DEBUG] Subjects API - resources fallback query failed:', resourcesError)
+          return NextResponse.json({ subjects: [] })
+        }
+
+        const uniqueCodes = Array.from(new Set((resourcesData || []).map((r: any) => (r.subject || '').toUpperCase()).filter(Boolean)))
+        const subjects = uniqueCodes.map((code: string) => ({ code, name: code, resource_type: 'resources' }))
+        console.log(`[DEBUG] Subjects API - Returning ${subjects.length} subjects from resources fallback`) 
+        return NextResponse.json({ subjects })
+      } catch (e) {
+        console.warn('[DEBUG] Subjects API - resources fallback unexpected error', e)
+        return NextResponse.json({ subjects: [] })
+      }
     }
 
     // Get subjects separately with resource_type filtering
