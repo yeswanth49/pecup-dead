@@ -223,13 +223,15 @@ export default function ResourceUploadForm() {
           Unit <span className="text-destructive">*</span>
         </label>
         <Input
-          type="text"
+          type="number"
           id="unit"
           value={unit}
           onChange={(e) => setUnit(e.target.value)}
           required
+          min="1"
+          max="12"
           disabled={isLoading}
-          placeholder="e.g., Unit 1, Chapter 5, Module B"
+          placeholder="e.g., 1, 2, 3"
         />
       </div>
 
