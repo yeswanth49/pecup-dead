@@ -1,7 +1,8 @@
-'use client'
+"use client"
 
 import { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react'
 import { useSession } from 'next-auth/react'
+import { useSessionCachedResource } from './session-cache'
 
 export interface Profile {
   id: string
@@ -20,11 +21,14 @@ interface ProfileContextType {
   loading: boolean
   error: string | null
   refetch: () => Promise<void>
+  subjects: { code: string; name: string; resource_type?: string }[]
+  refreshSubjects: () => Promise<void>
 }
 
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined)
 
 const PROFILE_STORAGE_KEY = 'user_profile_cache'
+const SESSION_CACHE_PREFIX = 'session_cache_v1'
 
 export function ProfileProvider({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession()
@@ -150,8 +154,23 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     await fetchProfile(true)
   }
 
+  // Subjects cache using session cache hook
+  const subjectsKey = profile ? `subjects:year=${profile.year}:branch=${profile.branch}` : 'subjects:anon'
+  const subjectsFetcher = async () => {
+    const params = new URLSearchParams()
+    if (profile) {
+      params.set('year', String(profile.year))
+      params.set('branch', profile.branch)
+    }
+    const res = await fetch(`/api/subjects?${params.toString()}`)
+    const json = await res.json()
+    return json.subjects || []
+  }
+
+  const { data: subjectsData, refresh: refreshSubjects } = useSessionCachedResource(subjectsKey, subjectsFetcher, [profile?.year, profile?.branch])
+
   return (
-    <ProfileContext.Provider value={{ profile, loading, error, refetch }}>
+    <ProfileContext.Provider value={{ profile, loading, error, refetch, subjects: subjectsData || [], refreshSubjects }}>
       {children}
     </ProfileContext.Provider>
   )
@@ -164,3 +183,9 @@ export function useProfile() {
   }
   return context
 }
+
+// Generic hook to provide stale-while-revalidate caching in sessionStorage.
+// Components can call this with a unique key (can include query params) and a fetcher
+// function that returns the desired data array/object.
+// re-export from shared session-cache implementation
+export { useSessionCachedResource }

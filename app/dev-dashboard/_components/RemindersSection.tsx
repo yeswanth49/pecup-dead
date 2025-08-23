@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useSessionCachedResource } from '@/lib/profile-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -53,9 +54,11 @@ export function RemindersSection({ userContext }: { userContext: UserContext | n
   }, [status, profile, userContext])
 
   async function load() {
+    // load via the session cache hook
     setLoading(true)
     setError(null)
     try {
+      // The hook also performs background fetch; here we manually fetch and update cache
       const res = await fetch(`/api/admin/reminders?${query}`)
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error || 'Failed')
@@ -67,6 +70,19 @@ export function RemindersSection({ userContext }: { userContext: UserContext | n
     }
   }
   useEffect(() => { load() }, [query, refreshIndex])
+
+  // Integrate with session cache: prefer cached value and revalidate in background
+  const cacheKey = useMemo(() => `reminders:${query}`, [query])
+  const { data: cached, loading: cacheLoading, error: cacheError, refresh: refreshCache } = useSessionCachedResource<{ id: string; title: string; due_date: string; status?: string | null; year?: number | null; branch?: string | null }[]>(cacheKey, async () => {
+    const res = await fetch(`/api/admin/reminders?${query}`)
+    const json = await res.json()
+    if (!res.ok) throw new Error(json?.error || 'Failed')
+    return json.data || []
+  }, [query])
+
+  useEffect(() => {
+    if (cached) setItems(cached)
+  }, [cached])
 
   useEffect(() => {
     // For representatives, set profile to their first assignment
@@ -93,8 +109,8 @@ export function RemindersSection({ userContext }: { userContext: UserContext | n
           <Input placeholder="e.g., active" value={status} onChange={(e) => setStatus(e.target.value)} />
         </div>
         <div className="ml-auto flex gap-2">
-          <Button variant="secondary" onClick={() => setRefreshIndex((i) => i + 1)} disabled={loading}>Refresh</Button>
-          <CreateReminderDialog onCreated={() => setRefreshIndex((i) => i + 1)} userContext={userContext} />
+          <Button variant="secondary" onClick={async () => { await refreshCache(); setRefreshIndex((i) => i + 1) }} disabled={loading}>Refresh</Button>
+          <CreateReminderDialog onCreated={async () => { await refreshCache(); setRefreshIndex((i) => i + 1) }} userContext={userContext} />
         </div>
       </div>
       {error && <div className="text-sm text-red-500">{error}</div>}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { useSessionCachedResource } from '@/lib/profile-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -61,6 +62,17 @@ export function RecentUpdatesSection({ userContext }: { userContext: UserContext
   }
   useEffect(() => { load() }, [refreshIndex, query])
 
+  // Integrate with session cache: prefer cached value and revalidate in background
+  const cacheKey = useMemo(() => `recent-updates:${query}`, [query])
+  const { data: cached, refresh: refreshCache } = useSessionCachedResource<{ id: string; title: string; date?: string | null; description?: string | null }[]>(cacheKey, async () => {
+    const res = await fetch(`/api/admin/recent-updates?${query}`)
+    const json = await res.json()
+    if (!res.ok) throw new Error(json?.error || 'Failed')
+    return json.data || []
+  }, [query])
+
+  useEffect(() => { if (cached) setItems(cached) }, [cached])
+
   async function handleDelete(id: string) {
     if (!confirm('Delete this update?')) return
     const res = await fetch(`/api/admin/recent-updates/${id}`, { method: 'DELETE' })
@@ -71,8 +83,8 @@ export function RecentUpdatesSection({ userContext }: { userContext: UserContext
   return (
     <div className="space-y-4">
       <div className="flex gap-2 justify-end">
-        <Button variant="secondary" onClick={() => setRefreshIndex((i) => i + 1)} disabled={loading}>Refresh</Button>
-        <CreateRecentUpdateDialog onCreated={() => setRefreshIndex((i) => i + 1)} userContext={userContext} />
+        <Button variant="secondary" onClick={async () => { await refreshCache(); setRefreshIndex((i) => i + 1) }} disabled={loading}>Refresh</Button>
+        <CreateRecentUpdateDialog onCreated={async () => { await refreshCache(); setRefreshIndex((i) => i + 1) }} userContext={userContext} />
       </div>
       {error && <div className="text-sm text-red-500">{error}</div>}
       <div className="rounded-md border overflow-auto">
