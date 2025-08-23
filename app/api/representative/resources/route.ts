@@ -128,30 +128,30 @@ export async function POST(request: NextRequest) {
 
     if (contentType.includes('multipart/form-data')) {
       const form = await request.formData();
-      const required = ['title', 'branchId', 'yearId', 'semesterId'] as const;
       for (const k of form.keys()) payload[k] = form.get(k);
-      for (const k of required) {
-        if (!payload[k]) {
-          console.error(`${REQ_DEBUG_PREFIX} Missing required form field: ${k}.`);
-          return NextResponse.json({ error: `Missing field ${k}` }, { status: 400 });
-        }
-      }
       file = (form.get('file') as unknown as File) || null;
       console.log(`${REQ_DEBUG_PREFIX} Parsed FormData: file presence=${!!file}, payload keys: ${Object.keys(payload).join(', ')}`);
     } else {
       payload = await request.json();
-      const required = ['title', 'branchId', 'yearId', 'semesterId'] as const;
-      for (const k of required) {
-        if (!payload[k]) {
-          console.error(`${REQ_DEBUG_PREFIX} Missing required JSON field: ${k}.`);
-          return NextResponse.json({ error: `Missing field ${k}` }, { status: 400 });
-        }
-      }
       console.log(`${REQ_DEBUG_PREFIX} Parsed JSON payload: keys: ${Object.keys(payload).join(', ')}`);
     }
 
-    const { branchId, yearId, semesterId } = payload;
-    console.log(`${REQ_DEBUG_PREFIX} Extracted IDs: branchId=${branchId}, yearId=${yearId}, semesterId=${semesterId}.`);
+    // Normalize ID fields to accept either snake_case or camelCase from clients
+    const branchId = payload.branch_id || payload.branchId || payload.branch || null
+    const yearId = payload.year_id || payload.yearId || payload.year || null
+    const semesterId = payload.semester_id || payload.semesterId || payload.semester || null
+    const title = payload.title || payload.name || null
+    console.log(`${REQ_DEBUG_PREFIX} Extracted IDs: branchId=${branchId}, yearId=${yearId}, semesterId=${semesterId}, title=${title}.`);
+
+    // Validate required fields
+    if (!title) {
+      console.error(`${REQ_DEBUG_PREFIX} Missing required field: title.`)
+      return NextResponse.json({ error: 'Missing field title' }, { status: 400 })
+    }
+    if (!branchId || !yearId || !semesterId) {
+      console.error(`${REQ_DEBUG_PREFIX} Missing branch/year/semester IDs. Received: branchId=${branchId}, yearId=${yearId}, semesterId=${semesterId}`)
+      return NextResponse.json({ error: 'Missing field branch/year/semester IDs' }, { status: 400 })
+    }
 
     // Verify representative can manage this branch/year
     const canManage = await canManageResources(branchId, yearId);

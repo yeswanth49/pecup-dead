@@ -335,6 +335,8 @@ function CreateResourceDialog({
   
   const isRepresentative = userContext?.role === 'representative'
   const assignments = userContext?.representativeAssignments || []
+  const [resolving, setResolving] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Record<string,string>>({})
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -351,9 +353,40 @@ function CreateResourceDialog({
       form.set('subject', subject)
       form.set('unit', String(unit))
       if (type) form.set('type', type)
+      // Send legacy display values but prefer *_id fields where available
       form.set('year', String(year))
       if (semester) form.set('semester', String(semester))
       form.set('branch', String(branch))
+
+      // Resolve and attach IDs when available; fail-fast with user-friendly errors on mapping failures
+      setFieldErrors({})
+      setResolving(true)
+      try {
+        const { getYearIdByBatchYear, getBranchIdByCode, getSemesterId } = await import('@/lib/lookup-mappers')
+        const yearId = await getYearIdByBatchYear(Number(year))
+        const branchId = await getBranchIdByCode(String(branch))
+        let semesterId: string | null = null
+        if (yearId && semester) semesterId = await getSemesterId(yearId, Number(semester))
+
+        if (!yearId) throw new Error('Year mapping failed: selected batch not found')
+        if (!branchId) throw new Error('Branch mapping failed: selected branch not found')
+        if (semester && !semesterId) throw new Error('Semester mapping failed for the selected year')
+
+        form.set('year_id', yearId)
+        form.set('branch_id', branchId)
+        if (semesterId) form.set('semester_id', semesterId)
+      } catch (err: any) {
+        // Log for debugging and show user-friendly field hints
+        // eslint-disable-next-line no-console
+        console.debug('Lookup resolution failed in client:', err)
+        const msg = err?.message || 'Failed to resolve lookup mappings'
+        if (msg.includes('Year mapping failed')) setFieldErrors((f) => ({ ...f, year: 'Selected batch not found' }))
+        if (msg.includes('Branch mapping failed')) setFieldErrors((f) => ({ ...f, branch: 'Selected branch not found' }))
+        if (msg.includes('Semester mapping failed')) setFieldErrors((f) => ({ ...f, semester: 'Semester not available for selected year' }))
+        throw new Error(msg)
+      } finally {
+        setResolving(false)
+      }
       if (defaultArchived) form.set('archived', 'true')
       if (file) form.set('file', file)
 
@@ -436,6 +469,7 @@ function CreateResourceDialog({
                   )}
                 </SelectContent>
               </Select>
+            {fieldErrors.year && <div className="text-xs text-red-500">{fieldErrors.year}</div>}
             </div>
             <div>
               <Label>Semester</Label>
@@ -448,6 +482,7 @@ function CreateResourceDialog({
                   {[1,2].map((s) => <SelectItem key={s} value={String(s)}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
+            {fieldErrors.semester && <div className="text-xs text-red-500">{fieldErrors.semester}</div>}
             </div>
             <div>
               <Label>Branch</Label>
@@ -476,6 +511,7 @@ function CreateResourceDialog({
                   )}
                 </SelectContent>
               </Select>
+            {fieldErrors.branch && <div className="text-xs text-red-500">{fieldErrors.branch}</div>}
             </div>
             <div className="col-span-2">
               <Label>File</Label>
@@ -484,7 +520,7 @@ function CreateResourceDialog({
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Create'}</Button>
+            <Button type="submit" disabled={saving || resolving}>{saving ? 'Saving…' : resolving ? 'Resolving…' : 'Create'}</Button>
           </div>
         </form>
       </DialogContent>

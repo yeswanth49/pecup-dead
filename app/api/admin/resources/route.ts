@@ -184,9 +184,10 @@ export async function POST(request: Request) {
         }
       }
       file = (form.get('file') as unknown as File) || null;
-      branchId = payload.branch_id || null;
-      yearId = payload.year_id || null;
-      semesterId = payload.semester_id || null;
+      // Normalize incoming ID fields: accept snake_case, camelCase, or legacy display values
+      branchId = payload.branch_id || payload.branchId || payload.branch || null;
+      yearId = payload.year_id || payload.yearId || payload.year || null;
+      semesterId = payload.semester_id || payload.semesterId || payload.semester || null;
       console.log(`${REQ_DEBUG_PREFIX} Parsed FormData: file presence=${!!file}, payload keys: ${Object.keys(payload).join(', ')}`);
     } else {
       payload = await request.json();
@@ -197,9 +198,10 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: `Missing field ${k}` }, { status: 400 });
         }
       }
-      branchId = payload.branch_id || null;
-      yearId = payload.year_id || null;
-      semesterId = payload.semester_id || null;
+      // Normalize incoming ID fields for JSON body as well
+      branchId = payload.branch_id || payload.branchId || payload.branch || null;
+      yearId = payload.year_id || payload.yearId || payload.year || null;
+      semesterId = payload.semester_id || payload.semesterId || payload.semester || null;
       console.log(`${REQ_DEBUG_PREFIX} Parsed JSON payload: keys: ${Object.keys(payload).join(', ')}`);
     }
 
