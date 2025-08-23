@@ -72,13 +72,13 @@ export default function ResourceUploadForm() {
     setMessage(null);
 
     // --- Updated Validation ---
-    if (!file || !title || !category || !subject || !unit || !resourceType) {
-      setMessage({
-        type: 'error',
-        text: 'Please fill in all required fields (*).',
-      });
-      return;
-    }
+    // if (!file || !title || !category || !subject || !unit || !resourceType) {
+    //   setMessage({
+    //     type: 'error',
+    //     text: 'Please fill in all required fields (*).',
+    //   });
+    //   return;
+    // }
     // --- End Updated Validation ---
 
     setIsLoading(true);
@@ -150,7 +150,7 @@ export default function ResourceUploadForm() {
           id="title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          required
+          // required
           disabled={isLoading}
         />
       </div>
@@ -182,7 +182,7 @@ export default function ResourceUploadForm() {
           id="category"
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          required
+          // required
           disabled={isLoading}
         >
           <option value="" disabled>
@@ -209,9 +209,11 @@ export default function ResourceUploadForm() {
           id="subject"
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
-          required
+          // required
           disabled={isLoading}
           placeholder="e.g., Mathematics, Physics, History"
+          pattern="[a-zA-Z0-9 ]+" // Allow alphanumeric and spaces
+          title="Subject can only contain letters, numbers, and spaces"
         />
       </div>
 
@@ -227,7 +229,7 @@ export default function ResourceUploadForm() {
           id="unit"
           value={unit}
           onChange={(e) => setUnit(e.target.value)}
-          required
+          // required
           min="1"
           max="12"
           disabled={isLoading}
@@ -247,9 +249,11 @@ export default function ResourceUploadForm() {
           id="resourceType"
           value={resourceType}
           onChange={(e) => setResourceType(e.target.value)}
-          required
+          // required
           disabled={isLoading}
           placeholder="e.g., Lecture Notes, Lab Manual, Question Bank"
+          pattern="[a-zA-Z0-9 ]+" // Allow alphanumeric and spaces
+          title="Resource Type can only contain letters, numbers, and spaces"
         />
         {/* Or use a Select dropdown if you have predefined types: */}
         {/* <Select
@@ -281,7 +285,7 @@ export default function ResourceUploadForm() {
           // Consider if you still want to restrict to PDF only, or allow other types
           // accept=".pdf"
           onChange={handleFileChange}
-          required
+          // required
           disabled={isLoading}
           className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-secondary file:text-secondary-foreground hover:file:bg-secondary/80" // Basic file input styling
         />
