@@ -8,6 +8,20 @@ import { Readable } from 'stream';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { validateFile, getFileExtension } from '@/lib/file-validation';
+import { getSettings } from '@/lib/admin-auth'; // Import getSettings
+import { ResourceCreateInput } from '@/lib/types'; // Import ResourceCreateInput
+
+// Define ResourceInsert based on ResourceCreateInput and actual DB schema
+interface ResourceInsert extends ResourceCreateInput {
+  file_name: string;
+  file_mime_type: string;
+  uploaded_by: string;
+  storage_location: string;
+  resource_type: string;
+  unit: number;
+  category: string;
+  subject: string;
+}
 
 // Debug logging prefix
 const DEBUG_PREFIX = '[API DEBUG UploadResource]';
@@ -164,53 +178,38 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unit cannot be empty.' }, { status: 400 });
     }
     const parsedUnit = Number.parseInt(unitStr, 10);
-    if (!Number.isInteger(parsedUnit) || !Number.isFinite(parsedUnit) || parsedUnit < 0) {
-      console.error(`${REQ_DEBUG_PREFIX} Validation Error: Invalid unit value '${unitStr}'.`);
-      return NextResponse.json({ error: 'Invalid unit. Must be a non-negative integer.' }, { status: 400 });
+    if (!Number.isInteger(parsedUnit) || !Number.isFinite(parsedUnit) || parsedUnit < 1 || parsedUnit > 12) {
+      console.error(`${REQ_DEBUG_PREFIX} Validation Error: Invalid unit value: ${unitRaw}.`);
+      return NextResponse.json({ error: 'Unit must be an integer between 1 and 12.' }, { status: 400 });
     }
-    const validatedUnit: number = parsedUnit;
 
+    // File Processing
+    const buffer = Buffer.from(await file.arrayBuffer());
     const originalFilename = file.name;
-    const clientProvidedMime = file.type;
+    const fileExtension = originalFilename.split('.').pop()?.toLowerCase() || '';
+    const clientMimeType = file.type;
+    console.log(`${REQ_DEBUG_PREFIX} File details: filename='${originalFilename}', extension='${fileExtension}', clientMimeType='${clientMimeType}', size=${file.size} bytes.`);
 
-    // File size validation BEFORE reading into memory
-    const fileSizeBytes = (file as any).size as number | undefined;
-    if (typeof fileSizeBytes === 'number' && Number.isFinite(fileSizeBytes)) {
-      if (fileSizeBytes > MAX_UPLOAD_BYTES) {
-        console.warn(`${REQ_DEBUG_PREFIX} File too large: ${fileSizeBytes} bytes > MAX_UPLOAD_BYTES=${MAX_UPLOAD_BYTES}`);
-        return NextResponse.json({ error: 'File too large. Please upload a smaller file.' }, { status: 413 });
-      }
+    // Validate file type and size
+    if (file.size > MAX_UPLOAD_BYTES) {
+      console.error(`${REQ_DEBUG_PREFIX} Validation Error: File size (${file.size} bytes) exceeds limit (${MAX_UPLOAD_BYTES} bytes).`);
+      return NextResponse.json({ error: 'File size exceeds limit.' }, { status: 413 });
     }
 
-    // Read buffer after size validation
-    const fileBuffer: Buffer = Buffer.from(await file.arrayBuffer());
-
-    // Centralized whitelist validation (MIME, extension, and magic bytes)
-    const validation = validateFile(fileBuffer, originalFilename, clientProvidedMime);
-    if (!validation.ok) {
-      const ext = getFileExtension(originalFilename);
-      console.warn(
-        `${REQ_DEBUG_PREFIX} File rejected by whitelist. Name='${originalFilename}', Ext='${ext}', Client MIME='${clientProvidedMime}', Detected='${validation.detectedMime}', Reason='${validation.reason}'`
-      );
-      const status = 415; // Unsupported Media Type
-      return NextResponse.json(
-        { error: 'Unsupported file type.', reason: validation.reason },
-        { status }
-      );
+    const validationResult = validateFile(buffer, originalFilename, clientMimeType);
+    if (!validationResult.ok) {
+      console.error(`${REQ_DEBUG_PREFIX} File Validation Failed:`, validationResult.reason);
+      return NextResponse.json({ error: validationResult.reason }, { status: 415 });
     }
+    console.log(`${REQ_DEBUG_PREFIX} File validation successful. Detected MIME type: ${validationResult.detectedMime}.`);
 
-    const effectiveMime = (validation.detectedMime || clientProvidedMime || '').toLowerCase();
-    const isPdf = effectiveMime === 'application/pdf' || originalFilename.toLowerCase().endsWith('.pdf');
+    const effectiveMimeType = validationResult.detectedMime || clientMimeType || 'application/octet-stream';
+    const isPdf = effectiveMimeType === 'application/pdf' || fileExtension === 'pdf';
+    const settings = await getSettings(); // Reinstated getSettings
+    console.log(`${REQ_DEBUG_PREFIX} Determined file as PDF: ${isPdf}. PDF to Drive setting: ${settings?.pdf_to_drive}.`);
 
-    if (effectiveMime && clientProvidedMime && effectiveMime !== clientProvidedMime.toLowerCase()) {
-      console.warn(
-        `${REQ_DEBUG_PREFIX} MIME mismatch: client='${clientProvidedMime}' vs detected='${effectiveMime}' for '${originalFilename}'. Proceeding with detected.`
-      );
-    }
-
-    console.log(`${REQ_DEBUG_PREFIX} File details - Name: ${originalFilename}, Size: ${file.size}, Client MIME: ${clientProvidedMime}, Effective MIME: ${effectiveMime}, Is PDF: ${isPdf}`);
-
-    let finalUrl = '';
+    let finalUrl: string;
+    let storageLocation: string;
 
     // Initialize Supabase admin at runtime (after auth) and handle failures
     let supabaseAdmin: SupabaseClient;
@@ -221,9 +220,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Server configuration error. Please try again later.' }, { status: 500 });
     }
 
-    if (isPdf) {
+    if (isPdf && settings?.pdf_to_drive) {
       // Upload PDFs to Google Drive
-      console.log(`${REQ_DEBUG_PREFIX} Uploading PDF to Google Drive...`);
+      console.log(`${REQ_DEBUG_PREFIX} Uploading PDF to Google Drive.`);
       
       const authClient = await getGoogleAuthClient();
       const drive = google.drive({ version: 'v3', auth: authClient });
@@ -233,7 +232,7 @@ export async function POST(request: Request) {
         throw new Error('Server configuration error: Drive folder ID missing.');
       }
 
-      const fileReadableStream = Readable.from(fileBuffer);
+      const fileReadableStream = Readable.from(buffer);
 
       const driveFileMetadata = {
         name: originalFilename,
@@ -242,7 +241,7 @@ export async function POST(request: Request) {
       };
 
       const driveMedia = {
-        mimeType: effectiveMime || 'application/pdf',
+        mimeType: effectiveMimeType || 'application/pdf',
         body: fileReadableStream,
       };
 
@@ -281,16 +280,17 @@ export async function POST(request: Request) {
       }
 
       console.log(`${REQ_DEBUG_PREFIX} PDF uploaded to Google Drive - ID: ${driveFileId}, Link: ${finalUrl}`);
+      storageLocation = 'Google Drive';
     } else {
       // Upload non-PDFs to Supabase Storage
-      console.log(`${REQ_DEBUG_PREFIX} Uploading non-PDF file to Supabase Storage...`);
+      console.log(`${REQ_DEBUG_PREFIX} Uploading to Supabase Storage.`);
       
       const fileName = `${Date.now()}-${originalFilename}`;
       
       const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
         .from('resources')
-        .upload(fileName, fileBuffer, {
-          contentType: effectiveMime || undefined,
+        .upload(fileName, buffer, {
+          contentType: effectiveMimeType || undefined,
           duplex: 'half'
         });
 
@@ -306,33 +306,46 @@ export async function POST(request: Request) {
 
       finalUrl = urlData.publicUrl;
       console.log(`${REQ_DEBUG_PREFIX} Non-PDF uploaded to Supabase Storage - Path: ${uploadData.path}, URL: ${finalUrl}`);
+      storageLocation = 'Supabase Storage';
     }
 
-    // Save metadata to Supabase database
-    console.log(`${REQ_DEBUG_PREFIX} Saving metadata to Supabase database...`);
-    
+    // Database Insertion
+    console.log(`${REQ_DEBUG_PREFIX} Preparing database insertion payload.`);
+    const insertPayload: ResourceInsert = {
+      title: title as string,
+      description: description || undefined,
+      category: category as string,
+      subject: subject as string,
+      unit: parsedUnit,
+      resource_type: resourceType as string,
+      file_url: finalUrl,
+      drive_link: finalUrl.includes('drive.google.com') ? finalUrl : '',
+      file_path: finalUrl, // Storing URL in file_path for consistency or future use
+      file_name: originalFilename,
+      file_mime_type: effectiveMimeType,
+      uploaded_by: authorizedUser.id,
+      storage_location: storageLocation,
+      // Assuming these are not directly from ResourceCreateInput or need mapping
+      branch_id: 'default', // Placeholder, adjust as per your logic
+      year_id: 'default', // Placeholder, adjust as per your logic
+      semester_id: 'default', // Placeholder, adjust as per your logic
+    };
+
     const { data: insertData, error: insertError } = await supabaseAdmin
       .from('resources')
-      .insert({
-        category: category,
-        subject: subject.toLowerCase(),
-        unit: validatedUnit,
-        name: title,
-        description: description,
-        date: new Date().toISOString(),
-        type: resourceType,
-        url: finalUrl,
-        is_pdf: isPdf
-      })
-      .select()
+      .insert(insertPayload)
+      .select('id')
       .single();
 
     if (insertError) {
-      console.error(`${REQ_DEBUG_PREFIX} Supabase database insert error:`, insertError);
-      throw new Error(`Failed to save resource metadata: ${insertError.message}`);
+      console.error(`${REQ_DEBUG_PREFIX} Database Insertion Error:`, insertError.message);
+      return NextResponse.json({ error: 'Failed to save resource to database.', details: insertError.message }, { status: 500 });
     }
-
-    console.log(`${REQ_DEBUG_PREFIX} Resource metadata saved successfully with ID: ${insertData.id}`);
+    if (!insertData) {
+      console.error(`${REQ_DEBUG_PREFIX} Database Insertion Error: No data returned after insert.`);
+      return NextResponse.json({ error: 'Failed to retrieve resource ID after insert.' }, { status: 500 });
+    }
+    console.log(`${REQ_DEBUG_PREFIX} Database insertion successful. New resource ID: ${insertData.id}.`);
 
     // Success Response
     console.log(`${REQ_DEBUG_PREFIX} Process completed successfully for file: ${originalFilename}. Sending success response.`);
@@ -342,7 +355,7 @@ export async function POST(request: Request) {
         fileName: originalFilename,
         url: finalUrl,
         resourceId: insertData.id,
-        storageLocation: isPdf ? 'Google Drive' : 'Supabase Storage'
+        storageLocation: storageLocation
       },
       { status: 200 }
     );

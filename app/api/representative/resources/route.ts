@@ -107,85 +107,110 @@ export async function GET(request: NextRequest) {
  * Create a new resource (representatives only for their assigned branch/year)
  */
 export async function POST(request: NextRequest) {
+  const REQ_DEBUG_PREFIX = '[API DEBUG RepresentativeResources POST]';
+  console.log(`${REQ_DEBUG_PREFIX} Received POST request at ${new Date().toISOString()}`);
   try {
-    const userContext = await requirePermission('write', 'resources')
+    const userContext = await requirePermission('write', 'resources');
+    console.log(`${REQ_DEBUG_PREFIX} User authorized: ${userContext.email}, Role: ${userContext.role}`);
     
     if (userContext.role !== 'representative') {
-      return NextResponse.json({ error: 'Forbidden: Representatives only' }, { status: 403 })
+      console.error(`${REQ_DEBUG_PREFIX} Forbidden: User is not a representative.`);
+      return NextResponse.json({ error: 'Forbidden: Representatives only' }, { status: 403 });
     }
 
-    const supabase = createSupabaseAdmin()
-    const contentType = request.headers.get('content-type') || ''
+    const supabase = createSupabaseAdmin();
+    const contentType = request.headers.get('content-type') || '';
 
-    let payload: any = {}
-    let file: File | null = null
+    let payload: any = {};
+    let file: File | null = null;
+
+    console.log(`${REQ_DEBUG_PREFIX} Content-Type: ${contentType}`);
 
     if (contentType.includes('multipart/form-data')) {
-      const form = await request.formData()
-      const required = ['title', 'branchId', 'yearId', 'semesterId'] as const
-      for (const k of form.keys()) payload[k] = form.get(k)
+      const form = await request.formData();
+      const required = ['title', 'branchId', 'yearId', 'semesterId'] as const;
+      for (const k of form.keys()) payload[k] = form.get(k);
       for (const k of required) {
         if (!payload[k]) {
-          return NextResponse.json({ error: `Missing field ${k}` }, { status: 400 })
+          console.error(`${REQ_DEBUG_PREFIX} Missing required form field: ${k}.`);
+          return NextResponse.json({ error: `Missing field ${k}` }, { status: 400 });
         }
       }
-      file = (form.get('file') as unknown as File) || null
+      file = (form.get('file') as unknown as File) || null;
+      console.log(`${REQ_DEBUG_PREFIX} Parsed FormData: file presence=${!!file}, payload keys: ${Object.keys(payload).join(', ')}`);
     } else {
-      payload = await request.json()
-      const required = ['title', 'branchId', 'yearId', 'semesterId'] as const
+      payload = await request.json();
+      const required = ['title', 'branchId', 'yearId', 'semesterId'] as const;
       for (const k of required) {
         if (!payload[k]) {
-          return NextResponse.json({ error: `Missing field ${k}` }, { status: 400 })
+          console.error(`${REQ_DEBUG_PREFIX} Missing required JSON field: ${k}.`);
+          return NextResponse.json({ error: `Missing field ${k}` }, { status: 400 });
         }
       }
+      console.log(`${REQ_DEBUG_PREFIX} Parsed JSON payload: keys: ${Object.keys(payload).join(', ')}`);
     }
 
-    const { branchId, yearId, semesterId } = payload
+    const { branchId, yearId, semesterId } = payload;
+    console.log(`${REQ_DEBUG_PREFIX} Extracted IDs: branchId=${branchId}, yearId=${yearId}, semesterId=${semesterId}.`);
 
     // Verify representative can manage this branch/year
-    const canManage = await canManageResources(branchId, yearId)
+    const canManage = await canManageResources(branchId, yearId);
     if (!canManage) {
+      console.error(`${REQ_DEBUG_PREFIX} Forbidden: Representative cannot manage resources for branchId: ${branchId}, yearId: ${yearId}.`);
       return NextResponse.json(
         { error: 'Forbidden: Cannot manage resources for this branch/year' },
         { status: 403 }
-      )
+      );
     }
+    console.log(`${REQ_DEBUG_PREFIX} Representative authorized to manage resources for branchId: ${branchId}, yearId: ${yearId}.`);
 
-    let url: string | undefined
-    let fileType: string | undefined
+    let url: string | undefined;
+    let fileType: string | undefined;
 
     if (file) {
-      const originalName = (file as any).name as string
-      const clientMime = (file as any).type as string | undefined
-      const size = (file as any).size as number | undefined
+      console.log(`${REQ_DEBUG_PREFIX} File detected for upload.`);
+      const originalName = (file as any).name as string;
+      const clientMime = (file as any).type as string | undefined;
+      const size = (file as any).size as number | undefined;
+      console.log(`${REQ_DEBUG_PREFIX} File details: name='${originalName}', clientMime='${clientMime}', size=${size} bytes.`);
       
       if (typeof size === 'number' && size > MAX_UPLOAD_BYTES) {
-        return NextResponse.json({ error: 'File too large' }, { status: 413 })
+        console.error(`${REQ_DEBUG_PREFIX} File too large: ${size} bytes > ${MAX_UPLOAD_BYTES} bytes.`);
+        return NextResponse.json({ error: 'File too large' }, { status: 413 });
       }
 
-      const buffer = Buffer.from(await file.arrayBuffer())
-      const validation = validateFile(buffer, originalName, clientMime)
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const validation = validateFile(buffer, originalName, clientMime);
       if (!validation.ok) {
-        return NextResponse.json({ error: 'Unsupported file type', reason: validation.reason }, { status: 415 })
+        console.error(`${REQ_DEBUG_PREFIX} File validation failed:`, validation.reason);
+        return NextResponse.json({ error: 'Unsupported file type', reason: validation.reason }, { status: 415 });
       }
+      console.log(`${REQ_DEBUG_PREFIX} File validation successful. Detected MIME: ${validation.detectedMime}.`);
 
-      const effectiveMime = (validation.detectedMime || clientMime || '').toLowerCase()
-      const isPdf = effectiveMime === 'application/pdf' || originalName.toLowerCase().endsWith('.pdf')
-      fileType = effectiveMime
+      const effectiveMime = (validation.detectedMime || clientMime || '').toLowerCase();
+      const isPdf = effectiveMime === 'application/pdf' || originalName.toLowerCase().endsWith('.pdf');
+      fileType = effectiveMime;
+      console.log(`${REQ_DEBUG_PREFIX} Effective MIME: ${effectiveMime}, Is PDF: ${isPdf}.`);
 
       // Upload to appropriate storage
       if (isPdf) {
-        const uploaded = await uploadToDrive(buffer, originalName, effectiveMime, payload.description)
-        url = uploaded.url
+        console.log(`${REQ_DEBUG_PREFIX} Uploading PDF to Google Drive.`);
+        const uploaded = await uploadToDrive(buffer, originalName, effectiveMime, payload.description);
+        url = uploaded.url;
+        console.log(`${REQ_DEBUG_PREFIX} Google Drive upload successful. URL: ${url}`);
       } else {
-        const uploaded = await uploadToStorage(buffer, originalName, effectiveMime)
-        url = uploaded.url
+        console.log(`${REQ_DEBUG_PREFIX} Uploading to Supabase Storage.`);
+        const uploaded = await uploadToStorage(buffer, originalName, effectiveMime);
+        url = uploaded.url;
+        console.log(`${REQ_DEBUG_PREFIX} Supabase Storage upload successful. URL: ${url}`);
       }
     } else if (payload.url) {
-      url = String(payload.url)
-      fileType = url.toLowerCase().includes('drive.google.com') ? 'application/pdf' : 'unknown'
+      url = String(payload.url);
+      fileType = url.toLowerCase().includes('drive.google.com') ? 'application/pdf' : 'unknown';
+      console.log(`${REQ_DEBUG_PREFIX} URL provided: ${url}, File Type: ${fileType}.`);
     } else {
-      return NextResponse.json({ error: 'Either file or url is required' }, { status: 400 })
+      console.error(`${REQ_DEBUG_PREFIX} Neither file nor URL provided.`);
+      return NextResponse.json({ error: 'Either file or url is required' }, { status: 400 });
     }
 
     const insertPayload = {
@@ -204,18 +229,20 @@ export async function POST(request: NextRequest) {
       subject: payload.subject || 'general',
       unit: payload.unit ? toInt(payload.unit) : 1,
       is_pdf: fileType?.includes('pdf') || false
-    }
+    };
+    console.log(`${REQ_DEBUG_PREFIX} Insert payload prepared:`, insertPayload);
 
     const { data, error } = await supabase
       .from('resources')
       .insert(insertPayload)
       .select('id')
-      .single()
+      .single();
 
     if (error) {
-      console.error('Error creating resource:', error)
-      return NextResponse.json({ error: 'Failed to create resource' }, { status: 500 })
+      console.error(`${REQ_DEBUG_PREFIX} Error creating resource in database:`, error);
+      return NextResponse.json({ error: 'Failed to create resource' }, { status: 500 });
     }
+    console.log(`${REQ_DEBUG_PREFIX} Resource created successfully with ID: ${data.id}.`);
 
     // Log the action
     await logAudit({
@@ -227,15 +254,16 @@ export async function POST(request: NextRequest) {
       success: true,
       message: `Representative created resource: ${payload.title}`,
       afterData: insertPayload
-    })
+    });
+    console.log(`${REQ_DEBUG_PREFIX} Audit log created.`);
 
-    return NextResponse.json({ id: data.id, ...insertPayload })
-  } catch (error) {
-    console.error('Representative resource creation error:', error)
+    return NextResponse.json({ id: data.id, ...insertPayload });
+  } catch (error: any) {
+    console.error(`${REQ_DEBUG_PREFIX} Representative resource creation error:`, error);
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
