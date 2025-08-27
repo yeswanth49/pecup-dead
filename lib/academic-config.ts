@@ -18,6 +18,33 @@ interface YearMappings {
 }
 
 /**
+ * Type guard to validate ProgramSettings
+ */
+function isValidProgramSettings(value: any): value is ProgramSettings {
+  return (
+    value &&
+    typeof value === 'object' &&
+    typeof value.program_length === 'number' &&
+    typeof value.start_month === 'number' &&
+    typeof value.current_academic_year === 'number' &&
+    Number.isFinite(value.program_length) &&
+    Number.isFinite(value.start_month) &&
+    Number.isFinite(value.current_academic_year)
+  );
+}
+
+/**
+ * Type guard to validate YearMappings
+ */
+function isValidYearMappings(value: any): value is YearMappings {
+  return (
+    value &&
+    typeof value === 'object' &&
+    Object.keys(value).every(key => typeof value[key] === 'number' && Number.isFinite(value[key]))
+  );
+}
+
+/**
  * Academic Configuration Manager
  * Handles dynamic academic year calculations and caching
  */
@@ -61,14 +88,31 @@ export class AcademicConfigManager {
     const programSettings = configs?.find(c => c.config_key === 'program_settings');
     const yearMappings = configs?.find(c => c.config_key === 'year_mappings');
 
-    const settings = programSettings?.config_value as ProgramSettings;
-    const mappings = yearMappings?.config_value as YearMappings;
+    // Validate program settings
+    let settings: ProgramSettings | null = null;
+    if (programSettings?.config_value != null) {
+      if (isValidProgramSettings(programSettings.config_value)) {
+        settings = programSettings.config_value;
+      } else {
+        console.warn('Invalid program settings found in database, using defaults');
+      }
+    }
+
+    // Validate year mappings
+    let mappings: YearMappings = {};
+    if (yearMappings?.config_value != null) {
+      if (isValidYearMappings(yearMappings.config_value)) {
+        mappings = yearMappings.config_value;
+      } else {
+        console.warn('Invalid year mappings found in database, using empty mappings');
+      }
+    }
 
     this.config = {
       programLength: settings?.program_length ?? 4,
       startMonth: settings?.start_month ?? 6,
       currentAcademicYear: settings?.current_academic_year ?? new Date().getFullYear(),
-      yearMappings: this.convertMappingsToNumbers(mappings ?? {})
+      yearMappings: this.convertMappingsToNumbers(mappings)
     };
 
     this.configCacheExpiry = now + this.CACHE_DURATION;
@@ -83,6 +127,12 @@ export class AcademicConfigManager {
 
     const config = await this.getConfig();
 
+    // Validate and normalize batchYear
+    if (!Number.isFinite(batchYear) || batchYear < 0 || !Number.isInteger(batchYear)) {
+      console.warn(`Invalid batchYear: ${batchYear}, must be a non-negative integer`);
+      return 1;
+    }
+
     // Check if we have an explicit mapping
     if (config.yearMappings[batchYear]) {
       return config.yearMappings[batchYear];
@@ -95,6 +145,12 @@ export class AcademicConfigManager {
 
     // Adjust for academic year (if we're before start month, we're still in previous academic year)
     const adjustedYear = currentMonth >= config.startMonth ? currentYear : currentYear - 1;
+
+    // Handle future batch years (students who haven't started yet)
+    if (batchYear > adjustedYear) {
+      return 1; // Future batches start at year 1
+    }
+
     const academicYear = adjustedYear - batchYear + 1;
 
     // Clamp within valid range
@@ -125,24 +181,34 @@ export class AcademicConfigManager {
       current_academic_year: newConfig.currentAcademicYear
     };
 
-    await supabase
+    const { error: programError } = await supabase
       .from('academic_config')
-      .update({
+      .upsert({
+        config_key: 'program_settings',
         config_value: programSettings,
         updated_at: new Date().toISOString()
-      })
-      .eq('config_key', 'program_settings');
+      });
+
+    if (programError) {
+      throw new Error(`Failed to update program settings: ${programError.message}`);
+    }
 
     // Update year mappings
-    await supabase
+    const { error: mappingsError } = await supabase
       .from('academic_config')
-      .update({
+      .upsert({
+        config_key: 'year_mappings',
         config_value: newConfig.yearMappings,
         updated_at: new Date().toISOString()
-      })
-      .eq('config_key', 'year_mappings');
+      });
 
-    // Clear cache to force reload
+    if (mappingsError) {
+      // Consider rolling back the first update or logging the inconsistency
+      console.error('Failed to update year mappings after program settings were updated:', mappingsError);
+      throw new Error(`Failed to update year mappings: ${mappingsError.message}`);
+    }
+
+    // Clear cache to force reload only after successful updates
     this.config = null;
     this.configCacheExpiry = 0;
   }
@@ -153,7 +219,12 @@ export class AcademicConfigManager {
   private convertMappingsToNumbers(mappings: YearMappings): Record<number, number> {
     const result: Record<number, number> = {};
     for (const [key, value] of Object.entries(mappings)) {
-      result[parseInt(key, 10)] = value;
+      const parsed = parseInt(key, 10);
+      if (Number.isNaN(parsed)) {
+        console.warn(`Skipping invalid year mapping key "${key}" - not a valid number`);
+        continue;
+      }
+      result[parsed] = value;
     }
     return result;
   }

@@ -11,7 +11,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   const DEBUG_PREFIX = '[API DEBUG SecureURL]';
-  console.log(`${DEBUG_PREFIX} Received secure URL request for resource ${params.id}`);
+  console.log(`${DEBUG_PREFIX} Secure URL request received`);
 
   try {
     // 1. Validate user session
@@ -38,17 +38,22 @@ export async function GET(
     // 3. Generate secure URL for the resource
     const secureUrlResult = await generateSecureFileUrl(params.id, userContext);
     if (!secureUrlResult) {
-      console.warn(`${DEBUG_PREFIX} Access denied or resource not found for user ${userContext.email}`);
+      console.warn(`${DEBUG_PREFIX} Access denied or resource not found`);
       return NextResponse.json({ error: 'Access denied or resource not found' }, { status: 403 });
     }
 
     // 4. Return the secure URL with expiration information
-    console.log(`${DEBUG_PREFIX} Generated secure URL for user ${userContext.email}, expires at ${secureUrlResult.expiresAt.toISOString()}`);
+    console.log(`${DEBUG_PREFIX} Secure URL generated`);
 
     return NextResponse.json({
       secureUrl: secureUrlResult.url,
       expiresAt: secureUrlResult.expiresAt.toISOString(),
       expiresInSeconds: Math.floor((secureUrlResult.expiresAt.getTime() - Date.now()) / 1000)
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0, must-revalidate',
+        'Pragma': 'no-cache'
+      }
     });
 
   } catch (error: any) {

@@ -18,19 +18,25 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'pnpm'
 
-      - name: Install dependencies
-        run: pnpm install
+      - name: Install pnpm
+        run: corepack enable pnpm
 
-      - name: TypeScript type check
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - id: tsc
+        name: TypeScript type check
         run: npx tsc --noEmit --skipLibCheck
 
-      - name: ESLint check
+      - id: eslint
+        name: ESLint check
         run: npx eslint . --ext .ts,.tsx,.js,.jsx --max-warnings 0
 
-      - name: Check for unsafe patterns
+      - id: unsafe
+        name: Check for unsafe patterns
         run: |
           echo "🔍 Checking for unsafe type assertions..."
           if grep -r "as any" --include="*.ts" --include="*.tsx" . --exclude-dir=node_modules --exclude-dir=.next; then
@@ -40,30 +46,43 @@ jobs:
             echo "✅ No unsafe type assertions found."
           fi
 
-      - name: Check for hardcoded secrets
+      - id: secrets
+        name: Check for hardcoded secrets
         run: |
           echo "🔍 Checking for hardcoded secrets..."
-          if grep -r "SUPABASE_SERVICE_ROLE_KEY\|NEXT_PUBLIC_SUPABASE_ANON_KEY\|AUTHORIZED_EMAILS" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" . --exclude-dir=node_modules --exclude-dir=.next; then
+          if grep -r -E "(SUPABASE_SERVICE_ROLE_KEY|NEXT_PUBLIC_SUPABASE_ANON_KEY|AUTHORIZED_EMAILS)" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" . --exclude-dir=node_modules --exclude-dir=.next; then
             echo "⚠️  Found potential hardcoded secrets. Please ensure these are properly configured as environment variables."
           else
             echo "✅ No hardcoded secrets found in source code."
           fi
 
-      - name: Check for console.log statements
+      - id: console
+        name: Check for console.log statements
         run: |
           echo "🔍 Checking for console statements in production code..."
-          if grep -r "console\." --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" app/ components/ lib/ --exclude-dir=node_modules --exclude-dir=.next; then
-            echo "⚠️  Console statements found in production code. Consider removing or using proper logging."
+          # Get tracked files in target directories
+          FILES=$(git ls-files 'app/**/*.{ts,tsx,js,jsx}' 'components/**/*.{ts,tsx,js,jsx}' 'lib/**/*.{ts,tsx,js,jsx}' 2>/dev/null || true)
+
+          if [ -n "$FILES" ]; then
+            if echo "$FILES" | xargs grep -n --color=auto 'console\.' >/dev/null 2>&1; then
+              echo "⚠️  Console statements found in production code. Consider removing or using proper logging."
+              echo "$FILES" | xargs grep -n --color=auto 'console\.'
+              exit 1
+            else
+              echo "✅ No console statements found in production code."
+            fi
           else
-            echo "✅ No console statements found in production code."
+            echo "✅ No console statements found in production code (no target files)."
           fi
 
-      - name: Security audit
+      - id: audit
+        name: Security audit
         run: |
           echo "🔍 Running security audit..."
           pnpm audit --audit-level moderate
 
-      - name: Performance check - Bundle size
+      - id: bundle
+        name: Performance check - Bundle size
         run: |
           echo "🔍 Checking bundle size..."
           npx next build --no-lint
@@ -84,12 +103,14 @@ jobs:
           # This would test database connection if credentials are available
           echo "✅ Database connection test skipped (no credentials in CI)"
 
-      - name: Test execution
+      - id: tests
+        name: Test execution
         run: |
           echo "🔍 Running test suite..."
-          npm run test -- --passWithNoTests --coverage --watchAll=false
+          pnpm test -- --passWithNoTests --coverage --watchAll=false
         env:
           NODE_ENV: test
+          CI: true
 
       - name: Performance baseline check
         run: |
@@ -101,10 +122,18 @@ jobs:
         if: always()
         run: |
           echo "🎯 Quality Gate Summary:"
-          echo "✅ TypeScript compilation: PASSED"
-          echo "✅ ESLint checks: PASSED"
-          echo "✅ Security patterns: PASSED"
-          echo "✅ Bundle size: PASSED"
-          echo "✅ Test execution: PASSED"
+          echo "TypeScript compilation: ${{ steps.tsc.outcome == 'success' && '✅ PASSED' || '❌ FAILED' }}"
+          echo "ESLint checks: ${{ steps.eslint.outcome == 'success' && '✅ PASSED' || '❌ FAILED' }}"
+          echo "Unsafe patterns: ${{ steps.unsafe.outcome == 'success' && '✅ PASSED' || '❌ FAILED' }}"
+          echo "Hardcoded secrets: ${{ steps.secrets.outcome == 'success' && '✅ PASSED' || '❌ FAILED' }}"
+          echo "Console statements: ${{ steps.console.outcome == 'success' && '✅ PASSED' || '❌ FAILED' }}"
+          echo "Security audit: ${{ steps.audit.outcome == 'success' && '✅ PASSED' || '❌ FAILED' }}"
+          echo "Bundle size: ${{ steps.bundle.outcome == 'success' && '✅ PASSED' || '❌ FAILED' }}"
+          echo "Test execution: ${{ steps.tests.outcome == 'success' && '✅ PASSED' || '❌ FAILED' }}"
           echo ""
-          echo "🚀 All quality gates passed! Code is ready for deployment."
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "🚀 All quality gates passed! Code is ready for deployment."
+          else
+            echo "❌ Some quality gates failed. Please review the issues above."
+            exit 1
+          fi

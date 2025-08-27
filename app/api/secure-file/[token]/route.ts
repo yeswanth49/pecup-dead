@@ -7,6 +7,8 @@ import { authOptions } from '../../auth/[...nextauth]/route';
 import { google } from 'googleapis';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { UserContext } from '@/lib/auth-permissions';
+import jwt from 'jsonwebtoken';
+import { checkRateLimit } from '@/lib/files';
 
 export async function GET(
   request: Request,
@@ -28,6 +30,13 @@ export async function GET(
     if (!tokenData) {
       console.warn(`${DEBUG_PREFIX} Invalid or expired token`);
       return NextResponse.json({ error: 'Invalid or expired token' }, { status: 403 });
+    }
+
+    // 2.5. Rate limiting check
+    const rateLimitKey = session.user.email?.toLowerCase() || 'anonymous';
+    if (!checkRateLimit(rateLimitKey, 'secure-file-download', 20, 60000)) { // 20 downloads per minute
+      console.warn(`${DEBUG_PREFIX} Rate limit exceeded for user ${rateLimitKey}`);
+      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
     }
 
     // 3. Get user context and check permissions
@@ -88,7 +97,13 @@ export async function GET(
     });
 
   } catch (error: any) {
-    console.error(`${DEBUG_PREFIX} Error serving secure file:`, error.message || error);
+    // Log detailed error only in non-production environments
+    if (process.env.NODE_ENV !== 'production') {
+      console.error(`${DEBUG_PREFIX} Error serving secure file:`, error.message || error);
+    } else {
+      // In production, log a generic error identifier only
+      console.error(`${DEBUG_PREFIX} Error serving secure file: [REDACTED_ERROR_${Date.now()}]`);
+    }
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -97,28 +112,41 @@ export async function GET(
 }
 
 /**
- * Validate the secure access token
+ * Validate the secure access JWT token
  */
 function validateSecureToken(token: string): { fileId: string; expiresAt: Date } | null {
   try {
-    const decoded = Buffer.from(token, 'base64').toString('utf8');
-    const tokenData = JSON.parse(decoded);
-
-    if (!tokenData.fileId || !tokenData.expiresAt) {
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error('JWT_SECRET environment variable is not set');
       return null;
     }
 
-    const expiresAt = new Date(tokenData.expiresAt);
+    const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] }) as any;
+
+    if (!decoded.fileId || !decoded.exp) {
+      console.warn('Invalid JWT payload: missing fileId or exp');
+      return null;
+    }
+
+    const expiresAt = new Date(decoded.exp * 1000);
     if (expiresAt < new Date()) {
+      console.warn('JWT token has expired');
       return null; // Token expired
     }
 
     return {
-      fileId: tokenData.fileId,
+      fileId: decoded.fileId,
       expiresAt
     };
   } catch (error) {
-    console.warn('Token validation failed:', error);
+    if (error instanceof jwt.JsonWebTokenError) {
+      console.warn('JWT verification failed:', error.message);
+    } else if (error instanceof jwt.TokenExpiredError) {
+      console.warn('JWT token has expired');
+    } else {
+      console.warn('Token validation failed:', error);
+    }
     return null;
   }
 }
@@ -179,13 +207,30 @@ async function downloadFromGoogleDrive(fileId: string): Promise<Buffer | null> {
     try {
       const rawB64 = process.env.GOOGLE_APPLICATION_CREDENTIALS_B64;
       const rawJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
-      let raw = rawJson || '{}';
+
+      // Check if either env var is present
+      if (!rawB64 && !rawJson) {
+        console.error('Google credentials not found: Both GOOGLE_APPLICATION_CREDENTIALS_B64 and GOOGLE_APPLICATION_CREDENTIALS_JSON environment variables are missing');
+        return null;
+      }
+
+      let raw: string;
       if (rawB64) {
         raw = Buffer.from(rawB64, 'base64').toString('utf8');
+      } else {
+        raw = rawJson!;
       }
+
       credentials = JSON.parse(raw);
+
+      // Validate that the parsed object contains required fields
+      if (!credentials.client_email || !credentials.private_key) {
+        console.error('Invalid Google credentials: Missing required fields client_email or private_key');
+        return null;
+      }
     } catch (e) {
-      console.error('Failed to parse Google credentials for secure file access:', e);
+      console.error('Failed to parse Google credentials for secure file access. Raw value length:', process.env.GOOGLE_APPLICATION_CREDENTIALS_B64?.length || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON?.length || 0);
+      console.error('Parse error:', e);
       return null;
     }
 
@@ -195,12 +240,27 @@ async function downloadFromGoogleDrive(fileId: string): Promise<Buffer | null> {
     });
     const drive = google.drive({ version: 'v3', auth });
 
+    // Check file size before downloading
+    const metadataResponse = await drive.files.get({
+      fileId: fileId,
+      fields: 'size'
+    });
+
+    const fileSize = parseInt(metadataResponse.data.size || '0');
+    const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB limit
+
+    if (fileSize > MAX_FILE_SIZE) {
+      console.error(`File too large: ${fileSize} bytes`);
+      return null;
+    }
+
     // Download the file
     const response = await drive.files.get({
       fileId: fileId,
       alt: 'media'
     }, {
-      responseType: 'arraybuffer'
+      responseType: 'arraybuffer',
+      timeout: 30000 // 30 second timeout
     });
 
     return Buffer.from(response.data as ArrayBuffer);

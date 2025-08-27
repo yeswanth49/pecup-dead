@@ -1,14 +1,48 @@
 import { google } from 'googleapis'
 import { createSupabaseAdmin } from '@/lib/supabase'
 import { UserContext } from '@/lib/auth-permissions'
+import jwt from 'jsonwebtoken'
 
-// Configuration for secure storage
-const SECURE_STORAGE_BUCKET = 'secure-resources'
-const SIGNED_URL_EXPIRY_SECONDS = 3600 // 1 hour
-const MAX_DOWNLOAD_SIZE_BYTES = 100 * 1024 * 1024 // 100MB limit
+// Simple in-memory rate limiter for file operations
+// In production, this should be replaced with Redis or similar
+const operationCache = new Map<string, { count: number; resetTime: number }>()
 
-export async function deleteDriveFile(fileId: string) {
-  let credentials
+/**
+ * Simple rate limiter - limits operations per user per time window
+ */
+export function checkRateLimit(userId: string, operation: string, maxOperations = 10, windowMs = 60000): boolean {
+  const key = `${userId}:${operation}`
+  const now = Date.now()
+  const record = operationCache.get(key)
+
+  if (!record || now > record.resetTime) {
+    operationCache.set(key, { count: 1, resetTime: now + windowMs })
+    return true
+  }
+
+  if (record.count >= maxOperations) {
+    return false
+  }
+
+  record.count++
+  return true
+}
+
+// Configuration for secure storage - configurable via environment variables
+const SECURE_STORAGE_BUCKET = process.env.SECURE_STORAGE_BUCKET || 'secure-resources'
+const SIGNED_URL_EXPIRY_SECONDS = (() => {
+  const parsed = parseInt(process.env.SIGNED_URL_EXPIRY_SECONDS || '3600', 10)
+  return isFinite(parsed) && parsed > 0 ? parsed : 3600
+})()
+const MAX_DOWNLOAD_SIZE_BYTES = (() => {
+  const parsed = parseInt(process.env.MAX_DOWNLOAD_SIZE_BYTES || '104857600', 10) // 100MB default
+  return isFinite(parsed) && parsed > 0 ? parsed : 100 * 1024 * 1024
+})()
+
+/**
+ * Extract and parse Google credentials from environment variables
+ */
+function getGoogleCredentials(): any {
   try {
     const rawB64 = process.env.GOOGLE_APPLICATION_CREDENTIALS_B64
     const rawJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
@@ -16,11 +50,59 @@ export async function deleteDriveFile(fileId: string) {
     if (rawB64) {
       raw = Buffer.from(rawB64, 'base64').toString('utf8')
     }
-    credentials = JSON.parse(raw)
+    return JSON.parse(raw)
   } catch (e) {
-    console.error('Failed to parse Google credentials in deleteDriveFile:', e)
+    console.error('Failed to parse Google credentials:', e)
     throw new Error('Google Drive configuration error')
   }
+}
+
+/**
+ * Validate that a string is a valid UUID v4 or v1
+ */
+function isValidUUID(uuid: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  return uuidRegex.test(uuid)
+}
+
+/**
+ * Determine file extension from MIME type or filename, with safe fallback
+ */
+function determineFileExtension(mimeType?: string, originalFilename?: string): string {
+  // Try to extract extension from original filename first
+  if (originalFilename) {
+    const ext = originalFilename.split('.').pop()?.toLowerCase()
+    if (ext && /^[a-z0-9]{1,5}$/.test(ext)) { // Basic validation: alphanumeric, max 5 chars
+      return ext
+    }
+  }
+
+  // Map common MIME types to extensions
+  const mimeToExt: Record<string, string> = {
+    'application/pdf': 'pdf',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'application/vnd.ms-excel': 'xls',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    'application/vnd.ms-powerpoint': 'ppt',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/gif': 'gif',
+    'text/plain': 'txt',
+    'application/zip': 'zip'
+  }
+
+  if (mimeType && mimeToExt[mimeType]) {
+    return mimeToExt[mimeType]
+  }
+
+  // Safe fallback
+  return 'bin'
+}
+
+export async function deleteDriveFile(fileId: string) {
+  const credentials = getGoogleCredentials()
   const auth = new google.auth.GoogleAuth({ credentials, scopes: ['https://www.googleapis.com/auth/drive'] })
   const drive = google.drive({ version: 'v3', auth })
   await drive.files.delete({ fileId })
@@ -49,6 +131,17 @@ export async function generateSecureFileUrl(
   resourceId: string,
   userContext: UserContext
 ): Promise<{ url: string; expiresAt: Date } | null> {
+  // Validate resourceId input
+  if (!resourceId || typeof resourceId !== 'string' || resourceId.trim() === '') {
+    console.warn('Invalid resourceId: empty or non-string value')
+    return null
+  }
+
+  if (!isValidUUID(resourceId)) {
+    console.warn('Invalid resourceId format: not a valid UUID v4/v1', resourceId)
+    return null
+  }
+
   const supabase = createSupabaseAdmin()
 
   // 1. Get resource details from database
@@ -150,13 +243,20 @@ async function generateDriveSignedUrl(filePath: string): Promise<{ url: string; 
     throw new Error('Invalid Google Drive file path')
   }
 
-  // Create a temporary access token that expires in 1 hour
-  // This is a simplified approach - in production, you'd want more sophisticated token management
+  // Create a JWT token that expires in configured time
   const expiresAt = new Date(Date.now() + SIGNED_URL_EXPIRY_SECONDS * 1000)
-  const tempToken = Buffer.from(JSON.stringify({
+
+  const jwtSecret = process.env.JWT_SECRET
+  if (!jwtSecret) {
+    throw new Error('JWT_SECRET environment variable is required')
+  }
+
+  const payload = {
     fileId: driveFileId,
-    expiresAt: expiresAt.toISOString()
-  })).toString('base64')
+    exp: Math.floor(expiresAt.getTime() / 1000)
+  }
+
+  const tempToken = jwt.sign(payload, jwtSecret, { algorithm: 'HS256' })
 
   // Return a URL that goes through our secure proxy
   const secureUrl = `${process.env.NEXTAUTH_URL}/api/secure-file/${tempToken}`
@@ -186,40 +286,66 @@ export async function migrateFileToSecureStorage(
       }
 
       // Get Google Drive credentials
-      let credentials
-      try {
-        const rawB64 = process.env.GOOGLE_APPLICATION_CREDENTIALS_B64
-        const rawJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
-        let raw = rawJson || '{}'
-        if (rawB64) {
-          raw = Buffer.from(rawB64, 'base64').toString('utf8')
-        }
-        credentials = JSON.parse(raw)
-      } catch (e) {
-        console.error('Failed to parse Google credentials for migration:', e)
-        return null
-      }
+      const credentials = getGoogleCredentials()
 
       const auth = new google.auth.GoogleAuth({ credentials, scopes: ['https://www.googleapis.com/auth/drive'] })
       const drive = google.drive({ version: 'v3', auth })
 
-      // Download file from Google Drive
-      const response = await drive.files.get({
-        fileId: driveFileId,
-        alt: 'media'
-      }, {
-        responseType: 'arraybuffer'
-      })
+      // Get file metadata first to determine the correct extension
+      let fileMetadata
+      try {
+        const metadataResponse = await drive.files.get({
+          fileId: driveFileId,
+          fields: 'name,mimeType,size'
+        })
+        fileMetadata = metadataResponse.data
+      } catch (metadataError: any) {
+        console.error('Failed to get Google Drive file metadata:', {
+          fileId: driveFileId,
+          error: metadataError?.message || metadataError,
+          operation: 'getFileMetadata'
+        })
+        return null
+      }
+
+      const originalFilename = fileMetadata.name
+      const mimeType = fileMetadata.mimeType
+      const fileSize = Number(fileMetadata.size) || 0
+
+      // Check file size before downloading
+      if (fileSize > MAX_DOWNLOAD_SIZE_BYTES) {
+        console.error(`File too large for migration: ${fileSize} bytes (max: ${MAX_DOWNLOAD_SIZE_BYTES}) for file ${driveFileId}`)
+        return null
+      }
+
+      // Download file content
+      let response
+      try {
+        response = await drive.files.get({
+          fileId: driveFileId,
+          alt: 'media'
+        }, {
+          responseType: 'arraybuffer'
+        })
+      } catch (downloadError: any) {
+        console.error('Failed to download from Google Drive:', {
+          fileId: driveFileId,
+          fileSize,
+          error: downloadError?.message || downloadError,
+          operation: 'downloadFile'
+        })
+        return null
+      }
 
       const buffer = Buffer.from(response.data as ArrayBuffer)
-      const fileName = `migrated-${Date.now()}-${driveFileId}.pdf`
+      const extension = determineFileExtension(mimeType, originalFilename as any)
+      const fileName = `migrated-${Date.now()}-${driveFileId}.${extension}`
 
       // Upload to secure Supabase storage
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from(SECURE_STORAGE_BUCKET)
         .upload(fileName, buffer, {
-          contentType: 'application/pdf',
-          duplex: 'half'
+          contentType: 'application/pdf'
         })
 
       if (uploadError) {
@@ -243,7 +369,14 @@ export async function migrateFileToSecureStorage(
         .download(publicPath.path)
 
       if (downloadError || !fileData) {
-        console.error('Failed to download file from public storage:', downloadError)
+        console.error('Failed to download file from public storage:', downloadError, 'for path:', publicPath.path)
+        return null
+      }
+
+      // Check file size before uploading
+      const fileSize = fileData.size
+      if (fileSize > MAX_DOWNLOAD_SIZE_BYTES) {
+        console.error(`File too large for migration: ${fileSize} bytes (max: ${MAX_DOWNLOAD_SIZE_BYTES}) for path ${publicPath.bucket}/${publicPath.path}`)
         return null
       }
 
@@ -252,7 +385,7 @@ export async function migrateFileToSecureStorage(
       const { error: uploadError } = await supabase.storage
         .from(SECURE_STORAGE_BUCKET)
         .upload(secureFileName, fileData, {
-          duplex: 'half'
+          // No duplex property needed for buffer uploads
         })
 
       if (uploadError) {
@@ -272,8 +405,14 @@ export async function migrateFileToSecureStorage(
     console.warn('Unsupported storage location for migration:', storageLocation)
     return null
 
-  } catch (error) {
-    console.error('File migration error:', error)
+  } catch (error: any) {
+    console.error('File migration error:', {
+      operation: 'migrateFileToSecureStorage',
+      currentPath,
+      storageLocation,
+      error: error?.message || error,
+      stack: error?.stack
+    })
     return null
   }
 }

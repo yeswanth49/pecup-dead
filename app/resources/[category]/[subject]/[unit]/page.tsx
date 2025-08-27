@@ -60,13 +60,13 @@ export default function UnitPage() {
       // Fallback to direct URL if no ID (for backward compatibility)
       if (action === 'download') {
         const link = document.createElement('a')
-        link.href = resource.url
+        link.href = resource.url!
         link.download = resource.name
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
       } else {
-        window.open(resource.url, '_blank', 'noopener,noreferrer')
+        window.open(resource.url!, '_blank', 'noopener,noreferrer')
       }
       return
     }
@@ -74,14 +74,21 @@ export default function UnitPage() {
     setLoadingFile(resource.id)
 
     try {
-      const response = await fetch(`/api/resources/${resource.id}/secure-url`)
-      const data = await response.json()
-
+      const response = await fetch(
+        `/api/resources/${encodeURIComponent(resource.id)}/secure-url`
+      )
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to get secure URL')
+        let msg = 'Failed to get secure URL'
+        try {
+          const err = await response.json()
+          if (err?.error) msg = err.error
+        } catch {}
+        throw new Error(msg)
       }
-
-      const { secureUrl } = data
+      const { secureUrl } = await response.json()
+      if (typeof secureUrl !== 'string' || secureUrl.length === 0) {
+        throw new Error('Invalid secure URL')
+      }
 
       if (action === 'download') {
         // Create a temporary link to download the file
@@ -95,19 +102,11 @@ export default function UnitPage() {
         // Open in new tab
         window.open(secureUrl, '_blank', 'noopener,noreferrer')
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to access secure file:', error)
-      // Fallback to direct URL on error
-      if (action === 'download') {
-        const link = document.createElement('a')
-        link.href = resource.url
-        link.download = resource.name
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-      } else {
-        window.open(resource.url, '_blank', 'noopener,noreferrer')
-      }
+      // Do NOT fall back to direct URL when an id exists; avoid bypassing access controls.
+      // Optionally surface a toast/snackbar here for better UX.
+      return
     } finally {
       setLoadingFile(null)
     }
@@ -334,7 +333,7 @@ export default function UnitPage() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    {resource.url && (
+                    {(resource.id || resource.url) && (
                       <>
                         <Button
                           variant="outline"
