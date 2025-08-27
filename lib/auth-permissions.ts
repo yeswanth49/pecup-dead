@@ -37,27 +37,32 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
   const email = session.user.email.toLowerCase()
   const supabase = createSupabaseAdmin()
 
-  // First check if user is in profiles table
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
+  // Check if user is in students table (new schema)
+  const { data: student, error: studentError } = await supabase
+    .from('students')
     .select(`
       id,
-      email,
+      roll_number,
       name,
-      role,
-      year,
-      branch
+      email,
+      branch_id,
+      year_id,
+      semester_id,
+      section,
+      branch:branches(id, name, code),
+      year:years(id, batch_year, display_name),
+      semester:semesters(id, semester_number)
     `)
     .eq('email', email)
     .maybeSingle()
 
-  if (profileError || !profile) {
+  if (studentError || !student) {
     return null
   }
 
   // If user is a representative, get their representative assignments
   let representatives: Representative[] = []
-  if (profile.role === 'representative') {
+  if (student.role === 'representative') {
     const { data: repData } = await supabase
       .from('representatives')
       .select(`
@@ -71,7 +76,7 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
         branches:branch_id(id, name, code),
         years:year_id(id, batch_year, display_name)
       `)
-      .eq('user_id', profile.id)
+      .eq('user_id', student.id)
       .eq('active', true)
 
     representatives = repData || []
@@ -85,13 +90,28 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
     admission_year: (rep.years as any)?.batch_year || 0
   }))
 
+  // Map batch year back to academic year for legacy compatibility
+  const mapBatchYearToYearLevel = (batchYear: number | undefined): number => {
+    if (!batchYear) return 1;
+    switch (batchYear) {
+      case 2024: return 1;
+      case 2023: return 2;
+      case 2022: return 3;
+      case 2021: return 4;
+      default: return 1;
+    }
+  }
+
   return {
-    id: profile.id,
-    email: profile.email,
-    name: profile.name,
-    role: profile.role as UserRole,
-    year: profile.year,
-    branch: profile.branch,
+    id: student.id,
+    email: student.email,
+    name: student.name,
+    role: 'student' as UserRole, // New schema students are always students
+    year: mapBatchYearToYearLevel((student.year as any)?.batch_year),
+    branch: (student.branch as any)?.code || '',
+    branchId: student.branch_id,
+    yearId: student.year_id,
+    semesterId: student.semester_id,
     representatives,
     representativeAssignments
   }

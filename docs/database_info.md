@@ -1,36 +1,81 @@
-# Database Handling in the Application
+# Database Architecture - Supabase (PostgreSQL)
 
 ## Overview
-This application now uses Supabase (PostgreSQL) as the primary data storage and management system. Some uploads continue to use Google Drive for PDFs, while Supabase Storage is used for non-PDF files. Data operations are performed via the Supabase client in the backend API routes.
+This application uses **Supabase (PostgreSQL)** as the primary data storage and management system. The application follows a normalized relational database design with proper foreign key relationships and Row Level Security (RLS).
 
-## Authentication and Setup
-- The application uses a Google Service Account for authentication.
-- Credentials (client email, private key) are stored in environment variables (e.g., `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`).
-- The `googleapis` library is used to create an authenticated client for the Sheets API v4.
-- Scopes are set to `'https://www.googleapis.com/auth/spreadsheets.readonly'` for read operations and `'https://www.googleapis.com/auth/spreadsheets'` for write operations.
+## Database Schema
 
-## Data Fetching
-- API routes (e.g., `/api/reminders`, `/api/recent-updates`, `/api/prime-section-data`, `/api/resources`) fetch data from Supabase tables (`reminders`, `recent_updates`, `exams`, `resources`).
-- Supabase URL and keys are sourced from environment variables.
-- Queries use RLS-safe server-side admin client.
+### Core Tables
+- **`students`** - User profiles with academic information
+- **`resources`** - Educational materials and documents
+- **`branches`** - Academic branches/departments
+- **`years`** - Academic years (batch years)
+- **`semesters`** - Semester information
+- **`subjects`** - Course subjects
+- **`representatives`** - Representative assignments
 
-## Data Writing
-- In the `/api/admin/resources` route, new resources are inserted into the `resources` table. PDFs are uploaded to Drive; other files to Supabase Storage. URLs are saved in the DB.
+### Supporting Tables
+- **`reminders`** - Academic reminders and announcements
+- **`recent_updates`** - System update logs
+- **`exams`** - Examination schedules
 
-## User Authentication & RBAC
-- User authentication is handled via NextAuth with Google Provider. Sessions are JWT-based.
-- User profiles are persisted in the `profiles` table with fields: `email`, `name`, `year`, `branch`, `roll_number`, `role`.
-- Role-based access:
-  - Students (`role = student`) automatically see content filtered by their `year` and `branch`.
-  - Admins are in the `admins` table with `role` `admin` or `superadmin`. Optional `admin_scopes` rows restrict which `(year, branch)` they can manage.
+## Authentication & Authorization
+- **Authentication**: NextAuth.js with Google OAuth provider
+- **Authorization**: Role-Based Access Control (RBAC) with session-based permissions
+- **User Roles**: `student`, `representative`, `admin`, `superadmin`
+
+## Data Flow
+
+### User Registration/Login
+1. User authenticates via Google OAuth
+2. Profile data is stored in `students` table with proper relationships
+3. Session created with user context and permissions
+
+### Resource Management
+1. Resources uploaded to Google Drive (PDFs) or Supabase Storage (images)
+2. Metadata stored in `resources` table with foreign key relationships
+3. Access controlled by user roles and branch/year filters
+
+## API Architecture
+
+### Key API Routes
+- **`/api/profile`** - Student profile management (GET/POST)
+- **`/api/resources`** - Resource retrieval with filtering
+- **`/api/admin/*`** - Administrative functions
+- **`/api/user/context`** - User context and permissions
+
+### Data Relationships
+```
+students ────┐
+             ├── branches
+             ├── years
+             └── semesters
+resources ───┘
+```
+
+## Environment Variables
+- `NEXTAUTH_URL` - NextAuth base URL
+- `NEXTAUTH_SECRET` - NextAuth secret key
+- `GOOGLE_CLIENT_ID` - Google OAuth client ID
+- `GOOGLE_CLIENT_SECRET` - Google OAuth client secret
+- `SUPABASE_URL` - Supabase project URL
+- `SUPABASE_ANON_KEY` - Supabase anonymous key
+- `SUPABASE_SERVICE_ROLE_KEY` - Supabase service role key
+
+## File Storage
+- **PDFs**: Google Drive with public sharing links
+- **Images**: Supabase Storage with CDN delivery
+- **Metadata**: PostgreSQL with proper indexing
+
+## Security Features
+- Row Level Security (RLS) enabled on all tables
+- Server-side validation on all API endpoints
+- Proper foreign key constraints
+- Session-based authentication
 
 ## Key Files
-- **API Routes**: `app/api/*/*.ts` (e.g., `reminders/route.ts`, `resources/route.ts`) contain the logic for interacting with Supabase.
-- **Auth Configuration**: `app/api/auth/[...nextauth]/route.ts` sets up NextAuth.
- - **Subjects API**: `app/api/subjects/route.ts` fetches contextual subject lists from `subject_offerings` and `subjects` tables based on year/branch/semester.
-
-## Notes
-- This approach treats Google Sheets as a lightweight, no-setup database alternative, suitable for small-scale data management.
-- For production or scaling, consider migrating to a dedicated database for better performance and features.
-- Ensure environment variables for Google credentials and sheet IDs are properly set.
-- Error handling includes logging and returning appropriate HTTP responses for failures in authentication or API calls. 
+- **API Routes**: `app/api/*/*.ts` - Backend logic
+- **Auth Config**: `app/api/auth/[...nextauth]/route.ts` - Authentication setup
+- **Database Client**: `lib/supabase.ts` - Supabase configuration
+- **Types**: `lib/types.ts` - TypeScript type definitions
+- **Permissions**: `lib/auth-permissions.ts` - RBAC logic 

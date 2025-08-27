@@ -1,33 +1,29 @@
+// Updated Resources API Route for New Schema
+// This file contains the updated implementation that works with the refactored database schema
+// Replace the existing route.ts with this content after migration is complete
+
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { createSupabaseAdmin } from '@/lib/supabase';
-const supabaseAdmin = createSupabaseAdmin();
-
-// Define the Resource interface
-interface Resource {
-  id: string;
-  category: string;
-  subject: string;
-  unit: number;
-  name: string;
-  description: string;
-  date: string;
-  type: string;
-  url: string;
-  is_pdf: boolean;
-}
+import { Resource, ResourceFilters } from '@/lib/types';
 
 export async function GET(request: Request) {
   console.log(`\nAPI Route: Received request at ${new Date().toISOString()}`);
 
+  const supabaseAdmin = createSupabaseAdmin();
   const { searchParams } = new URL(request.url);
   const category = searchParams.get('category')?.toLowerCase();
   const encodedSubject = searchParams.get('subject');
   const unit = searchParams.get('unit');
-  let year = searchParams.get('year');
-  const semester = searchParams.get('semester');
-  let branch = searchParams.get('branch');
+  let branch_id = searchParams.get('branch_id');
+  let year_id = searchParams.get('year_id');
+  let semester_id = searchParams.get('semester_id');
+
+  // Legacy support - convert old branch/year/semester params to IDs
+  const branch_code = searchParams.get('branch');
+  const year_number = searchParams.get('year');
+  const semester_number = searchParams.get('semester');
 
   console.log(`API Route: Query Params - category: ${category}, encodedSubject: ${encodedSubject}, unit: ${unit}`);
 
@@ -40,24 +36,76 @@ export async function GET(request: Request) {
   let subject = '';
   try {
     // Enforce student profile filtering by default (RBAC)
-    // If caller didn't provide year/branch, infer from the logged-in user's profile
-    if (!year || !branch) {
+    // If caller didn't provide branch/year/semester, infer from the logged-in user's student profile
+    if (!branch_id || !year_id || !semester_id) {
       const session = await getServerSession(authOptions);
       const email = session?.user?.email?.toLowerCase();
       if (email) {
-        const { data: profile } = await supabaseAdmin
-          .from('profiles')
-          .select('year,branch')
+        const { data: student } = await supabaseAdmin
+          .from('students')
+          .select(`
+            branch_id,
+            year_id,
+            semester_id,
+            branch:branches(code),
+            year:years(batch_year),
+            semester:semesters(semester_number)
+          `)
           .eq('email', email)
           .maybeSingle();
-        if (profile) {
-          year = year || String(profile.year);
-          branch = branch || String(profile.branch);
+
+        if (student) {
+          branch_id = branch_id || student.branch_id;
+          year_id = year_id || student.year_id;
+          semester_id = semester_id || student.semester_id;
         }
       }
     }
-    subject = decodeURIComponent(encodedSubject);
-    console.log(`API Route: Decoded subject: ${subject}`);
+
+    // Legacy support: convert old branch/year/semester params to IDs
+    if (!branch_id && branch_code) {
+      const { data: branch } = await supabaseAdmin
+        .from('branches')
+        .select('id')
+        .eq('code', branch_code)
+        .maybeSingle();
+      branch_id = branch?.id;
+    }
+
+    if (!year_id && year_number) {
+      const yearNum = parseInt(year_number, 10);
+
+      // Validate year number is within expected bounds
+      if (yearNum < 1 || yearNum > 4) {
+        console.warn(`Invalid year number: ${yearNum}. Expected 1-4.`);
+        return NextResponse.json({ error: 'Invalid year number. Expected 1-4.' }, { status: 400 });
+      }
+
+      // Map old year numbers (1,2,3,4) to batch years dynamically based on current year
+      const currentYear = new Date().getFullYear();
+      const batchYear = currentYear - (yearNum - 1);
+
+      const { data: year } = await supabaseAdmin
+        .from('years')
+        .select('id')
+        .eq('batch_year', batchYear)
+        .maybeSingle();
+      year_id = year?.id;
+    }
+
+    if (!semester_id && semester_number && year_id) {
+      const semNum = parseInt(semester_number, 10);
+      const { data: semester } = await supabaseAdmin
+        .from('semesters')
+        .select('id')
+        .eq('year_id', year_id)
+        .eq('semester_number', semNum)
+        .maybeSingle();
+      semester_id = semester?.id;
+    }
+
+    subject = decodeURIComponent(encodedSubject).trim().toLowerCase();
+    console.log(`API Route: Decoded and normalized subject: ${subject}`);
   } catch (error) {
     console.error(`API Route: Invalid subject parameter encoding: ${encodedSubject}`, error);
     return NextResponse.json({ error: 'Invalid subject parameter encoding' }, { status: 400 });
@@ -72,57 +120,45 @@ export async function GET(request: Request) {
 
   try {
     console.log(`API Route: Querying Supabase for resources...`);
-    
-    // Query Supabase for resources matching the criteria
+
+    // Query Supabase for resources with new schema and relationships
     let query = supabaseAdmin
       .from('resources')
-      .select('*')
+      .select(`
+        id,
+        title,
+        description,
+        drive_link,
+        file_type,
+        branch_id,
+        year_id,
+        semester_id,
+        uploader_id,
+        created_at,
+        category,
+        subject,
+        unit,
+        date,
+        is_pdf,
+        branch:branches(id, name, code),
+        year:years(id, batch_year, display_name),
+        semester:semesters(id, semester_number),
+        uploader:students(id, name, roll_number)
+      `)
       .eq('category', category)
-      .ilike('subject', subject.toLowerCase())
+      .eq('subject', subject)
       .eq('unit', unitNumber)
-      .order('date', { ascending: false });
+      .order('created_at', { ascending: false });
 
-    // Treat `year` query param as batch_year (e.g., 2024). Do not attempt index -> batch mapping here.
-    const batchYear = year ? parseInt(year, 10) : NaN;
-    let resolvedYearId: string | null = null
-    let resolvedBatchYear: number | null = null
-    if (!Number.isNaN(batchYear)) {
-      resolvedBatchYear = batchYear
-      try {
-        const { data: yearRow } = await supabaseAdmin.from('years').select('id').eq('batch_year', resolvedBatchYear).maybeSingle()
-        if (yearRow && yearRow.id) resolvedYearId = yearRow.id
-      } catch (e) {
-        console.warn('Year lookup failed for batch_year:', e)
-      }
+    // Apply filters based on new schema
+    if (branch_id) {
+      query = query.eq('branch_id', branch_id);
     }
-    const semNum = semester ? parseInt(semester, 10) : NaN;
-    if (!Number.isNaN(semNum)) {
-      // match either legacy semester number or normalized semester_id if needed (not implemented here)
-      query = query.eq('semester', semNum);
+    if (year_id) {
+      query = query.eq('year_id', year_id);
     }
-
-    // Resolve branch -> branch_id if possible
-    let resolvedBranchId: string | null = null
-    if (branch) {
-      try {
-        const { data: branchRow } = await supabaseAdmin.from('branches').select('id').eq('code', branch).maybeSingle()
-        if (branchRow && branchRow.id) resolvedBranchId = branchRow.id
-      } catch (e) {
-        console.warn('Branch lookup failed:', e)
-      }
-    }
-
-    // Apply filters preferring normalized *_id columns when available
-    if (resolvedYearId) {
-      query = query.eq('year_id', resolvedYearId)
-    } else if (resolvedBatchYear) {
-      query = query.eq('year', resolvedBatchYear)
-    }
-
-    if (resolvedBranchId) {
-      query = query.eq('branch_id', resolvedBranchId)
-    } else if (branch) {
-      query = query.eq('branch', branch)
+    if (semester_id) {
+      query = query.eq('semester_id', semester_id);
     }
 
     const { data: resources, error } = await query;
@@ -134,62 +170,36 @@ export async function GET(request: Request) {
 
     console.log(`API Route: Found ${resources?.length || 0} matching resources`);
 
-    // If no results and we have a resolvedBatchYear, try an alternate nearby batch (fallback)
-    let finalResources = resources || []
-    if ((finalResources.length === 0) && resolvedBatchYear) {
-      try {
-        const altBatch = resolvedBatchYear + 1
-        console.debug('No results, trying alternate batch year', altBatch)
-        let altQuery = supabaseAdmin
-          .from('resources')
-          .select('*')
-          .eq('category', category)
-          .eq('subject', subject.toLowerCase())
-          .eq('unit', unitNumber)
-          .order('date', { ascending: false })
-        if (!Number.isNaN(semNum)) altQuery = altQuery.eq('semester', semNum)
-        if (resolvedBranchId) altQuery = altQuery.eq('branch_id', resolvedBranchId)
-        else if (branch) altQuery = altQuery.eq('branch', branch)
-        altQuery = altQuery.eq('year', altBatch)
-        const { data: altResources, error: altErr } = await altQuery
-        if (!altErr && altResources && altResources.length > 0) {
-          console.debug('Alternate batch query returned', altResources.length)
-          finalResources = altResources
-        }
-      } catch (e) {
-        console.warn('Alternate batch lookup failed', e)
-      }
-    }
-
-    // Transform the data to match the expected format
-    const filteredResources: Resource[] = (finalResources || []).map(resource => ({
+    // Transform the data to match both new and legacy expected formats
+    const transformedResources = (resources || []).map(resource => ({
       id: resource.id,
+      title: resource.title,
+      description: resource.description || '',
+      drive_link: resource.drive_link,
+      file_type: resource.file_type,
+      branch_id: resource.branch_id,
+      year_id: resource.year_id,
+      semester_id: resource.semester_id,
+      uploader_id: resource.uploader_id,
+      created_at: resource.created_at,
+      // Legacy fields for backward compatibility
       category: resource.category,
       subject: resource.subject,
       unit: resource.unit,
-      name: resource.name,
-      description: resource.description || '',
-      date: resource.date,
-      type: resource.type,
-      url: resource.url,
-      is_pdf: resource.is_pdf
+      name: resource.title, // Map new title to old name
+      date: resource.date || resource.created_at,
+      type: resource.file_type,
+      url: resource.drive_link,
+      is_pdf: resource.is_pdf,
+      // Include relationship data (convert arrays to single objects)
+      branch: Array.isArray(resource.branch) ? resource.branch[0] : resource.branch,
+      year: Array.isArray(resource.year) ? resource.year[0] : resource.year,
+      semester: Array.isArray(resource.semester) ? resource.semester[0] : resource.semester,
+      uploader: Array.isArray(resource.uploader) ? resource.uploader[0] : resource.uploader
     }));
 
-    console.log(`API Route: Returning ${filteredResources.length} resources`);
-
-    // If debug flag provided and in development, return debug metadata to help trace mapping
-    const debugFlag = searchParams.get('debug')
-    if (process.env.NODE_ENV === 'development' && debugFlag === '1') {
-      const debugInfo = {
-        resolvedBatchYear: resolvedBatchYear || null,
-        resolvedYearId: resolvedYearId || null,
-        resolvedBranchId: resolvedBranchId || null,
-        queryCount: (resources || []).length
-      }
-      return NextResponse.json({ resources: filteredResources, _debug: debugInfo })
-    }
-
-    return NextResponse.json(filteredResources);
+    console.log(`API Route: Returning ${transformedResources.length} resources`);
+    return NextResponse.json(transformedResources as unknown as Resource[]);
 
   } catch (error: any) {
     console.error('API Error during Supabase query:', error);
