@@ -311,3 +311,29 @@ CREATE INDEX IF NOT EXISTS idx_subject_offerings_context
   ON subject_offerings(regulation, branch, year, semester);
 CREATE INDEX IF NOT EXISTS idx_subjects_code ON subjects(code);
 CREATE INDEX IF NOT EXISTS idx_subjects_resource_type ON subjects(resource_type);
+
+-- Academic configuration table for dynamic year mappings
+CREATE TABLE IF NOT EXISTS academic_config (
+    id SERIAL PRIMARY KEY,
+    config_key VARCHAR(50) UNIQUE NOT NULL,
+    config_value JSONB NOT NULL,
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Insert default academic configuration
+INSERT INTO academic_config (config_key, config_value, description) VALUES
+('program_settings', '{
+    "program_length": 4,
+    "start_month": 6,
+    "current_academic_year": 2024
+}'::jsonb, 'General program configuration including length and start month'),
+('year_mappings', '{
+    "2024": 1,
+    "2023": 2,
+    "2022": 3,
+    "2021": 4,
+    "2025": 1
+}'::jsonb, 'Mapping of batch years to academic year levels')
+ON CONFLICT (config_key) DO NOTHING;

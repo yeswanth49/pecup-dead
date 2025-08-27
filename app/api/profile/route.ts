@@ -6,20 +6,14 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { createSupabaseAdmin } from '@/lib/supabase';
-import { Student, StudentCreateInput, StudentUpdateInput } from '@/lib/types';
+import { academicConfig } from '@/lib/academic-config';
+import { Student, StudentCreateInput, StudentUpdateInput, StudentWithRelations } from '@/lib/types';
 
 const supabaseAdmin = createSupabaseAdmin();
 
-// Helper function to map batch year to year level
-function mapBatchYearToYearLevel(batchYear: number | undefined): number {
-  if (!batchYear) return 1;
-  switch (batchYear) {
-    case 2024: return 1;
-    case 2023: return 2;
-    case 2022: return 3;
-    case 2021: return 4;
-    default: return 1;
-  }
+// Helper function to dynamically calculate academic year level from batch year
+async function calculateYearLevel(batchYear: number | undefined): Promise<number> {
+  return academicConfig.calculateAcademicYear(batchYear);
 }
 
 // Helper function to sanitize payload for logging
@@ -67,8 +61,8 @@ export async function GET() {
 
   const supabase = createSupabaseAdmin();
 
-  // Query the new students table with relationships
-  const { data, error } = await supabase
+  // Query the students table with relationships
+  const { data: studentData, error } = await supabase
     .from('students')
     .select(`
       id,
@@ -93,15 +87,42 @@ export async function GET() {
     return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
 
+  // Get user role from profiles table
+  const { data: profileData, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('email', email)
+    .maybeSingle();
+
+  if (profileError) {
+    console.warn('Profile role fetch warning:', profileError);
+  }
+
   // Transform to include legacy format for backward compatibility
   let profile = null;
-  if (data) {
+  if (studentData) {
+    const typedData = studentData as StudentWithRelations;
+
+    // Validate required relations exist
+    if (!typedData.branch || typedData.branch.length === 0) {
+      console.warn('Profile fetch warning: Missing branch relation for student', typedData.email);
+    }
+    if (!typedData.year || typedData.year.length === 0) {
+      console.warn('Profile fetch warning: Missing year relation for student', typedData.email);
+    }
+    if (!typedData.semester || typedData.semester.length === 0) {
+      console.warn('Profile fetch warning: Missing semester relation for student', typedData.email);
+    }
+
+    // Get role with safe fallback
+    const userRole = profileData?.role || 'student';
+
     profile = {
-      ...data,
-      // Legacy compatibility fields
-      year: mapBatchYearToYearLevel((data.year as any)?.batch_year),
-      branch: (data.branch as any)?.code || '',
-      role: 'student' as const
+      ...typedData,
+      // Legacy compatibility fields with safe property access and fallbacks
+      year: typedData.year?.[0]?.batch_year ? await calculateYearLevel(typedData.year[0].batch_year) : 1,
+      branch: typedData.branch?.[0]?.code || 'Unknown',
+      role: userRole
     };
   }
 
@@ -199,7 +220,7 @@ export async function POST(request: Request) {
     });
 
     // Handle uniqueness violations (e.g., roll_number)
-    const isUniqueViolation = (error as any)?.code === '23505';
+    const isUniqueViolation = 'code' in error && typeof error.code === 'string' && error.code === '23505';
     const message = isUniqueViolation ? 'Roll number or email already exists' : 'Database error';
     return NextResponse.json({
       error: message,
@@ -208,13 +229,40 @@ export async function POST(request: Request) {
     }, { status: 400 });
   }
 
+  // Get user role from profiles table
+  const { data: profileData, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('email', email)
+    .maybeSingle();
+
+  if (profileError) {
+    console.warn('Profile role fetch warning:', profileError);
+  }
+
   // Transform response for backward compatibility
+  const typedData = data as StudentWithRelations;
+
+  // Validate required relations exist and log warnings if missing
+  if (!typedData.branch || typedData.branch.length === 0) {
+    console.warn('Profile update warning: Missing branch relation for student', typedData.email);
+  }
+  if (!typedData.year || typedData.year.length === 0) {
+    console.warn('Profile update warning: Missing year relation for student', typedData.email);
+  }
+  if (!typedData.semester || typedData.semester.length === 0) {
+    console.warn('Profile update warning: Missing semester relation for student', typedData.email);
+  }
+
+  // Get role with safe fallback
+  const userRole = profileData?.role || 'student';
+
   const profile = {
-    ...data,
-    // Legacy compatibility fields
-    year: mapBatchYearToYearLevel((data.year as any)?.batch_year),
-    branch: (data.branch as any)?.code || '',
-    role: 'student' as const
+    ...typedData,
+    // Legacy compatibility fields with safe property access and fallbacks
+    year: typedData.year?.[0]?.batch_year ? await calculateYearLevel(typedData.year[0].batch_year) : 1,
+    branch: typedData.branch?.[0]?.code || 'Unknown',
+    role: userRole
   };
 
   return NextResponse.json({ profile });

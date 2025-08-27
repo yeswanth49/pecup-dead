@@ -221,9 +221,9 @@ export async function POST(request: Request) {
     }
 
     if (isPdf && settings?.pdf_to_drive) {
-      // Upload PDFs to Google Drive
-      console.log(`${REQ_DEBUG_PREFIX} Uploading PDF to Google Drive.`);
-      
+      // Upload PDFs to Google Drive (with restricted permissions)
+      console.log(`${REQ_DEBUG_PREFIX} Uploading PDF to Google Drive with secure permissions.`);
+
       const authClient = await getGoogleAuthClient();
       const drive = google.drive({ version: 'v3', auth: authClient });
 
@@ -253,59 +253,39 @@ export async function POST(request: Request) {
 
       const driveFileId = driveUploadResponse.data.id;
       const driveFileWebViewLink = driveUploadResponse.data.webViewLink;
-      finalUrl = driveFileWebViewLink || `https://drive.google.com/file/d/${driveFileId}/view?usp=sharing`;
+      finalUrl = driveFileWebViewLink || `https://drive.google.com/file/d/${driveFileId}/view`;
 
       if (!driveFileId) {
         throw new Error('Failed to get file ID from Google Drive after upload.');
       }
 
-      // Set public permissions
-      try {
-        await drive.permissions.create({
-          fileId: driveFileId,
-          requestBody: { role: 'reader', type: 'anyone' },
-        });
-        console.log(`${REQ_DEBUG_PREFIX} Google Drive file permissions set to public successfully.`);
-      } catch (permError: any) {
-        console.error(`${REQ_DEBUG_PREFIX} ERROR: Failed to set public permissions for file ${driveFileId}.`, permError?.message || permError);
-        // Attempt rollback: delete uploaded file so we do not leave inaccessible artifacts
-        try {
-          await drive.files.delete({ fileId: driveFileId });
-          console.error(`${REQ_DEBUG_PREFIX} Rolled back Google Drive upload due to permissions failure. Deleted file ${driveFileId}.`);
-        } catch (rollbackError: any) {
-          console.error(`${REQ_DEBUG_PREFIX} CRITICAL: Failed to delete uploaded file ${driveFileId} after permissions failure.`, rollbackError?.message || rollbackError);
-        }
-        // Treat as critical to avoid returning a link that won't be publicly accessible
-        throw new Error('Failed to set public permissions on uploaded file. Upload has been rolled back.');
-      }
+      // IMPORTANT: Do NOT set public permissions - files should only be accessible through secure URLs
+      // The file will be accessible only through the service account or explicit sharing
 
-      console.log(`${REQ_DEBUG_PREFIX} PDF uploaded to Google Drive - ID: ${driveFileId}, Link: ${finalUrl}`);
+      console.log(`${REQ_DEBUG_PREFIX} PDF uploaded to Google Drive with restricted permissions - ID: ${driveFileId}`);
       storageLocation = 'Google Drive';
     } else {
-      // Upload non-PDFs to Supabase Storage
-      console.log(`${REQ_DEBUG_PREFIX} Uploading to Supabase Storage.`);
-      
+      // Upload files to secure Supabase Storage bucket
+      console.log(`${REQ_DEBUG_PREFIX} Uploading to secure Supabase Storage.`);
+
       const fileName = `${Date.now()}-${originalFilename}`;
-      
+
+      // Upload to secure bucket instead of public bucket
       const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
-        .from('resources')
+        .from('secure-resources')  // Use secure bucket
         .upload(fileName, buffer, {
           contentType: effectiveMimeType || undefined,
           duplex: 'half'
         });
 
       if (uploadError) {
-        console.error(`${REQ_DEBUG_PREFIX} Supabase Storage upload error:`, uploadError);
-        throw new Error(`Failed to upload file to Supabase Storage: ${uploadError.message}`);
+        console.error(`${REQ_DEBUG_PREFIX} Secure Supabase Storage upload error:`, uploadError);
+        throw new Error(`Failed to upload file to secure storage: ${uploadError.message}`);
       }
 
-      // Get public URL
-      const { data: urlData } = supabaseAdmin.storage
-        .from('resources')
-        .getPublicUrl(fileName);
-
-      finalUrl = urlData.publicUrl;
-      console.log(`${REQ_DEBUG_PREFIX} Non-PDF uploaded to Supabase Storage - Path: ${uploadData.path}, URL: ${finalUrl}`);
+      // Store the file path for secure URL generation later
+      finalUrl = fileName; // Store path, not public URL
+      console.log(`${REQ_DEBUG_PREFIX} File uploaded to secure Supabase Storage - Path: ${uploadData.path}`);
       storageLocation = 'Supabase Storage';
     }
 

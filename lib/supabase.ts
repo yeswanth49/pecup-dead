@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Validate public env vars explicitly
 const publicSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -17,12 +17,22 @@ if (missingPublicEnvVars.length > 0) {
 
 export const supabase = createClient(publicSupabaseUrl as string, publicSupabaseAnonKey as string);
 
-// Server-only factory for an admin Supabase client (uses service role key)
-export function createSupabaseAdmin() {
+// Singleton pattern for admin client to reduce resource waste
+let supabaseAdminInstance: SupabaseClient | null = null;
+
+/**
+ * Get or create a singleton admin Supabase client
+ * This prevents creating multiple client instances and improves performance
+ */
+export function getSupabaseAdmin(): SupabaseClient {
   if (typeof window !== 'undefined') {
     throw new Error(
-      'createSupabaseAdmin must only be used in server-side code (API routes, server actions, middleware, or SSR). '
+      'getSupabaseAdmin must only be used in server-side code (API routes, server actions, middleware, or SSR). '
     );
+  }
+
+  if (supabaseAdminInstance) {
+    return supabaseAdminInstance;
   }
 
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -34,12 +44,13 @@ export function createSupabaseAdmin() {
       console.warn(
         '[supabase] SUPABASE_SERVICE_ROLE_KEY missing; using anon key fallback in development (explicitly allowed via SUPABASE_ALLOW_DEV_ANON_FALLBACK)'
       );
-      return createClient(publicSupabaseUrl as string, publicSupabaseAnonKey as string, {
+      supabaseAdminInstance = createClient(publicSupabaseUrl as string, publicSupabaseAnonKey as string, {
         auth: {
           persistSession: false,
           autoRefreshToken: false,
         },
       });
+      return supabaseAdminInstance;
     }
     throw new Error(
       'Missing required environment variable: SUPABASE_SERVICE_ROLE_KEY. ' +
@@ -47,10 +58,24 @@ export function createSupabaseAdmin() {
     );
   }
 
-  return createClient(publicSupabaseUrl as string, serviceRoleKey, {
+  supabaseAdminInstance = createClient(publicSupabaseUrl as string, serviceRoleKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
     },
   });
+
+  return supabaseAdminInstance;
+}
+
+// Legacy function for backward compatibility - now uses singleton
+export function createSupabaseAdmin(): SupabaseClient {
+  return getSupabaseAdmin();
+}
+
+/**
+ * Reset the admin client instance (useful for testing or connection issues)
+ */
+export function resetSupabaseAdmin(): void {
+  supabaseAdminInstance = null;
 }

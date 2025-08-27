@@ -1,7 +1,8 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { createSupabaseAdmin } from '@/lib/supabase'
-import { UserRole, UserPermissions, Representative } from '@/lib/types'
+import { academicConfig } from '@/lib/academic-config'
+import { UserRole, UserPermissions, Representative, StudentWithRelations, RepresentativeWithRelations } from '@/lib/types'
 
 export interface UserContext {
   id: string;
@@ -37,7 +38,23 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
   const email = session.user.email.toLowerCase()
   const supabase = createSupabaseAdmin()
 
-  // Check if user is in students table (new schema)
+  // Get user role from profiles table (primary source of truth for roles)
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, email, name, role')
+    .eq('email', email)
+    .maybeSingle()
+
+  if (profileError) {
+    console.warn('Profile fetch error:', profileError)
+    return null
+  }
+
+  if (!profile) {
+    return null
+  }
+
+  // Check if user is in students table (new schema) for additional data
   const { data: student, error: studentError } = await supabase
     .from('students')
     .select(`
@@ -56,13 +73,13 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
     .eq('email', email)
     .maybeSingle()
 
-  if (studentError || !student) {
-    return null
+  if (studentError) {
+    console.warn('Student data fetch error:', studentError)
   }
 
   // If user is a representative, get their representative assignments
-  let representatives: Representative[] = []
-  if (student.role === 'representative') {
+  let representatives: RepresentativeWithRelations[] = []
+  if (profile.role === 'representative') {
     const { data: repData } = await supabase
       .from('representatives')
       .select(`
@@ -76,42 +93,71 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
         branches:branch_id(id, name, code),
         years:year_id(id, batch_year, display_name)
       `)
-      .eq('user_id', student.id)
+      .eq('user_id', profile.id)
       .eq('active', true)
 
-    representatives = repData || []
+    representatives = (repData as RepresentativeWithRelations[]) || []
   }
 
-  // Transform representatives data for frontend
-  const representativeAssignments = representatives.map(rep => ({
-    branch_id: rep.branch_id,
-    year_id: rep.year_id,
-    branch_code: (rep.branches as any)?.code || '',
-    admission_year: (rep.years as any)?.batch_year || 0
-  }))
+  // Transform representatives data for frontend with safe property access
+  const representativeAssignments = representatives.map(rep => {
+    // Log warnings for missing relations
+    if (!rep.branches || rep.branches.length === 0) {
+      console.warn('Representative assignment warning: Missing branch relation for rep', rep.id);
+    }
+    if (!rep.years || rep.years.length === 0) {
+      console.warn('Representative assignment warning: Missing year relation for rep', rep.id);
+    }
 
-  // Map batch year back to academic year for legacy compatibility
-  const mapBatchYearToYearLevel = (batchYear: number | undefined): number => {
-    if (!batchYear) return 1;
-    switch (batchYear) {
-      case 2024: return 1;
-      case 2023: return 2;
-      case 2022: return 3;
-      case 2021: return 4;
-      default: return 1;
+    return {
+      branch_id: rep.branch_id,
+      year_id: rep.year_id,
+      branch_code: rep.branches?.[0]?.code || 'Unknown',
+      admission_year: rep.years?.[0]?.batch_year || 0
+    };
+  })
+
+  // Dynamic calculation of academic year level from batch year
+  const calculateYearLevel = async (batchYear: number | undefined): Promise<number> => {
+    return academicConfig.calculateAcademicYear(batchYear);
+  }
+
+  // Use profile data as primary source, with student data as fallback for academic info
+  const userId = student?.id || profile.id;
+  const userEmail = profile.email;
+  const userName = student?.name || profile.name;
+  const userRole = profile.role as UserRole;
+
+  // Log warnings for missing student data if user should have it
+  if (!student && (profile.role === 'student' || profile.role === 'representative')) {
+    console.warn('Student context warning: No student record found for user with role', profile.role, profile.email);
+  }
+
+  const typedStudent = student as StudentWithRelations;
+
+  // Log warnings for missing relations if student data exists
+  if (typedStudent) {
+    if (!typedStudent.branch || typedStudent.branch.length === 0) {
+      console.warn('Student context warning: Missing branch relation for student', typedStudent.email);
+    }
+    if (!typedStudent.year || typedStudent.year.length === 0) {
+      console.warn('Student context warning: Missing year relation for student', typedStudent.email);
+    }
+    if (!typedStudent.semester || typedStudent.semester.length === 0) {
+      console.warn('Student context warning: Missing semester relation for student', typedStudent.email);
     }
   }
 
   return {
-    id: student.id,
-    email: student.email,
-    name: student.name,
-    role: 'student' as UserRole, // New schema students are always students
-    year: mapBatchYearToYearLevel((student.year as any)?.batch_year),
-    branch: (student.branch as any)?.code || '',
-    branchId: student.branch_id,
-    yearId: student.year_id,
-    semesterId: student.semester_id,
+    id: userId,
+    email: userEmail,
+    name: userName,
+    role: userRole,
+    year: typedStudent?.year?.[0]?.batch_year ? await calculateYearLevel(typedStudent.year[0].batch_year) : undefined,
+    branch: typedStudent?.branch?.[0]?.code || undefined,
+    branchId: typedStudent?.branch_id,
+    yearId: typedStudent?.year_id,
+    semesterId: typedStudent?.semester_id,
     representatives,
     representativeAssignments
   }
@@ -361,7 +407,12 @@ export async function requirePermission(
   if (!userContext) throw new Error('Unauthorized')
 
   const permissions = await getUserPermissions(userContext)
-  const hasPermission = permissions[`can${action.charAt(0).toUpperCase() + action.slice(1)}` as keyof UserPermissions][entity]
+  if (!permissions) {
+    throw new Error('Forbidden: Unable to determine permissions')
+  }
+
+  const permissionGroup = permissions[`can${action.charAt(0).toUpperCase() + action.slice(1)}` as keyof UserPermissions] as any
+  const hasPermission = permissionGroup?.[entity]
 
   if (!hasPermission) {
     throw new Error('Forbidden: Insufficient permissions')

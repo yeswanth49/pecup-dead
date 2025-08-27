@@ -210,6 +210,60 @@ export type SemesterNumber = 1 | 2;
 export type AdminRole = 'admin' | 'superadmin';
 export type UserRole = 'student' | 'representative' | 'admin' | 'superadmin';
 
+// Supabase Query Result Types (with joined relations as arrays)
+export interface StudentWithRelations {
+  id: string;
+  roll_number: string;
+  name: string;
+  email: string;
+  branch_id: string;
+  year_id: string;
+  semester_id: string;
+  section?: string;
+  created_at: string;
+  updated_at: string;
+  branch?: {
+    id: string;
+    name: string;
+    code: string;
+  }[] | null;
+  year?: {
+    id: string;
+    batch_year: number;
+    display_name: string;
+  }[] | null;
+  semester?: {
+    id: string;
+    semester_number: number;
+    year_id: string;
+  }[] | null;
+}
+
+export interface RepresentativeWithRelations {
+  id: string;
+  user_id: string;
+  branch_id: string;
+  year_id: string;
+  assigned_by?: string;
+  assigned_at: string;
+  active: boolean;
+  branches?: {
+    id: string;
+    name: string;
+    code: string;
+  }[] | null;
+  years?: {
+    id: string;
+    batch_year: number;
+    display_name: string;
+  }[] | null;
+}
+
+export interface AdminWithRole {
+  email: string;
+  role: AdminRole;
+}
+
 // Database query types
 export interface ResourceFilters {
   branch_id?: string;

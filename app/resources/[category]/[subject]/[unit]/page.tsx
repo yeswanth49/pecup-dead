@@ -26,6 +26,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 
 interface Resource {
+  id?: string // Add ID for secure URL generation
   name: string
   description?: string
   date: string
@@ -46,11 +47,71 @@ export default function UnitPage() {
   const [resources, setResources] = useState<Resource[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [loadingFile, setLoadingFile] = useState<string | null>(null) // Track which file is being loaded
 
   // For breadcrumbs / titles
   const [categoryTitle, setCategoryTitle] = useState('')
   const [subjectName, setSubjectName] = useState('')
   const [unitName, setUnitName] = useState('')
+
+  // Function to handle secure file access
+  const handleSecureFileAccess = async (resource: Resource, action: 'view' | 'download') => {
+    if (!resource.id) {
+      // Fallback to direct URL if no ID (for backward compatibility)
+      if (action === 'download') {
+        const link = document.createElement('a')
+        link.href = resource.url
+        link.download = resource.name
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      } else {
+        window.open(resource.url, '_blank', 'noopener,noreferrer')
+      }
+      return
+    }
+
+    setLoadingFile(resource.id)
+
+    try {
+      const response = await fetch(`/api/resources/${resource.id}/secure-url`)
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to get secure URL')
+      }
+
+      const { secureUrl } = data
+
+      if (action === 'download') {
+        // Create a temporary link to download the file
+        const link = document.createElement('a')
+        link.href = secureUrl
+        link.download = resource.name
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      } else {
+        // Open in new tab
+        window.open(secureUrl, '_blank', 'noopener,noreferrer')
+      }
+    } catch (error: any) {
+      console.error('Failed to access secure file:', error)
+      // Fallback to direct URL on error
+      if (action === 'download') {
+        const link = document.createElement('a')
+        link.href = resource.url
+        link.download = resource.name
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      } else {
+        window.open(resource.url, '_blank', 'noopener,noreferrer')
+      }
+    } finally {
+      setLoadingFile(null)
+    }
+  }
 
   useEffect(() => {
     async function fetchData() {
@@ -275,26 +336,34 @@ export default function UnitPage() {
                   <div className="flex gap-2">
                     {resource.url && (
                       <>
-                        <a href={resource.url} download={resource.name}>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="transition-all hover:bg-primary hover:text-white"
-                          >
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="transition-all hover:bg-primary hover:text-white"
+                          onClick={() => handleSecureFileAccess(resource, 'download')}
+                          disabled={loadingFile === resource.id}
+                        >
+                          {loadingFile === resource.id ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
                             <Download className="mr-2 h-4 w-4" />
-                            Download
-                          </Button>
-                        </a>
-                        <a href={resource.url} target="_blank" rel="noreferrer">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="transition-all hover:bg-primary hover:text-white"
-                          >
+                          )}
+                          Download
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="transition-all hover:bg-primary hover:text-white"
+                          onClick={() => handleSecureFileAccess(resource, 'view')}
+                          disabled={loadingFile === resource.id}
+                        >
+                          {loadingFile === resource.id ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
                             <ExternalLink className="mr-2 h-4 w-4" />
-                            View
-                          </Button>
-                        </a>
+                          )}
+                          View
+                        </Button>
                       </>
                     )}
                   </div>
