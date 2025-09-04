@@ -124,6 +124,28 @@ export async function GET() {
       branch: typedData.branch?.[0]?.code || 'Unknown',
       role: userRole
     };
+  } else if (profileData) {
+    // Fallback to profiles table data if no student record exists
+    console.log('Profile API: No student record found, using profiles table fallback for', email);
+
+    // Get the user's profile data from profiles table
+    const { data: fallbackProfile } = await supabase
+      .from('profiles')
+      .select('year, branch, name, roll_number')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (fallbackProfile) {
+      profile = {
+        id: profileData.id,
+        email: profileData.email,
+        name: fallbackProfile.name,
+        roll_number: fallbackProfile.roll_number,
+        year: fallbackProfile.year,
+        branch: fallbackProfile.branch,
+        role: profileData.role
+      };
+    }
   }
 
   return NextResponse.json({ profile });

@@ -77,6 +77,21 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
     console.warn('Student data fetch error:', studentError)
   }
 
+  // If no student record exists, try to get academic data from profiles table as fallback
+  let profileAcademicData = null
+  if (!student && (profile.role === 'student' || profile.role === 'representative')) {
+    const { data: fallbackProfile } = await supabase
+      .from('profiles')
+      .select('year, branch')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (fallbackProfile) {
+      profileAcademicData = fallbackProfile
+      console.log('Using profile fallback data for academic info:', profileAcademicData)
+    }
+  }
+
   // If user is a representative, get their representative assignments
   let representatives: RepresentativeWithRelations[] = []
   if (profile.role === 'representative') {
@@ -148,13 +163,29 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
     }
   }
 
+  // Get year and branch from student data or fallback to profile data
+  let userYear: number | undefined
+  let userBranch: string | undefined
+
+  if (typedStudent?.year?.[0]?.batch_year) {
+    userYear = await calculateYearLevel(typedStudent.year[0].batch_year)
+  } else if (profileAcademicData?.year) {
+    userYear = profileAcademicData.year
+  }
+
+  if (typedStudent?.branch?.[0]?.code) {
+    userBranch = typedStudent.branch[0].code
+  } else if (profileAcademicData?.branch) {
+    userBranch = profileAcademicData.branch
+  }
+
   return {
     id: userId,
     email: userEmail,
     name: userName,
     role: userRole,
-    year: typedStudent?.year?.[0]?.batch_year ? await calculateYearLevel(typedStudent.year[0].batch_year) : undefined,
-    branch: typedStudent?.branch?.[0]?.code || undefined,
+    year: userYear,
+    branch: userBranch,
     branchId: typedStudent?.branch_id,
     yearId: typedStudent?.year_id,
     semesterId: typedStudent?.semester_id,
