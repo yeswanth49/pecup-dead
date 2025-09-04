@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Loader2 } from 'lucide-react'
+import { mapProfileDataToIds } from '@/lib/profile-mapping'
 
 type BranchType = 'CSE' | 'AIML' | 'DS' | 'AI' | 'ECE' | 'EEE' | 'MEC' | 'CE'
 const BRANCHES: BranchType[] = ['CSE', 'AIML', 'DS', 'AI', 'ECE', 'EEE', 'MEC', 'CE']
@@ -65,10 +66,24 @@ export default function ProfilePage() {
     setSuccess(null)
     setIsSubmitting(true)
     try {
+      // Validate required fields
+      if (!name || !branch || !year || !rollNumber) {
+        throw new Error('All fields are required')
+      }
+
+      // Map frontend data to database IDs
+      const mappedIds = await mapProfileDataToIds(branch, year, 1) // Default to semester 1
+
       const response = await fetch('/api/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, year, branch, roll_number: rollNumber }),
+        body: JSON.stringify({
+          name,
+          branch_id: mappedIds.branch_id,
+          year_id: mappedIds.year_id,
+          semester_id: mappedIds.semester_id,
+          roll_number: rollNumber
+        }),
       })
       const json = await response.json().catch(() => ({}))
       if (!response.ok) {
