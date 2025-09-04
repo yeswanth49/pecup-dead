@@ -145,14 +145,14 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
   let userYear: number | undefined
   let userBranch: string | undefined
 
-  if (typedStudent?.year?.[0]?.batch_year) {
-    userYear = await calculateYearLevel(typedStudent.year[0].batch_year)
+  if (typedStudent?.year?.batch_year) {
+    userYear = await calculateYearLevel(typedStudent.year.batch_year)
   } else if (profileAcademicData?.year) {
     userYear = profileAcademicData.year
   }
 
-  if (typedStudent?.branch?.[0]?.code) {
-    userBranch = typedStudent.branch[0].code
+  if (typedStudent?.branch?.code) {
+    userBranch = typedStudent.branch.code
   } else if (profileAcademicData?.branch) {
     userBranch = profileAcademicData.branch
   }

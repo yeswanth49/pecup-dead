@@ -239,25 +239,6 @@ export interface StudentWithRelations {
   }[] | null;
 }
 
-export interface RepresentativeWithRelations {
-  id: string;
-  user_id: string;
-  branch_id: string;
-  year_id: string;
-  assigned_by?: string;
-  assigned_at: string;
-  active: boolean;
-  branches?: {
-    id: string;
-    name: string;
-    code: string;
-  }[] | null;
-  years?: {
-    id: string;
-    batch_year: number;
-    display_name: string;
-  }[] | null;
-}
 
 export interface AdminWithRole {
   email: string;

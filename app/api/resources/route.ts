@@ -191,10 +191,10 @@ export async function GET(request: Request) {
       type: resource.file_type,
       url: resource.drive_link,
       is_pdf: resource.is_pdf,
-      // Include relationship data (convert arrays to single objects)
-      branch: Array.isArray(resource.branch) ? resource.branch[0] : resource.branch,
-      year: Array.isArray(resource.year) ? resource.year[0] : resource.year,
-      semester: Array.isArray(resource.semester) ? resource.semester[0] : resource.semester,
+      // Include relationship data (now single objects)
+      branch: resource.branch,
+      year: resource.year,
+      semester: resource.semester,
       uploader: Array.isArray(resource.uploader) ? resource.uploader[0] : resource.uploader
     }));
 

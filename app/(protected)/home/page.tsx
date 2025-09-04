@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { BookOpen, Bell, Archive, Phone, AlertCircle, Loader2, Star, ExternalLink, FileText, Edit, FileQuestion, Settings, Users, TrendingUp } from 'lucide-react'
 import { UserPermissions } from '@/lib/types'
-import { UserContext } from '@/lib/types/auth'
+import type { UserContext } from '@/lib/types/auth'
 
 interface RecentUpdate {
   id: string | number

@@ -120,8 +120,8 @@ export async function GET() {
     profile = {
       ...typedData,
       // Legacy compatibility fields with safe property access and fallbacks
-      year: typedData.year?.[0]?.batch_year ? await calculateYearLevel(typedData.year[0].batch_year) : 1,
-      branch: typedData.branch?.[0]?.code || 'Unknown',
+      year: typedData.year?.batch_year ? await calculateYearLevel(typedData.year.batch_year) : 1,
+      branch: typedData.branch?.code || 'Unknown',
       role: userRole
     };
   } else if (profileData) {
@@ -282,8 +282,8 @@ export async function POST(request: Request) {
   const profile = {
     ...typedData,
     // Legacy compatibility fields with safe property access and fallbacks
-    year: typedData.year?.[0]?.batch_year ? await calculateYearLevel(typedData.year[0].batch_year) : 1,
-    branch: typedData.branch?.[0]?.code || 'Unknown',
+    year: typedData.year?.batch_year ? await calculateYearLevel(typedData.year.batch_year) : 1,
+    branch: typedData.branch?.code || 'Unknown',
     role: userRole
   };
 
