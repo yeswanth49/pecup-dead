@@ -237,13 +237,12 @@ export class AcademicConfigManager {
     return {
       programLength: 4,
       startMonth: 6, // June
-      currentAcademicYear: 2024,
+      currentAcademicYear: 2025,
       yearMappings: {
-        2024: 1,
-        2023: 2,
-        2022: 3,
-        2021: 4,
-        2025: 1
+        2024: 2, // 2024 batch = Academic year 2 (current Year 2 students)
+        2023: 3, // 2023 batch = Academic year 3 (current Year 3 students)
+        2022: 4, // 2022 batch = Academic year 4 (current Year 4 students)
+        2021: 4  // 2021 batch = Academic year 4 (graduated, final year)
       }
     };
   }

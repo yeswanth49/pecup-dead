@@ -117,10 +117,15 @@ export async function GET() {
     // Get role with safe fallback
     const userRole = profileData?.role || 'student';
 
+    // Calculate year level before constructing object
+    const calculatedYear = typedData.year?.batch_year
+      ? await calculateYearLevel(typedData.year.batch_year)
+      : 1;
+
     profile = {
       ...typedData,
       // Legacy compatibility fields with safe property access and fallbacks
-      year: typedData.year?.batch_year ? await calculateYearLevel(typedData.year.batch_year) : 1,
+      year: calculatedYear,
       branch: typedData.branch?.code || 'Unknown',
       role: userRole
     };
@@ -279,10 +284,15 @@ export async function POST(request: Request) {
   // Get role with safe fallback
   const userRole = profileData?.role || 'student';
 
+  // Calculate year level before constructing object
+  const calculatedYear = typedData.year?.batch_year
+    ? await calculateYearLevel(typedData.year.batch_year)
+    : 1;
+
   const profile = {
     ...typedData,
     // Legacy compatibility fields with safe property access and fallbacks
-    year: typedData.year?.batch_year ? await calculateYearLevel(typedData.year.batch_year) : 1,
+    year: calculatedYear,
     branch: typedData.branch?.code || 'Unknown',
     role: userRole
   };

@@ -23,14 +23,16 @@ export async function mapProfileDataToIds(
   // Handle year mapping - if it's an academic year (1-4), convert to batch year
   let batchYear: number;
   if (yearNumber >= 1 && yearNumber <= 4) {
-    // Convert academic year to batch year
-    // Academic year 1 = current batch, year 2 = previous batch, etc.
-    const currentBatchYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth() + 1;
+    // Map UI year selection to actual batch years based on current academic progression
+    // This should match the academic config mappings
+    const yearToBatchMapping: Record<number, number> = {
+      1: 2024, // Year 1 -> 2024 batch (no 2025 batch in DB, use most recent)
+      2: 2024, // Year 2 -> 2024 batch (2024 batch is currently Year 2)
+      3: 2023, // Year 3 -> 2023 batch (2023 batch is currently Year 3)
+      4: 2022  // Year 4 -> 2022 batch (2022 batch is currently Year 4)
+    };
 
-    // If we're before July (academic year start), we're still in previous batch
-    const adjustedYear = currentMonth >= 7 ? currentBatchYear : currentBatchYear - 1;
-    batchYear = adjustedYear - (yearNumber - 1);
+    batchYear = yearToBatchMapping[yearNumber] || 2024;
   } else {
     // Assume it's already a batch year
     batchYear = yearNumber;

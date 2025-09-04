@@ -81,9 +81,15 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Invalid year number. Expected 1-4.' }, { status: 400 });
       }
 
-      // Map old year numbers (1,2,3,4) to batch years dynamically based on current year
-      const currentYear = new Date().getFullYear();
-      const batchYear = currentYear - (yearNum - 1);
+      // Map old year numbers (1,2,3,4) to batch years based on current academic progression
+      // This should match the academic config mappings
+      const yearToBatchMapping: Record<number, number> = {
+        1: 2024, // Year 1 -> 2024 batch (no 2025 batch in DB, use most recent)
+        2: 2024, // Year 2 -> 2024 batch (2024 batch is currently Year 2)
+        3: 2023, // Year 3 -> 2023 batch (2023 batch is currently Year 3)
+        4: 2022  // Year 4 -> 2022 batch (2022 batch is currently Year 4)
+      };
+      const batchYear = yearToBatchMapping[yearNum] || 2024;
 
       const { data: year } = await supabaseAdmin
         .from('years')
