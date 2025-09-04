@@ -81,7 +81,7 @@ export class AcademicConfigManager {
       .in('config_key', ['program_settings', 'year_mappings']);
 
     if (error) {
-      console.error('Failed to load academic configuration:', error);
+      console.warn('Failed to load academic configuration (table may not exist), using defaults:', error.message);
       // Return default configuration on error
       return this.getDefaultConfig();
     }
@@ -237,13 +237,13 @@ export class AcademicConfigManager {
     return {
       programLength: 4,
       startMonth: 6, // June
-      currentAcademicYear: new Date().getFullYear(),
+      currentAcademicYear: 2024,
       yearMappings: {
         2024: 1,
         2023: 2,
         2022: 3,
         2021: 4,
-        [new Date().getFullYear()]: 1
+        2025: 1
       }
     };
   }

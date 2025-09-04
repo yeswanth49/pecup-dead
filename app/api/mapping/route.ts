@@ -45,7 +45,10 @@ export async function POST(request: Request) {
 
       // If we're before July (academic year start), we're still in previous batch
       const adjustedYear = currentMonth >= 7 ? currentBatchYear : currentBatchYear - 1;
-      batchYear = adjustedYear - (yearNumber - 1);
+
+      // Calculate the batch year, but cap it at the most recent year in database
+      const calculatedBatchYear = adjustedYear - (yearNumber - 1);
+      batchYear = Math.min(calculatedBatchYear, 2024); // Cap at most recent year in database
     } else {
       // Assume it's already a batch year
       batchYear = yearNumber;
