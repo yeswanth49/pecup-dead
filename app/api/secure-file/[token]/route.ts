@@ -6,7 +6,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { google } from 'googleapis';
 import { createSupabaseAdmin } from '@/lib/supabase';
-import { UserContext } from '@/lib/auth-permissions';
+import { UserContext } from '@/lib/types/auth';
 import jwt from 'jsonwebtoken';
 import { checkRateLimit } from '@/lib/files';
 

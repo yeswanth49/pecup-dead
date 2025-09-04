@@ -1,6 +1,6 @@
 import { google } from 'googleapis'
 import { createSupabaseAdmin } from '@/lib/supabase'
-import { UserContext } from '@/lib/auth-permissions'
+import { UserContext } from '@/lib/types/auth'
 import jwt from 'jsonwebtoken'
 
 // Simple in-memory rate limiter for file operations

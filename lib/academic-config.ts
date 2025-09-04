@@ -49,12 +49,13 @@ function isValidYearMappings(value: any): value is YearMappings {
  * Handles dynamic academic year calculations and caching
  */
 export class AcademicConfigManager {
-  private static instance: AcademicConfigManager;
+  private static instance: AcademicConfigManager | null = null;
   private config: AcademicConfig | null = null;
   private configCacheExpiry: number = 0;
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   static getInstance(): AcademicConfigManager {
+    // Lazy initialization to prevent client-side initialization
     if (!AcademicConfigManager.instance) {
       AcademicConfigManager.instance = new AcademicConfigManager();
     }
@@ -256,12 +257,28 @@ export class AcademicConfigManager {
   }
 }
 
-export const academicConfig = AcademicConfigManager.getInstance();
+// Lazy-loaded instance to prevent client-side initialization
+let academicConfigInstance: AcademicConfigManager | null = null;
+
+function getAcademicConfig(): AcademicConfigManager {
+  if (!academicConfigInstance) {
+    academicConfigInstance = AcademicConfigManager.getInstance();
+  }
+  return academicConfigInstance;
+}
+
+export const academicConfig = new Proxy({} as AcademicConfigManager, {
+  get(target, prop) {
+    const instance = getAcademicConfig();
+    const value = instance[prop as keyof AcademicConfigManager];
+    return typeof value === 'function' ? value.bind(instance) : value;
+  }
+});
 
 /**
  * Legacy function for backward compatibility
  * @deprecated Use academicConfig.calculateAcademicYear() instead
  */
 export async function calculateYearLevel(batchYear: number | undefined): Promise<number> {
-  return academicConfig.calculateAcademicYear(batchYear);
+  return getAcademicConfig().calculateAcademicYear(batchYear);
 }
