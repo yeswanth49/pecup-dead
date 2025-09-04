@@ -9,7 +9,6 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { mapProfileDataToIds } from '@/lib/profile-mapping'
 
 type BranchType = 'CSE' | 'AIML' | 'DS' | 'AI' | 'ECE' | 'EEE' | 'MEC' | 'CE'
 const BRANCHES: BranchType[] = ['CSE', 'AIML', 'DS', 'AI', 'ECE', 'EEE', 'MEC', 'CE']
@@ -40,17 +39,30 @@ export default function OnboardingPage() {
         throw new Error('All fields are required')
       }
 
-      // Map frontend data to database IDs
-      const mappedIds = await mapProfileDataToIds(branch, year, 1) // Default to semester 1
+      // Map frontend data to database IDs via API
+      const mappingResponse = await fetch('/api/mapping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          branchCode: branch,
+          yearNumber: year,
+          semesterNumber: 1 // Default to semester 1
+        }),
+      })
+
+      const mappingJson = await mappingResponse.json()
+      if (!mappingResponse.ok) {
+        throw new Error(mappingJson?.error || 'Failed to map branch/year data')
+      }
 
       const response = await fetch('/api/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
-          branch_id: mappedIds.branch_id,
-          year_id: mappedIds.year_id,
-          semester_id: mappedIds.semester_id,
+          branch_id: mappingJson.branch_id,
+          year_id: mappingJson.year_id,
+          semester_id: mappingJson.semester_id,
           roll_number: rollNumber
         }),
       })
