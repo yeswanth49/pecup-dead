@@ -23,19 +23,55 @@ export async function mapProfileDataToIds(
   // Handle year mapping - if it's an academic year (1-4), convert to batch year
   let batchYear: number;
   if (yearNumber >= 1 && yearNumber <= 4) {
-    // Map UI year selection to actual batch years based on current academic progression
-    // This should match the academic config mappings
-    const yearToBatchMapping: Record<number, number> = {
-      1: 2024, // Year 1 -> 2024 batch (no 2025 batch in DB, use most recent)
-      2: 2024, // Year 2 -> 2024 batch (2024 batch is currently Year 2)
-      3: 2023, // Year 3 -> 2023 batch (2023 batch is currently Year 3)
-      4: 2022  // Year 4 -> 2022 batch (2022 batch is currently Year 4)
-    };
+    // Dynamic computation using July UTC cutoff
+    const currentDate = new Date();
+    const currentYear = currentDate.getUTCFullYear();
+    const currentMonth = currentDate.getUTCMonth() + 1; // getUTCMonth() returns 0-11
 
-    batchYear = yearToBatchMapping[yearNumber] || 2024;
+    // If month >= July (7), set baseBatch = currentYear, otherwise baseBatch = currentYear - 1
+    const baseBatch = currentMonth >= 7 ? currentYear : currentYear - 1;
+
+    // Compute batchYear = baseBatch - (yearNumber - 1)
+    // Year 1 -> baseBatch, Year 2 -> baseBatch - 1, etc.
+    batchYear = baseBatch - (yearNumber - 1);
   } else {
-    // Assume it's already a batch year
-    batchYear = yearNumber;
+    // Assume it's already a batch year or handle invalid input
+    if (!Number.isInteger(yearNumber) || yearNumber < 1) {
+      // Check for DB-driven fallback behind env flag
+      const allowYearFallback = process.env.ALLOW_YEAR_FALLBACK === '1';
+      if (allowYearFallback) {
+        try {
+          // Query the years table for the latest batch_year
+          const { data: latestYear, error } = await supabase
+            .from('years')
+            .select('batch_year')
+            .order('batch_year', { ascending: false })
+            .limit(1)
+            .single();
+
+          if (!error && latestYear?.batch_year) {
+            batchYear = latestYear.batch_year;
+          } else {
+            throw new Error('Database query failed or returned no results');
+          }
+        } catch (dbError) {
+          throw new Error(
+            `Invalid yearNumber: ${yearNumber}. DB fallback failed: ${dbError instanceof Error ? dbError.message : 'Unknown error'}. ` +
+            'Valid yearNumber must be an integer >= 1. ' +
+            'Check ALLOW_YEAR_FALLBACK env var and database connectivity. ' +
+            'See docs/database_info.md for year configuration details.'
+          );
+        }
+      } else {
+        throw new Error(
+          `Invalid yearNumber: ${yearNumber}. Must be an integer between 1-4 or a valid batch year (>= 1). ` +
+          'Set ALLOW_YEAR_FALLBACK=1 to enable database-driven fallback for invalid inputs. ' +
+          'See docs/database_info.md for year configuration details.'
+        );
+      }
+    } else {
+      batchYear = yearNumber;
+    }
   }
 
   // Get branch ID

@@ -38,19 +38,26 @@ export async function POST(request: Request) {
     // Handle year mapping - if it's an academic year (1-4), convert to batch year
     let batchYear: number;
     if (yearNumber >= 1 && yearNumber <= 4) {
-      // Map UI year selection to actual batch years based on current academic progression
-      // This should match the academic config mappings
-      const yearToBatchMapping: Record<number, number> = {
-        1: 2024, // Year 1 -> 2024 batch (no 2025 batch in DB, use most recent)
-        2: 2024, // Year 2 -> 2024 batch (2024 batch is currently Year 2)
-        3: 2023, // Year 3 -> 2023 batch (2023 batch is currently Year 3)
-        4: 2022  // Year 4 -> 2022 batch (2022 batch is currently Year 4)
-      };
+      // Dynamic calculation anchored to September academic cycle start
+      const currentDate = new Date();
+      const currentYear = currentDate.getFullYear();
+      const currentMonth = currentDate.getMonth() + 1; // getMonth() returns 0-11
+      const academicStartMonth = 9; // September
 
-      batchYear = yearToBatchMapping[yearNumber] || 2024;
+      // Calculate current academic cohort base year
+      // If current month is before September, we're still in the previous academic year
+      const cohortBaseYear = currentMonth < academicStartMonth ? currentYear - 1 : currentYear;
+
+      // Derive batch year: Year 1 -> cohortBaseYear, Year 2 -> cohortBaseYear - 1, etc.
+      batchYear = cohortBaseYear - (yearNumber - 1);
     } else {
-      // Assume it's already a batch year
-      batchYear = yearNumber;
+      // Assume it's already a batch year or handle invalid input
+      if (!Number.isInteger(yearNumber) || yearNumber < 1) {
+        // Safe fallback to current calendar year if yearNumber is missing or invalid
+        batchYear = new Date().getFullYear();
+      } else {
+        batchYear = yearNumber;
+      }
     }
 
     // Get branch ID
