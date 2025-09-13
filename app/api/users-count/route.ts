@@ -6,44 +6,21 @@ export const runtime = 'nodejs';
 export async function GET() {
   try {
     const supabase = createSupabaseAdmin();
-    
-    // Get counts from all user tables
-    const [profilesResult, studentsResult, adminsResult] = await Promise.all([
-      supabase
-        .from('profiles')
-        .select('id', { count: 'exact', head: true }),
-      supabase
-        .from('students')
-        .select('id', { count: 'exact', head: true }),
-      supabase
-        .from('admins')
-        .select('id', { count: 'exact', head: true })
-    ]);
 
-    if (profilesResult.error || studentsResult.error || adminsResult.error) {
-      console.error('Error fetching user counts:', {
-        profiles: profilesResult.error,
-        students: studentsResult.error,
-        admins: adminsResult.error
-      });
-      return NextResponse.json({ error: 'Failed to fetch user counts' }, { status: 500 });
+    // Count only from profiles (single source of truth for registered users)
+    const { count, error } = await supabase
+      .from('profiles')
+      .select('id', { count: 'exact', head: true });
+
+    if (error) {
+      console.error('Error fetching profiles count:', error);
+      return NextResponse.json({ error: 'Failed to fetch users count' }, { status: 500 });
     }
 
-    const profilesCount = profilesResult.count || 0;
-    const studentsCount = studentsResult.count || 0;
-    const adminsCount = adminsResult.count || 0;
-    
-    // Total users = profiles + students (avoiding double counting if users exist in both)
-    // For now, we'll use profiles as the primary count since it's the main user table
-    const totalUsers = profilesCount + studentsCount + adminsCount;
+    const totalUsers = count || 0;
 
     return NextResponse.json({
       totalUsers,
-      breakdown: {
-        profiles: profilesCount,
-        students: studentsCount,
-        admins: adminsCount
-      },
       lastUpdated: new Date().toISOString()
     });
   } catch (error) {
