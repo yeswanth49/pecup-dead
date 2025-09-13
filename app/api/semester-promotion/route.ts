@@ -65,10 +65,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get students to promote
+    // Get profiles to promote (students/representatives by role)
     const { data: studentsToPromote, error: studentsError } = await supabase
-      .from('students')
+      .from('profiles')
       .select('id, roll_number, name, email')
+      .in('role', ['student', 'representative'])
       .eq('branch_id', branchId)
       .eq('year_id', yearId)
       .eq('semester_id', fromSemesterId)
@@ -85,13 +86,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Update students' semester
+    // Update profiles' semester
     const { error: updateError } = await supabase
-      .from('students')
+      .from('profiles')
       .update({ 
         semester_id: toSemesterId,
         ...(toSemester.year_id !== fromSemester.year_id ? { year_id: toSemester.year_id } : {})
       })
+      .in('role', ['student', 'representative'])
       .eq('branch_id', branchId)
       .eq('year_id', yearId)
       .eq('semester_id', fromSemesterId)

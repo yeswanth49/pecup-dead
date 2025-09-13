@@ -14,14 +14,14 @@ export async function PATCH(_request: Request, { params }: { params: { email: st
     const role = String(body.role || '')
     if (!['admin', 'superadmin'].includes(role)) return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
 
-    // Check if admin exists before updating
-    const { data: existingAdmin } = await supabase.from('admins').select('id,email,role,created_at').eq('email', email).maybeSingle()
+    // Check if admin profile exists before updating
+    const { data: existingAdmin } = await supabase.from('profiles').select('id,email,role,created_at').eq('email', email).maybeSingle()
     if (!existingAdmin) {
       return NextResponse.json({ error: 'Admin not found' }, { status: 404 })
     }
 
     const { data, error } = await supabase
-      .from('admins')
+      .from('profiles')
       .update({ role })
       .eq('email', email)
       .select('id,email,role,created_at')
@@ -48,13 +48,13 @@ export async function DELETE(_request: Request, { params }: { params: { email: s
     const email = decodeURIComponent(params.email).toLowerCase()
     
     // Check if admin exists before deleting
-    const { data: before } = await supabase.from('admins').select('id,email,role,created_at').eq('email', email).maybeSingle()
+    const { data: before } = await supabase.from('profiles').select('id,email,role,created_at').eq('email', email).maybeSingle()
     if (!before) {
       await logAudit({ actor_email: admin.email, actor_role: admin.role, action: 'delete', entity: 'admin', success: false, message: 'Admin not found' })
       return NextResponse.json({ error: 'Admin not found' }, { status: 404 })
     }
     
-    const { error } = await supabase.from('admins').delete().eq('email', email)
+    const { error } = await supabase.from('profiles').update({ role: 'student' }).eq('email', email)
     if (error) throw error
     await logAudit({ actor_email: admin.email, actor_role: admin.role, action: 'delete', entity: 'admin', entity_id: before.id, before_data: before })
     return NextResponse.json({ success: true })

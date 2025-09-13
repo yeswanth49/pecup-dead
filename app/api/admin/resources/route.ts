@@ -326,27 +326,27 @@ export async function POST(request: Request) {
     insertPayload['year_id'] = yearId;
     insertPayload['semester_id'] = semesterId;
     // Resolve uploader_id: prefer UUID; if userContext.id is not a UUID, try to look up profile id by email
-    // Resolve uploader_id: only set if the user corresponds to a student record
+    // Resolve uploader_id from profiles
     let resolvedUploaderId: string | null = null;
     try {
       if (userContext?.email) {
-        const { data: studentRecord } = await supabase.from('students').select('id').eq('email', userContext.email).maybeSingle();
-        if (studentRecord && studentRecord.id) resolvedUploaderId = studentRecord.id;
+        const { data: profileRecord } = await supabase.from('profiles').select('id').eq('email', userContext.email).maybeSingle();
+        if (profileRecord && profileRecord.id) resolvedUploaderId = profileRecord.id;
       }
     } catch (e) {
-      console.warn(`${REQ_DEBUG_PREFIX} Student lookup failed for uploader resolution:`, e);
+      console.warn(`${REQ_DEBUG_PREFIX} Profile lookup failed for uploader resolution:`, e);
     }
     insertPayload['uploader_id'] = resolvedUploaderId;
 
-    // created_by must reference admins.id (foreign key). Only set if the user is an admin.
+    // created_by now references profiles.id for admins/superadmins
     let resolvedCreatedBy: string | null = null;
     try {
-      if (userContext?.email) {
-        const { data: adminRecord } = await supabase.from('admins').select('id').eq('email', userContext.email).maybeSingle();
-        if (adminRecord && adminRecord.id) resolvedCreatedBy = adminRecord.id;
+      if (userContext?.email && (userContext.role === 'admin' || userContext.role === 'superadmin')) {
+        const { data: adminProfile } = await supabase.from('profiles').select('id').eq('email', userContext.email).maybeSingle();
+        resolvedCreatedBy = adminProfile?.id || null;
       }
     } catch (e) {
-      console.warn(`${REQ_DEBUG_PREFIX} Admin lookup failed for created_by resolution:`, e);
+      console.warn(`${REQ_DEBUG_PREFIX} Profile lookup failed for created_by resolution:`, e);
     }
     insertPayload['created_by'] = resolvedCreatedBy;
     insertPayload['file_type'] = detectedMime || ((file as any)?.type || null);

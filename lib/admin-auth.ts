@@ -21,7 +21,7 @@ export async function requireAdmin(minRole: 'admin' | 'superadmin' = 'admin'): P
   const email = session.user.email.toLowerCase()
   const supabase = createSupabaseAdmin()
   const { data, error } = await supabase
-    .from('admins')
+    .from('profiles')
     .select('email, role')
     .eq('email', email)
     .maybeSingle()
@@ -47,6 +47,7 @@ export async function requireAdmin(minRole: 'admin' | 'superadmin' = 'admin'): P
     throw new Error('Forbidden')
   }
   if (minRole === 'superadmin' && data.role !== 'superadmin') throw new Error('Forbidden')
+  if (data.role !== 'admin' && data.role !== 'superadmin') throw new Error('Forbidden')
   return { email: data.email, role: data.role as AdminContext['role'] }
 }
 

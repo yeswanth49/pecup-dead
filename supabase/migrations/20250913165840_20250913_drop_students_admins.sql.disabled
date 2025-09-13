@@ -1,0 +1,43 @@
+-- Stage B (dev): Drop legacy students/admins tables and any compat views
+
+BEGIN;
+
+-- Drop compatibility views if any
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.views WHERE table_schema='public' AND table_name='students_compat') THEN
+    EXECUTE 'DROP VIEW IF EXISTS students_compat CASCADE';
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.views WHERE table_schema='public' AND table_name='admins_compat') THEN
+    EXECUTE 'DROP VIEW IF EXISTS admins_compat CASCADE';
+  END IF;
+END $$;
+
+-- If admin_scopes has FK to admins, drop it before dropping admins
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE table_schema='public' AND table_name='admin_scopes' AND constraint_type='FOREIGN KEY'
+  ) THEN
+    BEGIN
+      EXECUTE 'ALTER TABLE admin_scopes DROP CONSTRAINT IF EXISTS admin_scopes_admin_id_fkey';
+    EXCEPTION WHEN OTHERS THEN NULL; END;
+  END IF;
+END $$;
+
+-- Drop tables if they exist
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='students') THEN
+    EXECUTE 'DROP TABLE IF EXISTS students CASCADE';
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='admins') THEN
+    EXECUTE 'DROP TABLE IF EXISTS admins CASCADE';
+  END IF;
+END $$;
+
+COMMIT;
+
+-- Rollback (manual): restore from backups if available or revert commit that drops tables.
+

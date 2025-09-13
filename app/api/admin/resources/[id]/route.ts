@@ -71,7 +71,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       const session = await getServerSession(authOptions)
       const email = session?.user?.email?.toLowerCase()
       if (email) {
-        const { data: adminRow } = await supabase.from('admins').select('id,role').eq('email', email).maybeSingle()
+        const { data: adminRow } = await supabase.from('profiles').select('id,role').eq('email', email).maybeSingle()
         if (adminRow && adminRow.role !== 'superadmin') {
           const { data: scopes } = await supabase
             .from('admin_scopes')
@@ -149,7 +149,7 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
 
     // Scope enforcement for non-superadmin
     try {
-      const { data: adminRow } = await supabase.from('admins').select('id,role').eq('email', admin.email).maybeSingle()
+      const { data: adminRow } = await supabase.from('profiles').select('id,role').eq('email', admin.email).maybeSingle()
       if (adminRow && adminRow.role !== 'superadmin') {
         const { data: scopes } = await supabase
           .from('admin_scopes')

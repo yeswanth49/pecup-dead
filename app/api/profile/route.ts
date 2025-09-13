@@ -61,9 +61,9 @@ export async function GET() {
 
   const supabase = createSupabaseAdmin();
 
-  // Query the students table with relationships
+  // Query the profiles table with relationships
   const { data: studentData, error } = await supabase
-    .from('students')
+    .from('profiles')
     .select(`
       id,
       roll_number,
@@ -216,8 +216,9 @@ export async function POST(request: Request) {
   }
 
   const { data, error } = await supabase
-    .from('students')
-    .upsert(payload, { onConflict: 'email' })
+    .from('profiles')
+    .update(payload)
+    .eq('email', email)
     .select(`
       id,
       roll_number,

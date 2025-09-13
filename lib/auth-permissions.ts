@@ -30,9 +30,9 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
     return null
   }
 
-  // Check if user is in students table (new schema) for additional data
+  // Get academic fields directly from profiles if present
   const { data: student, error: studentError } = await supabase
-    .from('students')
+    .from('profiles')
     .select(`
       id,
       roll_number,
@@ -181,33 +181,60 @@ export async function requireAdmin(minRole: 'admin' | 'superadmin' = 'admin'): P
 
   const email = session.user.email.toLowerCase()
   const supabase = createSupabaseAdmin()
-  const { data, error } = await supabase
-    .from('admins')
-    .select('email, role')
+  // Remove legacy admins table dependency if any stray usage remains
+  // (no direct admins table read needed; roles come from profiles)
+  // The following block is no longer needed as roles are directly from profiles
+  // const { data, error } = await supabase
+  //   .from('admins')
+  //   .select('email, role')
+  //   .eq('email', email)
+  //   .maybeSingle()
+
+  // if (error || !data) {
+  //   // Dev-only fallback: allow AUTHORIZED_EMAILS as superadmin in development
+  //   const isDev = process.env.NODE_ENV === 'development'
+  //   const listFromServer = (process.env.AUTHORIZED_EMAILS || '')
+  //     .split(',')
+  //     .map((e) => e.trim().toLowerCase())
+  //     .filter(Boolean)
+  //   const isAuthorizedByEnv = listFromServer.includes(email)
+  //   if (isDev && isAuthorizedByEnv) {
+  //     console.warn('Development auth bypass:', {
+  //       email,
+  //       source: 'AUTHORIZED_EMAILS',
+  //       role: 'superadmin',
+  //       nodeEnv: process.env.NODE_ENV
+  //     })
+  //     return { email, role: 'superadmin' }
+  //   }
+  //   throw new Error('Forbidden')
+  // }
+  // if (minRole === 'superadmin' && data.role !== 'superadmin') throw new Error('Forbidden')
+  // return { email: data.email, role: data.role as AdminContext['role'] }
+
+  // Determine roles based on profiles table
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
     .eq('email', email)
     .maybeSingle()
 
-  if (error || !data) {
-    // Dev-only fallback: allow AUTHORIZED_EMAILS as superadmin in development
-    const isDev = process.env.NODE_ENV === 'development'
-    const listFromServer = (process.env.AUTHORIZED_EMAILS || '')
-      .split(',')
-      .map((e) => e.trim().toLowerCase())
-      .filter(Boolean)
-    const isAuthorizedByEnv = listFromServer.includes(email)
-    if (isDev && isAuthorizedByEnv) {
-      console.warn('Development auth bypass:', {
-        email,
-        source: 'AUTHORIZED_EMAILS',
-        role: 'superadmin',
-        nodeEnv: process.env.NODE_ENV
-      })
-      return { email, role: 'superadmin' }
-    }
+  if (profileError) {
+    console.warn('Profile role fetch error:', profileError)
     throw new Error('Forbidden')
   }
-  if (minRole === 'superadmin' && data.role !== 'superadmin') throw new Error('Forbidden')
-  return { email: data.email, role: data.role as AdminContext['role'] }
+
+  if (!profile) {
+    throw new Error('Forbidden')
+  }
+
+  const userRole = profile.role as UserRole;
+
+  if (minRole === 'superadmin' && userRole !== 'superadmin') {
+    throw new Error('Forbidden')
+  }
+
+  return { email, role: userRole as AdminContext['role'] }
 }
 
 /**

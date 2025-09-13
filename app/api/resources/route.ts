@@ -41,23 +41,16 @@ export async function GET(request: Request) {
       const session = await getServerSession(authOptions);
       const email = session?.user?.email?.toLowerCase();
       if (email) {
-        const { data: student } = await supabaseAdmin
-          .from('students')
-          .select(`
-            branch_id,
-            year_id,
-            semester_id,
-            branch:branches(code),
-            year:years(batch_year),
-            semester:semesters(semester_number)
-          `)
+        const { data: prof } = await supabaseAdmin
+          .from('profiles')
+          .select('branch_id, year_id, semester_id')
           .eq('email', email)
           .maybeSingle();
 
-        if (student) {
-          branch_id = branch_id || student.branch_id;
-          year_id = year_id || student.year_id;
-          semester_id = semester_id || student.semester_id;
+        if (prof) {
+          branch_id = branch_id || (prof as any).branch_id;
+          year_id = year_id || (prof as any).year_id;
+          semester_id = semester_id || (prof as any).semester_id;
         }
       }
     }
@@ -148,8 +141,7 @@ export async function GET(request: Request) {
         is_pdf,
         branch:branches(id, name, code),
         year:years(id, batch_year, display_name),
-        semester:semesters(id, semester_number),
-        uploader:students(id, name, roll_number)
+        semester:semesters(id, semester_number)
       `)
       .eq('category', category)
       .eq('subject', subject)

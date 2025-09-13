@@ -28,8 +28,9 @@ export async function GET(request: Request) {
   const order = (url.searchParams.get('order') || 'desc') as 'asc' | 'desc'
 
   const { data, error, count } = await supabase
-    .from('admins')
+    .from('profiles')
     .select('id,email,role,created_at', { count: 'exact' })
+    .in('role', ['admin', 'superadmin'])
     .order(sort, { ascending: order === 'asc' })
     .range(from, to)
 
@@ -63,14 +64,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
     }
 
-    const { data, error } = await supabase.from('admins').insert({ email, role }).select('id,email,role,created_at').single()
-    if (error) {
-      // Handle unique constraint violation (duplicate email)
-      if (error.code === '23505') {
-        await logAudit({ actor_email: admin.email, actor_role: admin.role, action: 'create', entity: 'admin', success: false, message: 'Email already exists' })
-        return NextResponse.json({ error: 'Email already exists' }, { status: 409 })
-      }
-      throw error
+    // Ensure profile exists, then set role
+    const { data: existing } = await supabase.from('profiles').select('id,email,role,created_at').eq('email', email).maybeSingle()
+    let data
+    if (existing) {
+      const upd = await supabase.from('profiles').update({ role }).eq('email', email).select('id,email,role,created_at').single()
+      if (upd.error) throw upd.error
+      data = upd.data
+    } else {
+      const ins = await supabase.from('profiles').insert({ email, role }).select('id,email,role,created_at').single()
+      if (ins.error) throw ins.error
+      data = ins.data
     }
 
     await logAudit({ actor_email: admin.email, actor_role: admin.role, action: 'create', entity: 'admin', entity_id: data.id, after_data: data })

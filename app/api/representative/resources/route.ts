@@ -55,8 +55,7 @@ export async function GET(request: NextRequest) {
         branch_id, year_id, semester_id, uploader_id, created_at, updated_at,
         branches:branch_id(id, name, code),
         years:year_id(id, batch_year, display_name),
-        semesters:semester_id(id, semester_number),
-        students:uploader_id(id, name, email, roll_number)
+        semesters:semester_id(id, semester_number)
       `, { count: 'exact' })
       .in('branch_id', assignedBranchIds)
       .in('year_id', assignedYearIds)

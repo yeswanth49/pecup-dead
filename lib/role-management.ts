@@ -196,17 +196,7 @@ export async function assignSuperAdmin(userEmail: string): Promise<{ success: bo
       return { success: false, error: `Failed to update profile role: ${profileUpdateError.message}` }
     }
 
-    // Add to admins table
-    const { error: adminError } = await supabase
-      .from('admins')
-      .upsert({
-        email: userEmail.toLowerCase(),
-        role: 'superadmin'
-      })
-
-    if (adminError) {
-      return { success: false, error: `Failed to add to admins table: ${adminError.message}` }
-    }
+    // No admins table write; profiles.role is canonical
 
     console.log(`✅ Assigned superadmin role to ${userEmail}`)
     return { success: true }
@@ -247,17 +237,7 @@ export async function assignAdmin(userEmail: string): Promise<{ success: boolean
       return { success: false, error: `Failed to update profile role: ${profileUpdateError.message}` }
     }
 
-    // Add to admins table
-    const { error: adminError } = await supabase
-      .from('admins')
-      .upsert({
-        email: userEmail.toLowerCase(),
-        role: 'admin'
-      })
-
-    if (adminError) {
-      return { success: false, error: `Failed to add to admins table: ${adminError.message}` }
-    }
+    // No admins table write; profiles.role is canonical
 
     console.log(`✅ Assigned admin role to ${userEmail}`)
     return { success: true }
