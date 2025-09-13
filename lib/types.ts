@@ -265,21 +265,6 @@ export interface StudentFilters {
   section?: string;
 }
 
-// Migration helper types
-export interface MigrationStatus {
-  phase: string;
-  completed: boolean;
-  errors?: string[];
-  warnings?: string[];
-}
-
-export interface SchemaValidation {
-  table: string;
-  valid: boolean;
-  missing_columns?: string[];
-  orphaned_references?: number;
-  null_required_fields?: number;
-}
 
 // Representative and permission types
 export interface Representative {

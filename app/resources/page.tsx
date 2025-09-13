@@ -6,13 +6,9 @@ import { Header } from '@/components/Header'
 import ChatBubble from '@/components/ChatBubble'
 import { FileText, BookOpen, FileCheck, Database, Users, Loader2 } from "lucide-react"
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useState as useStateClient } from 'react'
 import { useProfile } from '@/lib/profile-context'
 import { useEffect as useEffectClient } from 'react'
-import { useSession } from 'next-auth/react'
-import { useState as useStateClient } from 'react'
-import { useCallback } from 'react'
-import { use } from 'react'
 
 function LiveUsersCount() {
   const [count, setCount] = useStateClient<number | null>(null)
