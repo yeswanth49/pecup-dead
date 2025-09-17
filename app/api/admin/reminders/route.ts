@@ -15,7 +15,7 @@ function toInt(value: unknown): number | null {
 export async function GET(request: Request) {
   // Allow admins and representatives
   const userContext = await getCurrentUserContext()
-  if (!userContext || !['admin', 'superadmin', 'representative'].includes(userContext.role)) {
+  if (!userContext || !['admin', 'yeshh', 'representative'].includes(userContext.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
   const supabase = createSupabaseAdmin()

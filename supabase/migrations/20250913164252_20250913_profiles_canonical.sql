@@ -39,13 +39,27 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'admins'
   ) THEN
-    UPDATE profiles p SET role = a.role::text
+    -- Map admins.role (admin_role enum) into profiles.role (user_role enum)
+    UPDATE profiles p
+    SET role = CASE a.role
+                 WHEN 'superadmin'::admin_role THEN 'superadmin'::user_role
+                 ELSE 'admin'::user_role
+               END
     FROM admins a
     WHERE lower(p.email) = lower(a.email)
-      AND (p.role IS NULL OR p.role <> a.role::text);
+      AND (p.role IS NULL OR p.role NOT IN ('admin'::user_role, 'superadmin'::user_role));
   END IF;
 END
 $$;
+
+-- Drop legacy FKs referencing admins/students prior to remapping
+ALTER TABLE IF EXISTS resources       DROP CONSTRAINT IF EXISTS fk_resources_created_by;
+ALTER TABLE IF EXISTS resources       DROP CONSTRAINT IF EXISTS fk_resources_uploader;
+ALTER TABLE IF EXISTS exams           DROP CONSTRAINT IF EXISTS fk_exams_created_by;
+ALTER TABLE IF EXISTS recent_updates  DROP CONSTRAINT IF EXISTS fk_recent_updates_created_by;
+ALTER TABLE IF EXISTS reminders       DROP CONSTRAINT IF EXISTS fk_reminders_created_by;
+ALTER TABLE IF EXISTS audit_logs      DROP CONSTRAINT IF EXISTS fk_audit_logs_actor;
+ALTER TABLE IF EXISTS academic_calendar DROP CONSTRAINT IF EXISTS academic_calendar_updated_by_fkey;
 
 -- 5) Optional: Migrate resources.created_by away from admins/students to profiles.id if column exists
 --    This is a best-effort update; the column may not exist in current schema.
@@ -71,6 +85,52 @@ BEGIN
   END IF;
 END
 $$;
+
+-- Remap other references from admins/students to profiles
+-- resources.uploader_id: students -> profiles by email, or NULL if no match
+UPDATE resources r SET uploader_id = p.id
+FROM students s JOIN profiles p ON lower(s.email) = lower(p.email)
+WHERE r.uploader_id = s.id;
+UPDATE resources r SET uploader_id = NULL
+WHERE r.uploader_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM profiles p WHERE p.id = r.uploader_id);
+
+-- exams.created_by: admins -> profiles by email, or NULL
+UPDATE exams e SET created_by = p.id
+FROM admins a JOIN profiles p ON lower(a.email) = lower(p.email)
+WHERE e.created_by = a.id;
+UPDATE exams e SET created_by = NULL
+WHERE e.created_by IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM profiles p WHERE p.id = e.created_by);
+
+-- recent_updates.created_by: admins -> profiles by email, or NULL
+UPDATE recent_updates ru SET created_by = p.id
+FROM admins a JOIN profiles p ON lower(a.email) = lower(p.email)
+WHERE ru.created_by = a.id;
+UPDATE recent_updates ru SET created_by = NULL
+WHERE ru.created_by IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM profiles p WHERE p.id = ru.created_by);
+
+-- reminders.created_by: admins -> profiles by email, or NULL
+UPDATE reminders r SET created_by = p.id
+FROM admins a JOIN profiles p ON lower(a.email) = lower(p.email)
+WHERE r.created_by = a.id;
+UPDATE reminders r SET created_by = NULL
+WHERE r.created_by IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM profiles p WHERE p.id = r.created_by);
+
+-- audit_logs.actor_id: map by actor_email
+UPDATE audit_logs al SET actor_id = p.id
+FROM profiles p
+WHERE al.actor_email IS NOT NULL AND lower(al.actor_email) = lower(p.email);
+UPDATE audit_logs al SET actor_id = NULL
+WHERE al.actor_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM profiles p WHERE p.id = al.actor_id);
+
+-- academic_calendar.updated_by: set NULL if pointing to admins
+UPDATE academic_calendar ac SET updated_by = NULL
+WHERE updated_by IS NOT NULL
+  AND EXISTS (SELECT 1 FROM admins a WHERE a.id = ac.updated_by);
 
 COMMIT;
 
@@ -112,4 +172,40 @@ BEGIN
   END IF;
 END
 $$;
+
+-- 7) Update FKs to reference profiles instead of admins/students where needed
+-- resources.created_by -> profiles(id)
+ALTER TABLE IF EXISTS resources DROP CONSTRAINT IF EXISTS fk_resources_created_by;
+ALTER TABLE IF EXISTS resources ADD CONSTRAINT fk_resources_created_by_profiles
+  FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL;
+
+-- resources.uploader_id -> profiles(id)
+ALTER TABLE IF EXISTS resources DROP CONSTRAINT IF EXISTS fk_resources_uploader;
+ALTER TABLE IF EXISTS resources ADD CONSTRAINT fk_resources_uploader_profiles
+  FOREIGN KEY (uploader_id) REFERENCES profiles(id) ON DELETE SET NULL;
+
+-- exams.created_by -> profiles(id)
+ALTER TABLE IF EXISTS exams DROP CONSTRAINT IF EXISTS fk_exams_created_by;
+ALTER TABLE IF EXISTS exams ADD CONSTRAINT fk_exams_created_by_profiles
+  FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL;
+
+-- recent_updates.created_by -> profiles(id)
+ALTER TABLE IF EXISTS recent_updates DROP CONSTRAINT IF EXISTS fk_recent_updates_created_by;
+ALTER TABLE IF EXISTS recent_updates ADD CONSTRAINT fk_recent_updates_created_by_profiles
+  FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL;
+
+-- reminders.created_by -> profiles(id)
+ALTER TABLE IF EXISTS reminders DROP CONSTRAINT IF EXISTS fk_reminders_created_by;
+ALTER TABLE IF EXISTS reminders ADD CONSTRAINT fk_reminders_created_by_profiles
+  FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL;
+
+-- audit_logs.actor_id -> profiles(id)
+ALTER TABLE IF EXISTS audit_logs DROP CONSTRAINT IF EXISTS fk_audit_logs_actor;
+ALTER TABLE IF EXISTS audit_logs ADD CONSTRAINT fk_audit_logs_actor_profiles
+  FOREIGN KEY (actor_id) REFERENCES profiles(id) ON DELETE SET NULL;
+
+-- academic_calendar.updated_by -> profiles(id)
+ALTER TABLE IF EXISTS academic_calendar DROP CONSTRAINT IF EXISTS academic_calendar_updated_by_fkey;
+ALTER TABLE IF EXISTS academic_calendar ADD CONSTRAINT academic_calendar_updated_by_profiles_fkey
+  FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL;
 

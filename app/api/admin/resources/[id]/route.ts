@@ -66,13 +66,13 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     if (sanitized.unit) sanitized.unit = Number.parseInt(String(sanitized.unit), 10)
     if (typeof sanitized.archived !== 'undefined') sanitized.archived = Boolean(sanitized.archived)
 
-    // Enforce scope for non-superadmin
+    // Enforce scope for non-yeshh
     try {
       const session = await getServerSession(authOptions)
       const email = session?.user?.email?.toLowerCase()
       if (email) {
         const { data: adminRow } = await supabase.from('profiles').select('id,role').eq('email', email).maybeSingle()
-        if (adminRow && adminRow.role !== 'superadmin') {
+        if (adminRow && adminRow.role !== 'yeshh') {
           const { data: scopes } = await supabase
             .from('admin_scopes')
             .select('year,branch')
@@ -147,10 +147,10 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
     const { data: row } = await supabase.from('resources').select('*').eq('id', id).maybeSingle()
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    // Scope enforcement for non-superadmin
+    // Scope enforcement for non-yeshh
     try {
       const { data: adminRow } = await supabase.from('profiles').select('id,role').eq('email', admin.email).maybeSingle()
-      if (adminRow && adminRow.role !== 'superadmin') {
+      if (adminRow && adminRow.role !== 'yeshh') {
         const { data: scopes } = await supabase
           .from('admin_scopes')
           .select('year,branch')

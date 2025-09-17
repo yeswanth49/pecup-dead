@@ -6,13 +6,13 @@ import { logAudit } from '@/lib/audit'
 export const runtime = 'nodejs'
 
 export async function PATCH(_request: Request, { params }: { params: { email: string } }) {
-  const admin = await requireAdmin('superadmin')
+  const admin = await requireAdmin('yeshh')
   const supabase = createSupabaseAdmin()
   try {
     const email = decodeURIComponent(params.email).toLowerCase()
     const body = await _request.json()
     const role = String(body.role || '')
-    if (!['admin', 'superadmin'].includes(role)) return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
+    if (!['admin', 'yeshh'].includes(role)) return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
 
     // Check if admin profile exists before updating
     const { data: existingAdmin } = await supabase.from('profiles').select('id,email,role,created_at').eq('email', email).maybeSingle()
@@ -42,7 +42,7 @@ export async function PATCH(_request: Request, { params }: { params: { email: st
 }
 
 export async function DELETE(_request: Request, { params }: { params: { email: string } }) {
-  const admin = await requireAdmin('superadmin')
+  const admin = await requireAdmin('yeshh')
   const supabase = createSupabaseAdmin()
   try {
     const email = decodeURIComponent(params.email).toLowerCase()

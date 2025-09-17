@@ -7,7 +7,6 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { academicConfig } from '@/lib/academic-config';
-import { Student, StudentCreateInput, StudentUpdateInput, StudentWithRelations } from '@/lib/types';
 
 const supabaseAdmin = createSupabaseAdmin();
 
@@ -61,8 +60,8 @@ export async function GET() {
 
   const supabase = createSupabaseAdmin();
 
-  // Query the profiles table with relationships
-  const { data: studentData, error } = await supabase
+  // Query the profiles table once for all needed data
+  const { data: profileData, error } = await supabase
     .from('profiles')
     .select(`
       id,
@@ -73,11 +72,9 @@ export async function GET() {
       year_id,
       semester_id,
       section,
+      role,
       created_at,
-      updated_at,
-      branch:branches(id, name, code),
-      year:years(id, batch_year, display_name),
-      semester:semesters(id, semester_number)
+      updated_at
     `)
     .eq('email', email)
     .maybeSingle();
@@ -87,70 +84,42 @@ export async function GET() {
     return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
 
-  // Get user role from profiles table
-  const { data: profileData, error: profileError } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('email', email)
-    .maybeSingle();
-
-  if (profileError) {
-    console.warn('Profile role fetch warning:', profileError);
-  }
-
   // Transform to include legacy format for backward compatibility
-  let profile = null;
-  if (studentData) {
-    const typedData = studentData as StudentWithRelations;
+  let profile = null as any;
+  if (profileData) {
+    const base = profileData as any;
 
-    // Validate required relations exist
-    if (!typedData.branch || typedData.branch.length === 0) {
-      console.warn('Profile fetch warning: Missing branch relation for student', typedData.email);
-    }
-    if (!typedData.year || typedData.year.length === 0) {
-      console.warn('Profile fetch warning: Missing year relation for student', typedData.email);
-    }
-    if (!typedData.semester || typedData.semester.length === 0) {
-      console.warn('Profile fetch warning: Missing semester relation for student', typedData.email);
+    // Safely enrich with branch code and batch year without relationship expansion
+    let branchCode: string | null = null;
+    let batchYear: number | null = null;
+
+    if (base.branch_id) {
+      const { data: b } = await supabase
+        .from('branches')
+        .select('code')
+        .eq('id', base.branch_id)
+        .maybeSingle();
+      branchCode = (b as any)?.code ?? null;
     }
 
-    // Get role with safe fallback
-    const userRole = profileData?.role || 'student';
+    if (base.year_id) {
+      const { data: y } = await supabase
+        .from('years')
+        .select('batch_year')
+        .eq('id', base.year_id)
+        .maybeSingle();
+      batchYear = (y as any)?.batch_year ?? null;
+    }
 
-    // Calculate year level before constructing object
-    const calculatedYear = typedData.year?.batch_year
-      ? await calculateYearLevel(typedData.year.batch_year)
-      : 1;
+    const userRole = base?.role || 'student';
+    const calculatedYear = batchYear ? await calculateYearLevel(batchYear) : 1;
 
     profile = {
-      ...typedData,
-      // Legacy compatibility fields with safe property access and fallbacks
+      ...base,
       year: calculatedYear,
-      branch: typedData.branch?.code || 'Unknown',
+      branch: branchCode || 'Unknown',
       role: userRole
     };
-  } else if (profileData) {
-    // Fallback to profiles table data if no student record exists
-    console.log('Profile API: No student record found, using profiles table fallback for', email);
-
-    // Get the user's profile data from profiles table
-    const { data: fallbackProfile } = await supabase
-      .from('profiles')
-      .select('year, branch, name, roll_number')
-      .eq('email', email)
-      .maybeSingle();
-
-    if (fallbackProfile) {
-      profile = {
-        id: profileData.id,
-        email: profileData.email,
-        name: fallbackProfile.name,
-        roll_number: fallbackProfile.roll_number,
-        year: fallbackProfile.year,
-        branch: fallbackProfile.branch,
-        role: profileData.role
-      };
-    }
   }
 
   return NextResponse.json({ profile });
@@ -228,11 +197,9 @@ export async function POST(request: Request) {
       year_id,
       semester_id,
       section,
+      role,
       created_at,
-      updated_at,
-      branch:branches(id, name, code),
-      year:years(id, batch_year, display_name),
-      semester:semesters(id, semester_number)
+      updated_at
     `)
     .single();
 
@@ -257,44 +224,37 @@ export async function POST(request: Request) {
     }, { status: 400 });
   }
 
-  // Get user role from profiles table
-  const { data: profileData, error: profileError } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('email', email)
-    .maybeSingle();
+  // Enrich without relationship expansion
+  const base = data as any;
 
-  if (profileError) {
-    console.warn('Profile role fetch warning:', profileError);
+  let branchCode: string | null = null;
+  let batchYear: number | null = null;
+
+  if (base.branch_id) {
+    const { data: b } = await supabase
+      .from('branches')
+      .select('code')
+      .eq('id', base.branch_id)
+      .maybeSingle();
+    branchCode = (b as any)?.code ?? null;
   }
 
-  // Transform response for backward compatibility
-  const typedData = data as StudentWithRelations;
-
-  // Validate required relations exist and log warnings if missing
-  if (!typedData.branch || typedData.branch.length === 0) {
-    console.warn('Profile update warning: Missing branch relation for student', typedData.email);
-  }
-  if (!typedData.year || typedData.year.length === 0) {
-    console.warn('Profile update warning: Missing year relation for student', typedData.email);
-  }
-  if (!typedData.semester || typedData.semester.length === 0) {
-    console.warn('Profile update warning: Missing semester relation for student', typedData.email);
+  if (base.year_id) {
+    const { data: y } = await supabase
+      .from('years')
+      .select('batch_year')
+      .eq('id', base.year_id)
+      .maybeSingle();
+    batchYear = (y as any)?.batch_year ?? null;
   }
 
-  // Get role with safe fallback
-  const userRole = profileData?.role || 'student';
-
-  // Calculate year level before constructing object
-  const calculatedYear = typedData.year?.batch_year
-    ? await calculateYearLevel(typedData.year.batch_year)
-    : 1;
+  const userRole = base?.role || 'student';
+  const calculatedYear = batchYear ? await calculateYearLevel(batchYear) : 1;
 
   const profile = {
-    ...typedData,
-    // Legacy compatibility fields with safe property access and fallbacks
+    ...base,
     year: calculatedYear,
-    branch: typedData.branch?.code || 'Unknown',
+    branch: branchCode || 'Unknown',
     role: userRole
   };
 

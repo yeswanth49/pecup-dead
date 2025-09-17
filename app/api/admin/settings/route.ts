@@ -7,7 +7,7 @@ export const runtime = 'nodejs'
 
 export async function GET() {
   try {
-    const admin = await requireAdmin('superadmin')
+    const admin = await requireAdmin('yeshh')
     const supabase = createSupabaseAdmin()
     const { data, error } = await supabase.from('settings').select('*').single()
     if (error) throw error
@@ -26,7 +26,7 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const admin = await requireAdmin('superadmin')
+  const admin = await requireAdmin('yeshh')
   const supabase = createSupabaseAdmin()
 
   try {

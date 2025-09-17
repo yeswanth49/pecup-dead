@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     }
     
     // Only allow admins and representatives to access this admin endpoint
-    if (!['admin', 'superadmin', 'representative'].includes(userContext.role)) {
+    if (!['admin', 'yeshh', 'representative'].includes(userContext.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
   } catch (err) {
@@ -338,10 +338,10 @@ export async function POST(request: Request) {
     }
     insertPayload['uploader_id'] = resolvedUploaderId;
 
-    // created_by now references profiles.id for admins/superadmins
+    // created_by now references profiles.id for admins/yeshh
     let resolvedCreatedBy: string | null = null;
     try {
-      if (userContext?.email && (userContext.role === 'admin' || userContext.role === 'superadmin')) {
+      if (userContext?.email && (userContext.role === 'admin' || userContext.role === 'yeshh')) {
         const { data: adminProfile } = await supabase.from('profiles').select('id').eq('email', userContext.email).maybeSingle();
         resolvedCreatedBy = adminProfile?.id || null;
       }
@@ -370,7 +370,7 @@ export async function POST(request: Request) {
     console.log(`${REQ_DEBUG_PREFIX} Database insertion successful. New resource ID: ${data.id}.`);
     
     // Log the audit with proper role handling
-    const auditRole = userContext.role === 'representative' ? 'admin' : userContext.role as 'admin' | 'superadmin';
+    const auditRole = userContext.role === 'representative' ? 'admin' : userContext.role as 'admin' | 'yeshh';
     await logAudit({
       actor_email: userContext.email,
       actor_role: auditRole,
@@ -385,7 +385,7 @@ export async function POST(request: Request) {
   } catch (err: any) {
     // Log error to server console for debugging
     console.error(`${REQ_DEBUG_PREFIX} Create resource error:`, err);
-    const auditRole = userContext?.role === 'representative' ? 'admin' : userContext?.role as 'admin' | 'superadmin' || 'admin';
+    const auditRole = userContext?.role === 'representative' ? 'admin' : userContext?.role as 'admin' | 'yeshh' || 'admin';
     await logAudit({
       actor_email: userContext?.email || 'unknown',
       actor_role: auditRole,

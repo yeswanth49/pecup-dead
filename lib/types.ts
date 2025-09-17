@@ -207,8 +207,8 @@ export interface SubjectOffering {
 // Utility types
 export type BranchCode = 'CSE' | 'AIML' | 'DS' | 'AI' | 'ECE' | 'EEE' | 'MEC' | 'CE';
 export type SemesterNumber = 1 | 2;
-export type AdminRole = 'admin' | 'superadmin';
-export type UserRole = 'student' | 'representative' | 'admin' | 'superadmin';
+export type AdminRole = 'admin' | 'yeshh';
+export type UserRole = 'student' | 'representative' | 'admin' | 'yeshh' | null;
 
 // Supabase Query Result Types (with joined relations as arrays)
 export interface StudentWithRelations {

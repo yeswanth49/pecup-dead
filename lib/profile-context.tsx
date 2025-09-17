@@ -155,13 +155,15 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }
 
   // Subjects cache using session cache hook
-  const subjectsKey = profile ? `subjects:year=${profile.year}:branch=${profile.branch}` : 'subjects:anon'
+  const subjectsKey = profile && profile.year && profile.branch ? `subjects:year=${profile.year}:branch=${profile.branch}` : 'subjects:anon'
   const subjectsFetcher = async () => {
-    const params = new URLSearchParams()
-    if (profile) {
-      params.set('year', String(profile.year))
-      params.set('branch', profile.branch)
+    // Don't fetch subjects if we don't have complete profile data
+    if (!profile || !profile.year || !profile.branch) {
+      return []
     }
+    const params = new URLSearchParams()
+    params.set('year', String(profile.year))
+    params.set('branch', profile.branch)
     const res = await fetch(`/api/subjects?${params.toString()}`)
     const json = await res.json()
     return json.subjects || []

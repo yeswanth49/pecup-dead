@@ -7,7 +7,7 @@ export const runtime = 'nodejs'
 
 export async function GET(request: Request) {
   try {
-    await requireAdmin('superadmin')
+    await requireAdmin('yeshh')
   } catch (error: any) {
     if (error.message === 'Forbidden') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   const { data, error, count } = await supabase
     .from('profiles')
     .select('id,email,role,created_at', { count: 'exact' })
-    .in('role', ['admin', 'superadmin'])
+    .in('role', ['admin', 'yeshh'])
     .order(sort, { ascending: order === 'asc' })
     .range(from, to)
 
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   let admin
   try {
-    admin = await requireAdmin('superadmin')
+    admin = await requireAdmin('yeshh')
   } catch (error: any) {
     if (error.message === 'Forbidden') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
     }
-    if (!['admin', 'superadmin'].includes(role)) {
+    if (!['admin', 'yeshh'].includes(role)) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
     }
 

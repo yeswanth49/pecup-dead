@@ -172,8 +172,8 @@ export default function HomePage() {
         return <Badge variant="default">Representative</Badge>
       case 'admin':
         return <Badge variant="destructive">Admin</Badge>
-      case 'superadmin':
-        return <Badge variant="destructive">Super Admin</Badge>
+      case 'yeshh':
+        return <Badge variant="destructive">Yeshh</Badge>
       default:
         return <Badge variant="outline">{role}</Badge>
     }
@@ -227,7 +227,7 @@ export default function HomePage() {
     )
 
     // Management dashboard for representatives and admins
-    if (userContext?.role === 'representative' || userContext?.role === 'admin' || userContext?.role === 'superadmin') {
+    if (userContext?.role === 'representative' || userContext?.role === 'admin' || userContext?.role === 'yeshh') {
       const dashboardHref = userContext.role === 'representative' ? '/dev-dashboard' : '/dashboard'
       cards.push(
         <Link key="dashboard" href={dashboardHref} className="block">
@@ -321,7 +321,7 @@ export default function HomePage() {
           </Card>
         )}
 
-        {(userContext?.role === 'admin' || userContext?.role === 'superadmin') && (
+        {(userContext?.role === 'admin' || userContext?.role === 'yeshh') && (
           <Card className="p-4">
             <h3 className="font-semibold mb-2">Admin Access</h3>
             <p className="text-sm text-muted-foreground">

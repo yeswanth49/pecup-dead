@@ -15,7 +15,7 @@ function toInt(value: unknown): number | null {
 export async function GET(request: Request) {
   // Allow admins and representatives
   const userContext = await getCurrentUserContext()
-  if (!userContext || !['admin', 'superadmin', 'representative'].includes(userContext.role)) {
+  if (!userContext || !['admin', 'yeshh', 'representative'].includes(userContext.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
   const supabase = createSupabaseAdmin()
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
     const { data, error } = await supabase.from('exams').insert(payload).select('id').single()
     if (error) throw error
     
-    const auditRole = userContext.role === 'representative' ? 'admin' : userContext.role as 'admin' | 'superadmin'
+    const auditRole = userContext.role === 'representative' ? 'admin' : userContext.role as 'admin' | 'yeshh'
     await logAudit({ 
       actor_email: userContext.email, 
       actor_role: auditRole, 
@@ -131,7 +131,7 @@ export async function POST(request: Request) {
     })
     return NextResponse.json({ id: data.id, ...payload })
   } catch (err: any) {
-    const auditRole = userContext.role === 'representative' ? 'admin' : userContext.role as 'admin' | 'superadmin'
+    const auditRole = userContext.role === 'representative' ? 'admin' : userContext.role as 'admin' | 'yeshh'
     await logAudit({ 
       actor_email: userContext.email, 
       actor_role: auditRole, 

@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { createSupabaseAdmin } from '@/lib/supabase'
 
-export type AdminContext = { email: string; role: 'admin' | 'superadmin' }
+export type AdminContext = { email: string; role: 'admin' | 'yeshh' }
 
 // Re-export from auth-permissions for backward compatibility
 export { 
@@ -14,7 +14,7 @@ export {
   canAssignRepresentatives
 } from './auth-permissions'
 
-export async function requireAdmin(minRole: 'admin' | 'superadmin' = 'admin'): Promise<AdminContext> {
+export async function requireAdmin(minRole: 'admin' | 'yeshh' = 'admin'): Promise<AdminContext> {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email) throw new Error('Unauthorized')
 
@@ -46,8 +46,8 @@ export async function requireAdmin(minRole: 'admin' | 'superadmin' = 'admin'): P
     }
     throw new Error('Forbidden')
   }
-  if (minRole === 'superadmin' && data.role !== 'superadmin') throw new Error('Forbidden')
-  if (data.role !== 'admin' && data.role !== 'superadmin') throw new Error('Forbidden')
+  if (minRole === 'yeshh' && data.role !== 'yeshh') throw new Error('Forbidden')
+  if (data.role !== 'admin' && data.role !== 'yeshh') throw new Error('Forbidden')
   return { email: data.email, role: data.role as AdminContext['role'] }
 }
 

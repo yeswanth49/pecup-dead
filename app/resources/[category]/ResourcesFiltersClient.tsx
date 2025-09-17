@@ -29,8 +29,27 @@ export default function ResourcesFiltersClient({ category, categoryData }: Resou
       setError(null)
       try {
         const qp = buildSubjectsQuery(searchParams, category)
+        
+        // Check if we have at least some meaningful parameters before making the API call
+        const hasYear = qp.has('year') && qp.get('year')
+        const hasBranch = qp.has('branch') && qp.get('branch')
+        
+        if (!hasYear && !hasBranch) {
+          // If we don't have year or branch, don't make the API call
+          // The API will try to infer from profile, but if profile is incomplete, it will fail
+          console.log('ResourcesFiltersClient: No year/branch parameters, skipping subjects fetch')
+          setSubjects([])
+          setLoading(false)
+          return
+        }
+        
         const res = await fetch(`/api/subjects?${qp.toString()}`, { cache: 'no-store' })
         const json = await res.json()
+        
+        if (!res.ok) {
+          throw new Error(json?.error || `HTTP ${res.status}`)
+        }
+        
         setSubjects(json?.subjects || [])
       } catch (err) {
         console.error('Failed to load subjects:', err)

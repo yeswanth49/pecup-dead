@@ -175,7 +175,7 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
 /**
  * Check if current user has admin privileges
  */
-export async function requireAdmin(minRole: 'admin' | 'superadmin' = 'admin'): Promise<AdminContext> {
+export async function requireAdmin(minRole: 'admin' | 'yeshh' = 'admin'): Promise<AdminContext> {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email) throw new Error('Unauthorized')
 
@@ -230,7 +230,7 @@ export async function requireAdmin(minRole: 'admin' | 'superadmin' = 'admin'): P
 
   const userRole = profile.role as UserRole;
 
-  if (minRole === 'superadmin' && userRole !== 'superadmin') {
+  if (minRole === 'yeshh' && userRole !== 'yeshh') {
     throw new Error('Forbidden')
   }
 

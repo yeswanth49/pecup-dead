@@ -21,7 +21,7 @@ export interface UserContext {
 
 export interface AdminContext {
   email: string;
-  role: 'admin' | 'superadmin';
+  role: 'admin' | 'yeshh';
 }
 
 // Relation types for reuse

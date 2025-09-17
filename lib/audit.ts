@@ -2,7 +2,7 @@ import { createSupabaseAdmin } from '@/lib/supabase'
 
 export async function logAudit(entry: {
   actor_email: string
-  actor_role: 'admin' | 'superadmin'
+  actor_role: 'admin' | 'yeshh'
   action: string
   entity: string
   entity_id?: string
