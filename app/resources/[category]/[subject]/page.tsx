@@ -10,6 +10,7 @@ import ChatBubble from '@/components/ChatBubble'
 import { ChevronRight, FileText } from "lucide-react"
 import { getResourceTypeForCategory } from '@/lib/resource-utils'
 import { useProfile } from '@/lib/enhanced-profile-context'
+import { getSubjectDisplayByCode } from '@/lib/subject-display'
 
 const CATEGORY_TITLES: Record<string, string> = {
   notes: 'Notes',
@@ -54,8 +55,7 @@ export default function SubjectPage({
     const resourceType = getResourceTypeForCategory(category)
     const list = Array.isArray(subjects) ? subjects : []
     const filtered = resourceType ? list.filter((s: any) => (s?.resource_type || 'resources') === resourceType) : list
-    const found = filtered.find((s: any) => s.code?.toLowerCase() === decodedSubject.toLowerCase())
-    return found?.name || decodedSubject.toUpperCase()
+    return getSubjectDisplayByCode(filtered as any, decodedSubject, true)
   }, [subjects, category, decodedSubject])
 
   const [subjectName, setSubjectName] = useState<string>(subjectNameFromContext)
@@ -70,13 +70,15 @@ export default function SubjectPage({
     <div className="space-y-6">
       <div className="space-y-2">
         <Header/>
-        <div className="flex items-center pt-2 gap-2 text-sm text-muted-foreground">
+        <nav className="flex items-center pt-2 gap-2 text-sm text-muted-foreground" aria-label="Breadcrumb">
+          <Link href="/" className="hover:text-foreground">Home</Link>
+          <ChevronRight className="h-4 w-4" />
           <Link href="/resources" className="hover:text-foreground">Resources</Link>
           <ChevronRight className="h-4 w-4" />
           <Link href={`/resources/${category}`} className="hover:text-foreground">{categoryTitle}</Link>
           <ChevronRight className="h-4 w-4" />
-          <span>{subjectName}</span>
-        </div>
+          <span aria-current="page">{subjectName}</span>
+        </nav>
 
         <div className="flex items-start">
           <h1 className="text-3xl font-bold tracking-tight">{subjectName} {categoryTitle}</h1>

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { useSession } from 'next-auth/react'
-import { ProfileCache, StaticCache, SubjectsCache, DynamicCache } from './simple-cache'
+import { ProfileCache, StaticCache, SubjectsCache, DynamicCache, ProfileDisplayCache } from './simple-cache'
 import { PerfMon } from './performance-monitor'
 import { broadcastBulkCacheUpdate, subscribeToBulkCacheUpdates } from './cross-tab'
 
@@ -89,6 +89,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
 		if (cachedProfile) {
 			setProfile(cachedProfile)
+			// Seed persistent display cache for instant header render
+			try { ProfileDisplayCache.set(email, cachedProfile) } catch (_) {}
 			foundCache = true
 
 			// Try to load subjects for this profile
@@ -199,6 +201,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
 			// Update caches
 			ProfileCache.set(email, data.profile)
+			ProfileDisplayCache.set(email, data.profile)
 			StaticCache.set(data.static)
 			DynamicCache.set(data.dynamic)
 
@@ -241,6 +244,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 	const refreshProfile = async () => {
 		if (!session?.user?.email) return
 		ProfileCache.clear()
+		try { ProfileDisplayCache.clear() } catch (_) {}
 		await fetchBulkData(true)
 	}
 
@@ -254,6 +258,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 		ProfileCache.clear()
 		StaticCache.clear()
 		DynamicCache.clear()
+		try { ProfileDisplayCache.clear() } catch (_) {}
 		if (profile && profile.branch && profile.year && profile.semester) {
 			SubjectsCache.clearForContext(profile.branch, profile.year, profile.semester)
 		}

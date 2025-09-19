@@ -8,6 +8,7 @@ import { useSearchParams } from 'next/navigation'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getResourceTypeForCategory } from '@/lib/resource-utils'
 import { useProfile } from '@/lib/enhanced-profile-context'
+import { getSubjectDisplay } from '@/lib/subject-display'
 
 interface ResourcesFiltersClientProps {
   category: string
@@ -45,8 +46,8 @@ export default function ResourcesFiltersClient({ category, categoryData }: Resou
           <Link key={s.code} href={`/resources/${category}/${encodeURIComponent(s.code)}${q ? `?${q}` : ''}`} className="block">
             <Card className="h-full transition-all-smooth hover-lift">
               <CardHeader>
-                <CardTitle>{s.code}</CardTitle>
-                <CardDescription>Access {s.code} {categoryData.title.toUpperCase()}</CardDescription>
+                <CardTitle>{getSubjectDisplay(s, true)}</CardTitle>
+                <CardDescription>Access {getSubjectDisplay(s, true)} {categoryData.title.toUpperCase()}</CardDescription>
               </CardHeader>
               <CardContent className="flex justify-end">
                 <ChevronRight className="h-5 w-5 text-primary" />

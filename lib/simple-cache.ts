@@ -276,3 +276,81 @@ export class DynamicCache {
 }
 
 
+// Minimal, persistent display cache to avoid UI flicker across sessions
+export interface CachedProfileDisplay {
+  name?: string
+  branch?: string | null
+  year?: number | null
+  semester?: number | null
+}
+
+export class ProfileDisplayCache {
+  private static KEY = 'profile_display_cache'
+  private static TTL = 30 * 24 * 60 * 60 * 1000 // 30 days
+
+  private static whitelistDisplay(profile: any): CachedProfileDisplay | null {
+    if (!profile || typeof profile !== 'object') return null
+    const { name, branch, year, semester } = profile
+    return { name, branch, year, semester }
+  }
+
+  static set(email: string, profile: any) {
+    if (typeof window === 'undefined') return
+    try {
+      const display = this.whitelistDisplay(profile)
+      if (!display) {
+        this.clear()
+        return
+      }
+      localStorage.setItem(
+        this.KEY,
+        JSON.stringify({ email, profile: display, timestamp: Date.now(), expiresAt: Date.now() + this.TTL })
+      )
+    } catch (e) {
+      // best-effort, ignore quota errors
+      try { localStorage.removeItem(this.KEY) } catch (_) {}
+    }
+  }
+
+  static get(email: string): CachedProfileDisplay | null {
+    if (typeof window === 'undefined') return null
+    try {
+      const raw = localStorage.getItem(this.KEY)
+      if (!raw) return null
+      const { email: cachedEmail, profile, expiresAt } = JSON.parse(raw) as { email?: string; profile?: CachedProfileDisplay; expiresAt?: number }
+      if (!cachedEmail || cachedEmail !== email || !expiresAt || Date.now() > expiresAt) {
+        this.clear()
+        return null
+      }
+      return (profile as CachedProfileDisplay) || null
+    } catch {
+      this.clear()
+      return null
+    }
+  }
+
+  // Non-strict read for initial paint before session is available. Respects TTL.
+  static peek(): CachedProfileDisplay | null {
+    if (typeof window === 'undefined') return null
+    try {
+      const raw = localStorage.getItem(this.KEY)
+      if (!raw) return null
+      const { profile, expiresAt } = JSON.parse(raw) as { profile?: CachedProfileDisplay; expiresAt?: number }
+      if (!expiresAt || Date.now() > expiresAt) {
+        this.clear()
+        return null
+      }
+      return (profile as CachedProfileDisplay) || null
+    } catch {
+      this.clear()
+      return null
+    }
+  }
+
+  static clear() {
+    if (typeof window === 'undefined') return
+    try { localStorage.removeItem(this.KEY) } catch (_) {}
+  }
+}
+
+

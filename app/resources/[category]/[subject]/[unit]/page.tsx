@@ -24,6 +24,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
+import { getSubjectDisplayByCode } from '@/lib/subject-display'
+import { useProfile } from '@/lib/enhanced-profile-context'
 
 interface Resource {
   id?: string // Add ID for secure URL generation
@@ -201,63 +203,8 @@ export default function UnitPage() {
     fetchData()
   }, [params])
 
-  // full‐screen loader
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="space-y-2">
-          <Skeleton className="h-16 w-full" />
-          {/* Breadcrumbs skeleton */}
-          <div className="flex flex-wrap items-center gap-2 pt-2">
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="h-4 w-4" />
-            <Skeleton className="h-4 w-12" />
-            <Skeleton className="h-4 w-4" />
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-4 w-4" />
-            <Skeleton className="h-4 w-24" />
-          </div>
-          {/* Title skeleton */}
-          <div className="flex items-start justify-between">
-            <Skeleton className="h-9 w-32" />
-            <Skeleton className="h-5 w-24" />
-          </div>
-          <Skeleton className="h-5 w-64" />
-        </div>
-
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-7 w-40" />
-            <Skeleton className="h-5 w-48" />
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {/* Resource item skeletons */}
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between rounded-lg border p-4"
-                >
-                  <div className="flex items-center gap-3 mb-3 sm:mb-0">
-                    <Skeleton className="h-5 w-5" />
-                    <div className="space-y-2">
-                      <Skeleton className="h-5 w-48" />
-                      <Skeleton className="h-4 w-32" />
-                      <Skeleton className="h-4 w-28" />
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Skeleton className="h-8 w-24" />
-                    <Skeleton className="h-8 w-20" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+  const { subjects } = useProfile()
+  const subjectDisplay = getSubjectDisplayByCode(subjects as any, subjectName || '', true)
 
   // render
   return (
@@ -265,35 +212,23 @@ export default function UnitPage() {
       <div className="space-y-2">
       <Header/>
         {/* Breadcrumbs */}
-        <div className="flex flex-wrap items-center gap-2 pt-10 text-sm text-muted-foreground">
-          <Link href="/resources" className="hover:text-foreground">
-            Resources
-          </Link>
+        <nav className="flex flex-wrap items-center gap-2 pt-2 text-sm text-muted-foreground" aria-label="Breadcrumb">
+          <Link href="/" className="hover:text-foreground">Home</Link>
           <ChevronRight className="h-4 w-4" />
-          <Link
-            href={`/resources/${params.category}`}
-            className="hover:text-foreground"
-          >
-            {categoryTitle}
-          </Link>
+          <Link href="/resources" className="hover:text-foreground">Resources</Link>
           <ChevronRight className="h-4 w-4" />
-          <Link
-            href={`/resources/${params.category}/${encodeURIComponent(
-              subjectName
-            )}`}
-            className="hover:text-foreground"
-          >
-            {subjectName.toUpperCase()}
-          </Link>
+          <Link href={`/resources/${params.category}`} className="hover:text-foreground">{categoryTitle}</Link>
           <ChevronRight className="h-4 w-4" />
-          <span>{unitName}{year ? ` • Year ${year}` : ''}{semester ? ` • Sem ${semester}` : ''}</span>
-        </div>
+          <Link href={`/resources/${params.category}/${encodeURIComponent(subjectName)}`} className="hover:text-foreground">{subjectDisplay}</Link>
+          <ChevronRight className="h-4 w-4" />
+          <span aria-current="page">{unitName}{year ? ` • Year ${year}` : ''}{semester ? ` • Sem ${semester}` : ''}</span>
+        </nav>
         {/* Title */}
         <div className="flex items-start">
           <h1 className="text-3xl font-bold tracking-tight">{unitName}</h1>
         </div>
         <p className="text-muted-foreground">
-          {subjectName} {categoryTitle} for {unitName}
+          {subjectDisplay} {categoryTitle} for {unitName}
         </p>
       </div>
 
@@ -314,7 +249,26 @@ export default function UnitPage() {
           )}
 
           <div className="space-y-4">
-            {!error && resources.length > 0 ? (
+            {loading && (
+              [1,2,3].map(i => (
+                <div key={i} className="flex flex-col sm:flex-row sm:items-center sm:justify-between rounded-lg border p-4">
+                  <div className="flex items-center gap-3 mb-3 sm:mb-0">
+                    <Skeleton className="h-5 w-5" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-5 w-48" />
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-4 w-28" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Skeleton className="h-8 w-24" />
+                    <Skeleton className="h-8 w-20" />
+                  </div>
+                </div>
+              ))
+            )}
+
+            {!loading && !error && resources.length > 0 && (
               resources.map((resource) => (
                 <div
                   key={resource.url || resource.name}
@@ -368,12 +322,10 @@ export default function UnitPage() {
                   </div>
                 </div>
               ))
-            ) : (
-              !error && (
-                <p className="text-muted-foreground">
-                  No resources available for this unit.
-                </p>
-              )
+            )}
+
+            {!loading && !error && resources.length === 0 && (
+              <p className="text-muted-foreground">No resources available for this unit.</p>
             )}
           </div>
         </CardContent>
