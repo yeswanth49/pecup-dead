@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useSessionCachedResource } from './session-cache'
+import { ProfileCache } from './simple-cache'
 
 export interface Profile {
   id: string
@@ -27,7 +28,7 @@ interface ProfileContextType {
 
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined)
 
-const PROFILE_STORAGE_KEY = 'user_profile_cache'
+const PROFILE_STORAGE_KEY = 'user_profile_cache' // legacy key for migration/cleanup
 const SESSION_CACHE_PREFIX = 'session_cache_v1'
 
 export function ProfileProvider({ children }: { children: ReactNode }) {
@@ -38,28 +39,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const hasFetched = useRef(false)
   const isInitialized = useRef(false)
 
-  // Immediately try to load from cache on mount
+  // Immediately try to clean up any legacy cache on mount and avoid SSR issues
   useEffect(() => {
-    console.log('ProfileContext: Mount effect running')
     if (typeof window !== 'undefined') {
-      try {
-        const cached = sessionStorage.getItem(PROFILE_STORAGE_KEY)
-        console.log('ProfileContext: Cached data found:', !!cached)
-        if (cached) {
-          const cachedProfile = JSON.parse(cached)
-          console.log('ProfileContext: Setting cached profile:', cachedProfile)
-          setProfile(cachedProfile)
-          setLoading(false)
-          hasFetched.current = true
-          return
-        }
-      } catch (err) {
-        console.warn('Failed to load cached profile on mount:', err)
-        sessionStorage.removeItem(PROFILE_STORAGE_KEY)
-      }
+      try { sessionStorage.removeItem(PROFILE_STORAGE_KEY) } catch (_) {}
     }
-    console.log('ProfileContext: No cache found, setting loading to false')
-    setLoading(false) // If no cache, set loading to false initially
+    setLoading(false)
   }, [])
 
   const fetchProfile = async (force = false) => {
@@ -89,13 +74,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       setProfile(profileData)
       hasFetched.current = true
       
-      // Cache the profile data in sessionStorage
-      if (profileData && typeof window !== 'undefined') {
-        try {
-          sessionStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profileData))
-        } catch (err) {
-          console.warn('Failed to cache profile:', err)
-        }
+      // Cache the profile using the secure ProfileCache
+      if (profileData && session?.user?.email) {
+        ProfileCache.set(session.user.email, profileData)
       }
     } catch (err: any) {
       setError(err.message || 'Error loading profile')
@@ -108,30 +89,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   // Handle authentication state changes
   useEffect(() => {
     if (status === 'authenticated' && !hasFetched.current && !profile) {
-      // Only fetch if we don't have cached profile data and haven't fetched yet
       if (session?.user?.email) {
-        // Verify cached profile belongs to current user
-        if (typeof window !== 'undefined') {
-          const cached = sessionStorage.getItem(PROFILE_STORAGE_KEY)
-          if (cached) {
-            try {
-              const cachedProfile = JSON.parse(cached)
-              if (cachedProfile.email !== session.user.email) {
-                // Different user, clear cache and fetch
-                sessionStorage.removeItem(PROFILE_STORAGE_KEY)
-                setProfile(null)
-                fetchProfile()
-              }
-              // If same user, we already loaded from cache in the mount effect
-            } catch (err) {
-              sessionStorage.removeItem(PROFILE_STORAGE_KEY)
-              setProfile(null)
-              fetchProfile()
-            }
-          } else {
-            // No cache, need to fetch
-            fetchProfile()
-          }
+        const cachedProfile = ProfileCache.get(session.user.email)
+        if (cachedProfile) {
+          setProfile(cachedProfile)
+          setLoading(false)
+          hasFetched.current = true
+        } else {
+          fetchProfile()
         }
       }
     } else if (status === 'unauthenticated') {
@@ -139,17 +104,13 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       setLoading(false)
       setProfile(null)
       hasFetched.current = false
-      if (typeof window !== 'undefined') {
-        sessionStorage.removeItem(PROFILE_STORAGE_KEY)
-      }
+      ProfileCache.clear()
     }
   }, [status, session?.user?.email])
 
   const refetch = async () => {
     // Clear cache before refetching
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem(PROFILE_STORAGE_KEY)
-    }
+    ProfileCache.clear()
     hasFetched.current = false
     await fetchProfile(true)
   }
