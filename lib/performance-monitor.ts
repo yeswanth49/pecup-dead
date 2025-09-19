@@ -38,12 +38,14 @@ class PerformanceMonitor {
   private cacheHits = 0
 
   startOperation(name: string, extra?: Record<string, unknown>) {
-    const start = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()
-    const at = Date.now()
+    const hasPerf = typeof performance !== 'undefined' && typeof performance.now === 'function' && typeof performance.timeOrigin === 'number'
+    const now = hasPerf ? () => performance.now() : () => Date.now()
+    const start = now()
+    const at = hasPerf ? performance.timeOrigin + start : start
     return () => {
-      const end = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()
+      const end = now()
       const durationMs = end - start
-      this.record(name, durationMs, extra, at)
+      this.record(name, durationMs, extra, hasPerf ? performance.timeOrigin + start : at)
       return durationMs
     }
   }

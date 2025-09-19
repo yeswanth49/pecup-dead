@@ -10,8 +10,34 @@ import Link from 'next/link'
 import { BookOpen, Bell, Archive, Phone, AlertCircle, Loader2, Settings, Users, CalendarDays, Clock } from 'lucide-react'
 import { useProfile } from '@/lib/enhanced-profile-context'
 
+interface Exam {
+  subject: string
+  exam_date: string
+  branch: string
+  year: string
+}
+
+interface Reminder {
+  id: string
+  title: string
+  due_date: string
+}
+
+interface Update {
+  id: string
+  title?: string
+  created_at?: string
+  description?: string
+}
+
+interface DynamicData {
+  upcomingExams?: Exam[]
+  upcomingReminders?: Reminder[]
+  recentUpdates?: Update[]
+}
+
 export default function HomePage() {
-  const { profile, dynamicData, loading, error } = useProfile()
+  const { profile, dynamicData, loading, error } = useProfile() as { profile: any, dynamicData: DynamicData | undefined, loading: boolean, error?: string }
 
   const [usersCount, setUsersCount] = useState<number>(0)
   const [isLoadingUsersCount, setIsLoadingUsersCount] = useState(true)
@@ -211,7 +237,7 @@ export default function HomePage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {dynamicData.upcomingExams.map((exam: any, idx: number) => (
+                {dynamicData.upcomingExams.map((exam: Exam, idx: number) => (
                   <div key={`${exam.subject}-${exam.exam_date}-${idx}`} className="flex items-center justify-between border-l-4 border-primary pl-4">
                     <div>
                       <h3 className="font-medium">{exam.subject}</h3>
@@ -240,7 +266,7 @@ export default function HomePage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {dynamicData.upcomingReminders.map((r: any) => (
+                {dynamicData.upcomingReminders.map((r: Reminder) => (
                   <div key={r.id} className="border-l-4 border-primary pl-4">
                     <h3 className="font-medium">{r.title}</h3>
                     <p className="text-sm text-muted-foreground">Due {new Date(r.due_date).toDateString()}</p>
@@ -261,7 +287,7 @@ export default function HomePage() {
           <CardContent>
             {dynamicData?.recentUpdates && dynamicData.recentUpdates.length > 0 && (
               <div className="space-y-4">
-                {dynamicData.recentUpdates.map((u: any) => (
+                {dynamicData.recentUpdates.map((u: Update) => (
                   <div key={u.id} className="border-l-4 border-primary pl-4 transition-colors hover:bg-muted/50 py-1">
                     <h3 className="font-medium">{u.title || 'Update'}</h3>
                     <p className="text-sm text-muted-foreground">{u.created_at ? new Date(u.created_at).toDateString() : ''}</p>

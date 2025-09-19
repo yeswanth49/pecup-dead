@@ -26,6 +26,17 @@ const STORAGE_FALLBACK_KEY = 'broadcast:pecup_bulk_cache_sync'
 
 let channel: BroadcastChannel | null = null
 
+function isValidBulkCacheMessage(obj: unknown): obj is BulkCacheMessage {
+	if (!obj || typeof obj !== 'object') return false
+	const anyObj = obj as Record<string, unknown>
+	if (anyObj.type !== 'bulk-cache-update') return false
+	if (typeof anyObj.senderId !== 'string') return false
+	if (typeof anyObj.timestamp !== 'number') return false
+	if ('email' in anyObj && anyObj.email != null && typeof anyObj.email !== 'string') return false
+	if ('payload' in anyObj && anyObj.payload != null && typeof anyObj.payload !== 'object') return false
+	return true
+}
+
 function getTabId(): string {
 	if (typeof window === 'undefined') return 'server'
 	try {
@@ -82,10 +93,11 @@ export function subscribeToBulkCacheUpdates(onMessage: (msg: BulkCacheMessage) =
 
 	if (ch) {
 		const handler = (msg: MessageEvent) => {
-			const data = msg?.data as BulkCacheMessage | undefined
-			if (!data || typeof data !== 'object') return
-			if (data.senderId === selfId) return
-			onMessage(data)
+			const raw = msg?.data
+			if (!raw || typeof raw !== 'object') return
+			if (!isValidBulkCacheMessage(raw)) return
+			if (raw.senderId === selfId) return
+			onMessage(raw)
 		}
 		ch.addEventListener('message', handler as EventListener)
 		return () => {
@@ -98,9 +110,10 @@ export function subscribeToBulkCacheUpdates(onMessage: (msg: BulkCacheMessage) =
 		if (ev.key !== STORAGE_FALLBACK_KEY) return
 		if (!ev.newValue) return
 		try {
-			const data = JSON.parse(ev.newValue) as BulkCacheMessage
-			if (!data || data.senderId === selfId) return
-			onMessage(data)
+			const parsed = JSON.parse(ev.newValue) as unknown
+			if (!isValidBulkCacheMessage(parsed)) return
+			if (parsed.senderId === selfId) return
+			onMessage(parsed)
 		} catch (_) {}
 	}
 	window.addEventListener('storage', storageHandler)
