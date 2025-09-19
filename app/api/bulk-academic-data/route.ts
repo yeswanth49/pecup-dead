@@ -1,0 +1,256 @@
+import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { createSupabaseAdmin } from '@/lib/supabase'
+import { AcademicConfigManager } from '@/lib/academic-config'
+
+export const runtime = 'nodejs'
+
+function errorResponse(code: string, message: string, status: number) {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: { code, message },
+      meta: { timestamp: Date.now(), path: '/api/bulk-academic-data' }
+    },
+    { status }
+  )
+}
+
+export async function GET() {
+  const session = await getServerSession(authOptions)
+  const email = session?.user?.email?.toLowerCase()
+  if (!email) {
+    return errorResponse('UNAUTHORIZED', 'Unauthorized', 401)
+  }
+
+  const startTime = Date.now()
+  const t = {
+    profileStart: Date.now(),
+    profileMs: 0,
+    subjectsMs: 0,
+    staticMs: 0,
+    dynamicMs: 0,
+  }
+  try {
+    const supabase = createSupabaseAdmin()
+    const academicConfig = AcademicConfigManager.getInstance()
+
+    // Fetch profile with relations
+    const { data: profileRow, error: profileErr } = await supabase
+      .from('profiles')
+      .select(`
+        id, roll_number, name, email, branch_id, year_id, semester_id, section, role,
+        branch:branches(id, name, code),
+        year:years(id, batch_year, display_name),
+        semester:semesters(id, semester_number)
+      `)
+      .eq('email', email)
+      .maybeSingle()
+    t.profileMs = Date.now() - t.profileStart
+
+    if (profileErr) {
+      console.error('[bulk] profile query error:', profileErr)
+      return errorResponse('DB_ERROR', 'Database error loading profile', 500)
+    }
+    if (!profileRow) {
+      return errorResponse('PROFILE_NOT_FOUND', 'Profile not found', 404)
+    }
+
+    // Handle Supabase relation shapes that may come as arrays or objects
+    const yearRel: any = Array.isArray((profileRow as any).year)
+      ? (profileRow as any).year?.[0]
+      : (profileRow as any).year
+    const branchRel: any = Array.isArray((profileRow as any).branch)
+      ? (profileRow as any).branch?.[0]
+      : (profileRow as any).branch
+    const semesterRel: any = Array.isArray((profileRow as any).semester)
+      ? (profileRow as any).semester?.[0]
+      : (profileRow as any).semester
+
+    const currentYear = yearRel?.batch_year
+      ? await academicConfig.calculateAcademicYear(yearRel.batch_year)
+      : null
+    const branchCode = branchRel?.code || null
+    const semesterNumber = semesterRel?.semester_number || null
+
+    // Defensive: If missing critical context, advise re-auth workflow in message
+    const contextWarnings: string[] = []
+    if (!branchCode || !currentYear || !semesterNumber) {
+      contextWarnings.push('Missing branch/year/semester context. If this persists, please log out and log in again to refresh your profile data.')
+    }
+
+    // Fetch subjects using subject_offerings with dynamic regulation (do not hardcode)
+    const subjectsPromise = (async () => {
+      const secStart = Date.now()
+      if (!branchCode || !currentYear || !semesterNumber) return { data: [] as any[] }
+
+      // Try to detect latest regulation from offerings for this context, fall back to most recent by created_at
+      const { data: regs } = await supabase
+        .from('subject_offerings')
+        .select('regulation')
+        .eq('branch', branchCode)
+        .eq('year', currentYear)
+        .eq('semester', semesterNumber)
+        .eq('active', true)
+        .order('regulation', { ascending: false })
+        .limit(1)
+
+      const regulation = regs && regs.length > 0 ? regs[0].regulation : null
+
+      let offeringsQuery = supabase
+        .from('subject_offerings')
+        .select('subject_id, display_order')
+        .eq('branch', branchCode)
+        .eq('year', currentYear)
+        .eq('semester', semesterNumber)
+        .eq('active', true)
+        .order('display_order', { ascending: true })
+
+      if (regulation) {
+        offeringsQuery = offeringsQuery.eq('regulation', regulation)
+      }
+
+      const { data: offerings, error: offeringsErr } = await offeringsQuery
+      if (offeringsErr) {
+        console.error('[bulk] offerings query error:', offeringsErr)
+        return { data: [] as any[] }
+      }
+      if (!offerings || offerings.length === 0) return { data: [] as any[] }
+
+      const subjectIds = offerings.map(o => o.subject_id)
+      const { data: subjects, error: subjectsErr } = await supabase
+        .from('subjects')
+        .select('id, code, name, resource_type')
+        .in('id', subjectIds)
+      if (subjectsErr) {
+        console.error('[bulk] subjects query error:', subjectsErr)
+        return { data: [] as any[] }
+      }
+      // Sort by display_order using offerings order mapping
+      const orderMap = new Map<string, number>(offerings.map(o => [o.subject_id, o.display_order ?? 0]))
+      const sorted = (subjects || []).slice().sort((a: any, b: any) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0))
+      const duration = Date.now() - secStart
+      return { data: sorted, _meta: { durationMs: duration } }
+    })()
+
+    // Static data
+    const staticPromise = (async () => {
+      const secStart = Date.now()
+      const res = await Promise.all([
+        supabase.from('branches').select('*'),
+        supabase.from('years').select('*'),
+        supabase.from('semesters').select('*')
+      ])
+      t.staticMs = Date.now() - secStart
+      return res
+    })()
+
+    // Dynamic data
+    const dynamicPromise = (async () => {
+      const secStart = Date.now()
+      // Dates for exams window
+      const start = new Date()
+      start.setUTCHours(0, 0, 0, 0)
+      const end = new Date(start)
+      end.setUTCDate(end.getUTCDate() + 5)
+      const startDateStr = start.toISOString().slice(0, 10)
+      const endDateStr = end.toISOString().slice(0, 10)
+
+      // recent_updates: filter by context when available; else return latest
+      let recentUpdatesQuery = supabase
+        .from('recent_updates')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(10)
+      if (branchCode && currentYear) {
+        recentUpdatesQuery = recentUpdatesQuery.eq('branch', branchCode).eq('year', currentYear)
+      }
+
+      // exams: filter by branch/year when available, then by date window
+      let examsQuery = supabase
+        .from('exams')
+        .select('subject, exam_date, year, branch')
+        .gte('exam_date', startDateStr)
+        .lte('exam_date', endDateStr)
+        .order('exam_date', { ascending: true })
+      if (branchCode) examsQuery = examsQuery.eq('branch', branchCode)
+      if (currentYear) examsQuery = examsQuery.eq('year', currentYear)
+
+      // reminders: filter by context when available; else return latest upcoming by due_date
+      let remindersQuery = supabase
+        .from('reminders')
+        .select('*')
+        .is('deleted_at', null)
+        .gte('due_date', startDateStr)
+        .order('due_date', { ascending: true })
+        .limit(5)
+      if (branchCode && currentYear) {
+        remindersQuery = remindersQuery.eq('branch', branchCode).eq('year', currentYear)
+      }
+
+      const [recentUpdates, upcomingExams, upcomingReminders] = await Promise.all([
+        recentUpdatesQuery,
+        examsQuery,
+        remindersQuery
+      ])
+
+      t.dynamicMs = Date.now() - secStart
+      return { recentUpdates, upcomingExams, upcomingReminders }
+    })()
+
+    const [subjectsResult, staticResults, dynamicResults] = await Promise.all([
+      subjectsPromise,
+      staticPromise,
+      dynamicPromise
+    ])
+    t.subjectsMs = (subjectsResult as any)?._meta?.durationMs ?? t.subjectsMs
+
+    const [branches, years, semesters] = staticResults
+    const { recentUpdates, upcomingExams, upcomingReminders } = dynamicResults
+
+    const responseBody = {
+      profile: {
+        id: profileRow.id,
+        roll_number: profileRow.roll_number,
+        name: profileRow.name,
+        email: profileRow.email,
+        section: profileRow.section,
+        role: profileRow.role,
+        year: currentYear ?? null,
+        branch: branchCode ?? null,
+        semester: semesterNumber ?? null
+      },
+      subjects: subjectsResult.data || [],
+      static: {
+        branches: branches?.data || [],
+        years: years?.data || [],
+        semesters: semesters?.data || []
+      },
+      dynamic: {
+        recentUpdates: recentUpdates?.data || [],
+        upcomingExams: upcomingExams?.data || [],
+        upcomingReminders: upcomingReminders?.data || []
+      },
+      contextWarnings,
+      timestamp: Date.now(),
+      meta: {
+        loadedInMs: Date.now() - startTime,
+        timings: {
+          profileMs: t.profileMs,
+          subjectsMs: t.subjectsMs,
+          staticMs: t.staticMs,
+          dynamicMs: t.dynamicMs,
+        }
+      }
+    }
+
+    return NextResponse.json(responseBody)
+  } catch (error: any) {
+    console.error('Bulk fetch error:', error)
+    const message = typeof error?.message === 'string' ? error.message : 'Failed to fetch data'
+    return errorResponse('INTERNAL_ERROR', message, 500)
+  }
+}
+
+

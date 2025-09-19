@@ -7,7 +7,7 @@ import ChatBubble from '@/components/ChatBubble'
 import { FileText, BookOpen, FileCheck, Database, Users, Loader2 } from "lucide-react"
 
 import { useEffect, useMemo, useState, useState as useStateClient } from 'react'
-import { useProfile } from '@/lib/profile-context'
+import { useProfile } from '@/lib/enhanced-profile-context'
 import { useEffect as useEffectClient } from 'react'
 
 function LiveUsersCount() {
@@ -55,9 +55,9 @@ export default function ResourcesPage() {
   useEffect(() => {
     // Use cached profile data instead of fetching
     if (profile) {
-      if (year === 'all') setYear(profile.year)
+      if (year === 'all') setYear(profile.year ?? ('all' as any))
       if (semester === 'all') setSemester(1)
-      if (!branch) setBranch(profile.branch)
+      if (!branch && profile.branch) setBranch(profile.branch)
     }
   }, [profile, year, semester, branch])
 
