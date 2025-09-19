@@ -5,6 +5,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { createSupabaseAdmin } from '@/lib/supabase'
 import { ProfileProvider } from '@/lib/enhanced-profile-context'
 import { RefreshButton } from '@/components/RefreshButton'
+import ClientStatus from './status-client'
 
 export default async function ProtectedLayout({ children }: { children: ReactNode }) {
   const session = await getServerSession(authOptions)
@@ -34,6 +35,7 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
         <div className="flex w-full items-center justify-end px-4 py-2">
           <RefreshButton />
         </div>
+        <ClientStatus />
         {children}
       </div>
     </ProfileProvider>

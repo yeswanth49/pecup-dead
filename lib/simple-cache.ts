@@ -148,10 +148,29 @@ export class SubjectsCache {
     if (typeof window === 'undefined') return
     try {
       const key = this.getKey(branch, year, semester)
-      localStorage.setItem(
-        key,
-        JSON.stringify({ subjects, timestamp: Date.now(), context: { branch, year, semester } })
-      )
+      try {
+        localStorage.setItem(
+          key,
+          JSON.stringify({ subjects, timestamp: Date.now(), context: { branch, year, semester } })
+        )
+      } catch (e) {
+        if (e instanceof DOMException && (e.name === 'QuotaExceededError' || (e as any).code === 22 || e.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+          try {
+            const keys = Object.keys(localStorage).filter(k => k.startsWith('subjects_'))
+            for (let i = 0; i < Math.ceil(keys.length / 2); i++) {
+              try { localStorage.removeItem(keys[i]) } catch (_) {}
+            }
+            localStorage.setItem(
+              key,
+              JSON.stringify({ subjects, timestamp: Date.now(), context: { branch, year, semester } })
+            )
+          } catch (retryErr) {
+            console.warn('SubjectsCache: quota exceeded; skipping cache write after cleanup:', retryErr)
+          }
+        } else {
+          console.warn('Failed to cache subjects:', e)
+        }
+      }
     } catch (e) {
       console.warn('Failed to cache subjects:', e)
     }
@@ -164,15 +183,18 @@ export class SubjectsCache {
       const cached = localStorage.getItem(key)
       if (!cached) return null
 
-      const { subjects, context } = JSON.parse(cached) as { subjects: Array<{ id: string; code: string; name: string; resource_type?: string }>; context?: { branch: string; year: number; semester: number } }
+      const parsed = JSON.parse(cached) as { subjects?: Array<{ id: string; code: string; name: string; resource_type?: string }>; context?: { branch: string; year: number; semester: number } }
+      const subjects = Array.isArray(parsed?.subjects) ? parsed.subjects : null
+      const context = parsed?.context
       if (!context || context.branch !== branch || context.year !== year || context.semester !== semester) {
         localStorage.removeItem(key)
         return null
       }
 
-      return (subjects as Array<{ id: string; code: string; name: string; resource_type?: string }>) ?? null
+      return subjects ?? null
     } catch (e) {
       console.warn('Failed to read subjects cache:', e)
+      try { localStorage.removeItem(this.getKey(branch, year, semester)) } catch (_) {}
       return null
     }
   }

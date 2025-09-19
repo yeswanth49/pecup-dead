@@ -15,5 +15,5 @@
   - Clear All removes entries from storage.
 
 - **Completion checklist**:
-  - [ ] Component renders in dev
-  - [ ] Clear All works
+  - [x] Component renders in dev
+  - [x] Clear All works

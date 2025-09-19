@@ -1,4 +1,4 @@
-In docs/fetch-fast/19_load_testing.md around lines 14 to 15, the Validation criteria entry is vague because it references "targets" without specifying them; update this section to list concrete, measurable performance targets (e.g., P50/P95/P99 latency thresholds in ms, acceptable error rate as a percentage, throughput in requests/sec, and any SLA for percent of successful requests) and include the test conditions (payload sizes, concurrency levels, test duration) so the validation can be reproduced and measured against these exact numbers.### Task 19: Load testing with realistic user scenarios
+### Task 19: Load testing with realistic user scenarios
 
 - **Objective**: Validate performance under concurrent usage and varied user contexts.
 

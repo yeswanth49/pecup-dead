@@ -8,7 +8,8 @@ import { notFound } from "next/navigation"
 import { Header } from '@/components/Header'
 import ChatBubble from '@/components/ChatBubble'
 import { ChevronRight, FileText } from "lucide-react"
-import { buildSubjectsQuery } from '@/lib/resource-utils'
+import { getResourceTypeForCategory } from '@/lib/resource-utils'
+import { useProfile } from '@/lib/enhanced-profile-context'
 
 const CATEGORY_TITLES: Record<string, string> = {
   notes: 'Notes',
@@ -46,27 +47,24 @@ export default function SubjectPage({
     return notFound()
   }
 
-  const [subjectName, setSubjectName] = useState<string>(decodedSubject.toUpperCase())
+  const { subjects } = useProfile()
+
+  // Compute subject display name using context subjects and category filter
+  const subjectNameFromContext = useMemo(() => {
+    const resourceType = getResourceTypeForCategory(category)
+    const list = Array.isArray(subjects) ? subjects : []
+    const filtered = resourceType ? list.filter((s: any) => (s?.resource_type || 'resources') === resourceType) : list
+    const found = filtered.find((s: any) => s.code?.toLowerCase() === decodedSubject.toLowerCase())
+    return found?.name || decodedSubject.toUpperCase()
+  }, [subjects, category, decodedSubject])
+
+  const [subjectName, setSubjectName] = useState<string>(subjectNameFromContext)
   const units = useMemo(() => defaultUnitsForCategory(category), [category])
 
+  // Keep subjectName in sync with context updates
   useEffect(() => {
-    async function load() {
-      try {
-        const searchParamsObj = new URLSearchParams()
-        if (typeof searchParams.year === 'string') searchParamsObj.set('year', searchParams.year)
-        if (typeof searchParams.semester === 'string') searchParamsObj.set('semester', searchParams.semester)
-        if (typeof searchParams.branch === 'string') searchParamsObj.set('branch', searchParams.branch)
-        
-        const qp = buildSubjectsQuery(searchParamsObj, category)
-        const res = await fetch(`/api/subjects?${qp.toString()}`, { cache: 'no-store' })
-        const json = await res.json().catch(() => ({}))
-        const subjects = Array.isArray(json?.subjects) ? json.subjects : []
-        const found = subjects.find((s: any) => s.code?.toLowerCase() === decodedSubject.toLowerCase())
-        if (found?.name) setSubjectName(found.name)
-      } catch {}
-    }
-    load()
-  }, [decodedSubject, searchParams.year, searchParams.semester, searchParams.branch, category])
+    setSubjectName(subjectNameFromContext)
+  }, [subjectNameFromContext])
 
   return (
     <div className="space-y-6">

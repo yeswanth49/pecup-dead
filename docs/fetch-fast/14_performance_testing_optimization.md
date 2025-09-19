@@ -13,5 +13,15 @@
   - Measurable load-time reduction per plan goals.
 
 - **Completion checklist**:
-  - [ ] Metrics collected
-  - [ ] Optimizations applied and verified
+  - [x] Metrics collected
+  - [x] Optimizations applied and verified
+
+---
+
+Notes:
+- A lightweight client metrics module is available at `lib/performance-monitor.ts`.
+- The dev cache panel `components/CacheDebugger.tsx` now shows:
+  - API calls, bulk calls, last/avg bulk fetch time
+  - Cache checks, hits, and hit-rate
+- The bulk endpoint `app/api/bulk-academic-data/route.ts` returns `meta.timings` with per-section durations: `profileMs`, `subjectsMs`, `staticMs`, `dynamicMs`.
+- Background refresh is skipped when caches are present except when dynamic cache is missing/expired.

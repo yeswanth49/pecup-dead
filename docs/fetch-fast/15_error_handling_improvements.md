@@ -17,5 +17,5 @@
   - Console logs contain actionable context.
 
 - **Completion checklist**:
-  - [ ] API returns consistent error shape
-  - [ ] UI displays errors unobtrusively
+  - [x] API returns consistent error shape
+  - [x] UI displays errors unobtrusively

@@ -1,6 +1,6 @@
 'use client'
 import { useSession } from 'next-auth/react'
-import { useProfile } from '@/lib/profile-context'
+import { useProfile } from '@/lib/enhanced-profile-context'
 import { Skeleton } from '@/components/ui/skeleton'
 
 export function Header() {
@@ -36,8 +36,8 @@ export function Header() {
       </h1>
       {profile?.year && profile?.branch && (
         <div className="text-sm text-muted-foreground">
-          {profile?.semester?.semester_number 
-            ? `Year ${profile.year} • Sem ${profile.semester.semester_number} • ${profile.branch}`
+          {profile?.semester 
+            ? `Year ${profile.year} • Sem ${profile.semester} • ${profile.branch}`
             : `Year ${profile.year} • ${profile.branch}`
           }
         </div>

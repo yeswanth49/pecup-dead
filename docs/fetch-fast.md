@@ -20,6 +20,59 @@ This document outlines a simplified, practical implementation plan to optimize d
 
 ## Implementation Plan
 
+### API Reference (Implemented)
+
+**Endpoint**: `GET /api/bulk-academic-data`
+
+**Success response (shape):**
+```json
+{
+  "profile": {
+    "id": "uuid",
+    "roll_number": "",
+    "name": "",
+    "email": "",
+    "section": "",
+    "role": "student",
+    "year": 1,
+    "branch": "CSE",
+    "semester": 1
+  },
+  "subjects": [
+    { "id": "uuid", "code": "CS101", "name": "Programming", "resource_type": "theory" }
+  ],
+  "static": {
+    "branches": [ { "id": "uuid", "name": "Computer Science", "code": "CSE" } ],
+    "years": [ { "id": "uuid", "batch_year": 2023, "display_name": "2nd Year" } ],
+    "semesters": [ { "id": "uuid", "semester_number": 1 } ]
+  },
+  "dynamic": {
+    "recentUpdates": [ { "id": "uuid", "title": "...", "created_at": "..." } ],
+    "upcomingExams": [ { "subject": "CS101", "exam_date": "YYYY-MM-DD", "year": 1, "branch": "CSE" } ],
+    "upcomingReminders": [ { "id": "uuid", "title": "...", "due_date": "YYYY-MM-DD" } ]
+  },
+  "contextWarnings": [],
+  "timestamp": 1720000000000,
+  "meta": {
+    "loadedInMs": 123,
+    "timings": { "profileMs": 10, "subjectsMs": 20, "staticMs": 30, "dynamicMs": 40 }
+  }
+}
+```
+
+**Error response (shape):**
+```json
+{
+  "ok": false,
+  "error": { "code": "UNAUTHORIZED", "message": "Unauthorized" },
+  "meta": { "timestamp": 1720000000000, "path": "/api/bulk-academic-data" }
+}
+```
+
+Notes:
+- The backend auto-detects regulation from `subject_offerings` when possible, and sorts `subjects` by `display_order`.
+- When profile context is incomplete, a `contextWarnings` array is included.
+
 ### Phase 1: Simple Bulk API + Naive Caching (Week 1-2)
 
 #### Step 1: Create Bulk Academic Data API
@@ -147,205 +200,14 @@ export async function GET(request: Request) {
 }
 ```
 
-#### Step 2: Create Simple Cache Utilities
+#### Step 2: Cache Utilities (Implemented)
 
 **File**: `lib/simple-cache.ts`
 
-```typescript
-'use client'
-
-// Separate cache utilities for different data types
-export class ProfileCache {
-  private static KEY = 'profile_cache'
-  
-  static set(email: string, profile: any) {
-    if (typeof window === 'undefined') return
-    try {
-      sessionStorage.setItem(this.KEY, JSON.stringify({ 
-        email, 
-        profile, 
-        timestamp: Date.now() 
-      }))
-    } catch (e) {
-      console.warn('Failed to cache profile:', e)
-    }
-  }
-  
-  static get(email: string): any | null {
-    if (typeof window === 'undefined') return null
-    try {
-      const cached = sessionStorage.getItem(this.KEY)
-      if (!cached) return null
-      
-      const { email: cachedEmail, profile, timestamp } = JSON.parse(cached)
-      
-      // Check if it's for the same user
-      if (cachedEmail !== email) {
-        this.clear()
-        return null
-      }
-      
-      return profile
-    } catch (e) {
-      console.warn('Failed to read profile cache:', e)
-      this.clear()
-      return null
-    }
-  }
-  
-  static clear() {
-    if (typeof window === 'undefined') return
-    sessionStorage.removeItem(this.KEY)
-  }
-}
-
-export class StaticCache {
-  private static KEY = 'static_data_cache'
-  private static TTL = 30 * 24 * 60 * 60 * 1000 // 30 days
-  
-  static set(data: any) {
-    if (typeof window === 'undefined') return
-    try {
-      localStorage.setItem(this.KEY, JSON.stringify({
-        data,
-        timestamp: Date.now(),
-        expiresAt: Date.now() + this.TTL
-      }))
-    } catch (e) {
-      console.warn('Failed to cache static data:', e)
-    }
-  }
-  
-  static get(): any | null {
-    if (typeof window === 'undefined') return null
-    try {
-      const cached = localStorage.getItem(this.KEY)
-      if (!cached) return null
-      
-      const { data, expiresAt } = JSON.parse(cached)
-      
-      if (Date.now() > expiresAt) {
-        this.clear()
-        return null
-      }
-      
-      return data
-    } catch (e) {
-      console.warn('Failed to read static cache:', e)
-      this.clear()
-      return null
-    }
-  }
-  
-  static clear() {
-    if (typeof window === 'undefined') return
-    localStorage.removeItem(this.KEY)
-  }
-}
-
-export class SubjectsCache {
-  private static getKey(branch: string, year: number, semester: number) {
-    return `subjects_${branch}_${year}_${semester}`
-  }
-  
-  static set(branch: string, year: number, semester: number, subjects: any[]) {
-    if (typeof window === 'undefined') return
-    try {
-      const key = this.getKey(branch, year, semester)
-      // Cache for entire semester - no expiry, manual invalidation only
-      localStorage.setItem(key, JSON.stringify({
-        subjects,
-        timestamp: Date.now(),
-        context: { branch, year, semester }
-      }))
-    } catch (e) {
-      console.warn('Failed to cache subjects:', e)
-    }
-  }
-  
-  static get(branch: string, year: number, semester: number): any[] | null {
-    if (typeof window === 'undefined') return null
-    try {
-      const key = this.getKey(branch, year, semester)
-      const cached = localStorage.getItem(key)
-      if (!cached) return null
-      
-      const { subjects, context } = JSON.parse(cached)
-      
-      // Verify context matches
-      if (context.branch !== branch || context.year !== year || context.semester !== semester) {
-        localStorage.removeItem(key)
-        return null
-      }
-      
-      return subjects
-    } catch (e) {
-      console.warn('Failed to read subjects cache:', e)
-      return null
-    }
-  }
-  
-  static clearForContext(branch: string, year: number, semester: number) {
-    if (typeof window === 'undefined') return
-    const key = this.getKey(branch, year, semester)
-    localStorage.removeItem(key)
-  }
-  
-  static clearAll() {
-    if (typeof window === 'undefined') return
-    // Clear all subjects cache entries
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('subjects_')) {
-        localStorage.removeItem(key)
-      }
-    })
-  }
-}
-
-export class DynamicCache {
-  private static KEY = 'dynamic_data_cache'
-  private static TTL = 10 * 60 * 1000 // 10 minutes
-  
-  static set(data: any) {
-    if (typeof window === 'undefined') return
-    try {
-      sessionStorage.setItem(this.KEY, JSON.stringify({
-        data,
-        timestamp: Date.now(),
-        expiresAt: Date.now() + this.TTL
-      }))
-    } catch (e) {
-      console.warn('Failed to cache dynamic data:', e)
-    }
-  }
-  
-  static get(): any | null {
-    if (typeof window === 'undefined') return null
-    try {
-      const cached = sessionStorage.getItem(this.KEY)
-      if (!cached) return null
-      
-      const { data, expiresAt } = JSON.parse(cached)
-      
-      if (Date.now() > expiresAt) {
-        this.clear()
-        return null
-      }
-      
-      return data
-    } catch (e) {
-      console.warn('Failed to read dynamic cache:', e)
-      this.clear()
-      return null
-    }
-  }
-  
-  static clear() {
-    if (typeof window === 'undefined') return
-    sessionStorage.removeItem(this.KEY)
-  }
-}
-```
+- **ProfileCache**: sessionStorage, whitelists safe fields; clears on user mismatch
+- **StaticCache**: localStorage with 30-day TTL; handles quota exceeded with retry
+- **SubjectsCache**: localStorage per-context key `subjects_{branch}_{year}_{semester}`; cleans up on quota
+- **DynamicCache**: sessionStorage with 10-minute TTL; safe clear on parse errors
 
 #### Step 3: Update Profile Context
 
@@ -540,6 +402,28 @@ export function useProfile() {
     throw new Error('useProfile must be used within a ProfileProvider')
   }
   return context
+}
+```
+
+Client usage example:
+```tsx
+import { useProfile } from '@/lib/enhanced-profile-context'
+
+export function DashboardHeader() {
+  const { profile, dynamicData, loading, error, warnings, forceRefresh } = useProfile()
+  if (loading) return <div>Loading…</div>
+  if (error) return <div className="text-red-600">{error}</div>
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <div className="font-semibold">Hi, {profile?.name ?? profile?.email}</div>
+        {Array.isArray(warnings) && warnings.length > 0 && (
+          <div className="text-amber-600 text-sm">{warnings[0]}</div>
+        )}
+      </div>
+      <button onClick={forceRefresh}>Refresh</button>
+    </div>
+  )
 }
 ```
 

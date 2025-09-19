@@ -13,6 +13,6 @@
   - No regression in error rates or user-facing performance.
 
 - **Completion checklist**:
-  - [ ] Staging validated
-  - [ ] Production deployed
-  - [ ] Monitoring dashboards updated
+  - [x] Staging validated
+  - [x] Production deployed
+  - [x] Monitoring dashboards updated

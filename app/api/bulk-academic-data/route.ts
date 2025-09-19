@@ -6,14 +6,32 @@ import { AcademicConfigManager } from '@/lib/academic-config'
 
 export const runtime = 'nodejs'
 
+function errorResponse(code: string, message: string, status: number) {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: { code, message },
+      meta: { timestamp: Date.now(), path: '/api/bulk-academic-data' }
+    },
+    { status }
+  )
+}
+
 export async function GET() {
   const session = await getServerSession(authOptions)
   const email = session?.user?.email?.toLowerCase()
   if (!email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return errorResponse('UNAUTHORIZED', 'Unauthorized', 401)
   }
 
   const startTime = Date.now()
+  const t = {
+    profileStart: Date.now(),
+    profileMs: 0,
+    subjectsMs: 0,
+    staticMs: 0,
+    dynamicMs: 0,
+  }
   try {
     const supabase = createSupabaseAdmin()
     const academicConfig = AcademicConfigManager.getInstance()
@@ -29,20 +47,32 @@ export async function GET() {
       `)
       .eq('email', email)
       .maybeSingle()
+    t.profileMs = Date.now() - t.profileStart
 
     if (profileErr) {
       console.error('[bulk] profile query error:', profileErr)
-      return NextResponse.json({ error: 'Database error loading profile' }, { status: 500 })
+      return errorResponse('DB_ERROR', 'Database error loading profile', 500)
     }
     if (!profileRow) {
-      return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+      return errorResponse('PROFILE_NOT_FOUND', 'Profile not found', 404)
     }
 
-    const currentYear = profileRow.year?.batch_year
-      ? await academicConfig.calculateAcademicYear(profileRow.year.batch_year)
+    // Handle Supabase relation shapes that may come as arrays or objects
+    const yearRel: any = Array.isArray((profileRow as any).year)
+      ? (profileRow as any).year?.[0]
+      : (profileRow as any).year
+    const branchRel: any = Array.isArray((profileRow as any).branch)
+      ? (profileRow as any).branch?.[0]
+      : (profileRow as any).branch
+    const semesterRel: any = Array.isArray((profileRow as any).semester)
+      ? (profileRow as any).semester?.[0]
+      : (profileRow as any).semester
+
+    const currentYear = yearRel?.batch_year
+      ? await academicConfig.calculateAcademicYear(yearRel.batch_year)
       : null
-    const branchCode = profileRow.branch?.code || null
-    const semesterNumber = profileRow.semester?.semester_number || null
+    const branchCode = branchRel?.code || null
+    const semesterNumber = semesterRel?.semester_number || null
 
     // Defensive: If missing critical context, advise re-auth workflow in message
     const contextWarnings: string[] = []
@@ -52,6 +82,7 @@ export async function GET() {
 
     // Fetch subjects using subject_offerings with dynamic regulation (do not hardcode)
     const subjectsPromise = (async () => {
+      const secStart = Date.now()
       if (!branchCode || !currentYear || !semesterNumber) return { data: [] as any[] }
 
       // Try to detect latest regulation from offerings for this context, fall back to most recent by created_at
@@ -99,18 +130,25 @@ export async function GET() {
       // Sort by display_order using offerings order mapping
       const orderMap = new Map<string, number>(offerings.map(o => [o.subject_id, o.display_order ?? 0]))
       const sorted = (subjects || []).slice().sort((a: any, b: any) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0))
-      return { data: sorted }
+      const duration = Date.now() - secStart
+      return { data: sorted, _meta: { durationMs: duration } }
     })()
 
     // Static data
-    const staticPromise = Promise.all([
-      supabase.from('branches').select('*'),
-      supabase.from('years').select('*'),
-      supabase.from('semesters').select('*')
-    ])
+    const staticPromise = (async () => {
+      const secStart = Date.now()
+      const res = await Promise.all([
+        supabase.from('branches').select('*'),
+        supabase.from('years').select('*'),
+        supabase.from('semesters').select('*')
+      ])
+      t.staticMs = Date.now() - secStart
+      return res
+    })()
 
     // Dynamic data
     const dynamicPromise = (async () => {
+      const secStart = Date.now()
       // Dates for exams window
       const start = new Date()
       start.setUTCHours(0, 0, 0, 0)
@@ -157,6 +195,7 @@ export async function GET() {
         remindersQuery
       ])
 
+      t.dynamicMs = Date.now() - secStart
       return { recentUpdates, upcomingExams, upcomingReminders }
     })()
 
@@ -165,6 +204,7 @@ export async function GET() {
       staticPromise,
       dynamicPromise
     ])
+    t.subjectsMs = (subjectsResult as any)?._meta?.durationMs ?? t.subjectsMs
 
     const [branches, years, semesters] = staticResults
     const { recentUpdates, upcomingExams, upcomingReminders } = dynamicResults
@@ -195,14 +235,21 @@ export async function GET() {
       contextWarnings,
       timestamp: Date.now(),
       meta: {
-        loadedInMs: Date.now() - startTime
+        loadedInMs: Date.now() - startTime,
+        timings: {
+          profileMs: t.profileMs,
+          subjectsMs: t.subjectsMs,
+          staticMs: t.staticMs,
+          dynamicMs: t.dynamicMs,
+        }
       }
     }
 
     return NextResponse.json(responseBody)
   } catch (error: any) {
     console.error('Bulk fetch error:', error)
-    return NextResponse.json({ error: 'Failed to fetch data', message: error?.message }, { status: 500 })
+    const message = typeof error?.message === 'string' ? error.message : 'Failed to fetch data'
+    return errorResponse('INTERNAL_ERROR', message, 500)
   }
 }
 
