@@ -181,9 +181,6 @@ export default function UnitPage() {
           throw new Error(`Status ${res.status}: ${text}`)
         }
         const body = await res.json()
-        // Debug: log API response to help troubleshoot missing resources in UI
-        // (Remove this log after debugging)
-        console.debug('DEBUG: /api/resources response', body)
         // normalize two possible shapes
         if (Array.isArray(body)) {
           setResources(body)
@@ -204,7 +201,9 @@ export default function UnitPage() {
   }, [params])
 
   const { subjects } = useProfile()
-  const subjectDisplay = getSubjectDisplayByCode(subjects as any, subjectName || '', true)
+  type Subject = { code?: string; name?: string; resource_type?: string }
+  const typedSubjects: Subject[] | undefined = Array.isArray(subjects) ? subjects : undefined
+  const subjectDisplay = getSubjectDisplayByCode(typedSubjects, subjectName || '', true)
 
   // render
   return (

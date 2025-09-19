@@ -201,7 +201,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
 			// Update caches
 			ProfileCache.set(email, data.profile)
-			ProfileDisplayCache.set(email, data.profile)
+			try {
+				ProfileDisplayCache.set(email, data.profile)
+			} catch (err) {
+				if (process.env.NODE_ENV !== 'production') {
+					// eslint-disable-next-line no-console
+					console.warn('ProfileDisplayCache.set failed', { email }, err)
+				}
+			}
 			StaticCache.set(data.static)
 			DynamicCache.set(data.dynamic)
 

@@ -19,10 +19,10 @@ export function getSubjectDisplayByCode(
 ): string {
   if (!codeOrSlug) return ''
   const normalized = codeOrSlug.trim().toLowerCase()
+  if (normalized === '') return ''
   const list = Array.isArray(subjects) ? subjects : []
   const found = list.find(s => (s.code || '').toLowerCase() === normalized)
   if (found) return getSubjectDisplay(found, preferAbbreviation)
   return preferAbbreviation ? normalized.toUpperCase() : normalized
 }
-
 

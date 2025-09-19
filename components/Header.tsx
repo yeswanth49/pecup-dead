@@ -12,7 +12,7 @@ export function Header() {
   const [cachedProfile, setCachedProfile] = useState<ReturnType<typeof ProfileCache.get> | null>(null)
   const [displayCache, setDisplayCache] = useState<ReturnType<typeof ProfileDisplayCache.peek> | null>(() => {
     if (typeof window === 'undefined') return null
-    return ProfileDisplayCache.peek() as any
+    return ProfileDisplayCache.peek()
   })
 
   useEffect(() => {
@@ -22,7 +22,7 @@ export function Header() {
     const cached = ProfileCache.get(email)
     if (cached) setCachedProfile(cached)
     const display = ProfileDisplayCache.get(email)
-    if (display) setDisplayCache(display as any)
+    if (display) setDisplayCache(display)
   }, [session?.user?.email])
 
   const displayName = useMemo(() => {
@@ -32,13 +32,13 @@ export function Header() {
   const showNameSkeleton = !displayName && (status === 'loading' || profileLoading)
 
   const metaLine = useMemo(() => {
-    const source = profile ?? (cachedProfile as any) ?? (displayCache as any) ?? null
+    const source = (profile ?? cachedProfile ?? displayCache) as (typeof profile) | null
     if (!source?.year || !source?.branch) return null
     const parts: string[] = [`Year ${source.year}`]
     if (source.semester) parts.push(`Sem ${source.semester}`)
     parts.push(source.branch)
     return parts.join(' • ')
-  }, [profile?.year, profile?.semester, profile?.branch, cachedProfile?.year, cachedProfile?.semester, cachedProfile?.branch, displayCache?.year, displayCache?.semester, displayCache?.branch])
+  }, [profile, cachedProfile, displayCache])
 
   return (
     <div className="flex flex-col gap-1">
