@@ -14,5 +14,5 @@
   - Cache entries updated after network response.
 
 - **Completion checklist**:
-  - [ ] Behavior observed and consistent
-  - [ ] No console errors
+  - [x] Behavior observed and consistent
+  - [x] No console errors
