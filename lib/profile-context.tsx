@@ -42,9 +42,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   // Immediately try to clean up any legacy cache on mount and avoid SSR issues
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      try { sessionStorage.removeItem(PROFILE_STORAGE_KEY) } catch (_) {}
+      try { sessionStorage.removeItem(PROFILE_STORAGE_KEY) } catch (e) { console.error('Failed legacy profile cleanup', e) }
     }
-    setLoading(false)
   }, [])
 
   const fetchProfile = async (force = false) => {
@@ -91,11 +90,15 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     if (status === 'authenticated' && !hasFetched.current && !profile) {
       if (session?.user?.email) {
         const cachedProfile = ProfileCache.get(session.user.email)
-        if (cachedProfile) {
+        const isValidProfile = (p: any): p is Profile => {
+          return !!p && typeof p === 'object' && typeof p.id === 'string' && typeof p.email === 'string' && typeof p.name === 'string'
+        }
+        if (isValidProfile(cachedProfile)) {
           setProfile(cachedProfile)
           setLoading(false)
           hasFetched.current = true
         } else {
+          if (cachedProfile) { ProfileCache.clear() }
           fetchProfile()
         }
       }

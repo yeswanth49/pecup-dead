@@ -4,30 +4,47 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { useSession } from 'next-auth/react'
 import { ProfileCache, StaticCache, SubjectsCache, DynamicCache } from './simple-cache'
 
+// Narrow shapes for bulk static and dynamic data with safe extensibility
+export interface EnhancedProfileStaticData {
+	branches?: Array<{ id: string; name?: string; code?: string }>
+	years?: Array<{ id: string; batch_year?: number; display_name?: string }>
+	semesters?: Array<{ id: string; semester_number?: number; year_id?: string }>
+	subjects?: Array<{ id: string; code: string; name: string; resource_type?: string }>
+	[key: string]: unknown
+}
+
+export interface EnhancedProfileDynamicData {
+	recentUpdates?: Array<{ id: string; title?: string; created_at?: string }>
+	reminders?: Array<{ id: string; title?: string; due_date?: string; completed?: boolean }>
+	resourcesCount?: number
+	lastSyncedAt?: string
+	[key: string]: unknown
+}
+
 interface Profile {
 	id: string
-	name: string
+	name?: string
 	email: string
-	roll_number: string
-	branch: string | null
-	year: number | null
-	semester: number | null
-	section: string
-	role: string
+	roll_number?: string
+	branch?: string | null
+	year?: number | null
+	semester?: number | null
+	section?: string
+	role?: string
 }
 
 interface Subject {
 	id: string
 	code: string
 	name: string
-	resource_type: string
+	resource_type?: string
 }
 
 interface ProfileContextType {
 	profile: Profile | null
 	subjects: Subject[]
-	staticData: any // TODO: Narrow types once API contract is finalized
-	dynamicData: any // TODO: Narrow types once API contract is finalized
+	staticData: EnhancedProfileStaticData | null
+	dynamicData: EnhancedProfileDynamicData | null
 	loading: boolean
 	error: string | null
 	refreshProfile: () => Promise<void>
@@ -41,8 +58,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 	const { data: session, status } = useSession()
 	const [profile, setProfile] = useState<Profile | null>(null)
 	const [subjects, setSubjects] = useState<Subject[]>([])
-	const [staticData, setStaticData] = useState<any>(null)
-	const [dynamicData, setDynamicData] = useState<any>(null)
+	const [staticData, setStaticData] = useState<EnhancedProfileStaticData | null>(null)
+	const [dynamicData, setDynamicData] = useState<EnhancedProfileDynamicData | null>(null)
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
 
@@ -57,8 +74,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
 		// Try to load cached data
 		const cachedProfile = ProfileCache.get(email)
-		const cachedStatic = StaticCache.get()
-		const cachedDynamic = DynamicCache.get()
+		const cachedStatic = StaticCache.get<EnhancedProfileStaticData>()
+		const cachedDynamic = DynamicCache.get<EnhancedProfileDynamicData>()
 
 		let foundCache = false
 
@@ -92,13 +109,40 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 		if (foundCache) {
 			setLoading(false)
 			// Background refresh without spinner
-			fetchBulkData(false).catch(() => {})
+			fetchBulkData(false).catch((err) => {
+				if (process.env.NODE_ENV !== 'production') {
+					// eslint-disable-next-line no-console
+					console.error('Background refresh failed (cached present):', err)
+				}
+			})
 		} else {
 			// No cache, fetch with spinner
-			fetchBulkData(true).catch(() => {})
+			fetchBulkData(true).catch((err) => {
+				if (process.env.NODE_ENV !== 'production') {
+					// eslint-disable-next-line no-console
+					console.error('Initial fetch failed (no cache):', err)
+				}
+			})
 		}
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [session?.user?.email, status])
+
+	// Simple fetch with optional retry/backoff for transient failures
+	const fetchWithRetry = async (url: string, init: RequestInit, retries: number, backoffMs: number) => {
+		try {
+			const res = await fetch(url, init)
+			if (!res.ok) {
+				throw new Error(`Request failed with status ${res.status}`)
+			}
+			return res
+		} catch (err) {
+			if (retries > 0) {
+				await new Promise(resolve => setTimeout(resolve, backoffMs))
+				return fetchWithRetry(url, init, retries - 1, backoffMs * 2)
+			}
+			throw err
+		}
+	}
 
 	const fetchBulkData = async (showLoading = true) => {
 		if (status !== 'authenticated' || !session?.user?.email) return
@@ -107,7 +151,13 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 		setError(null)
 
 		try {
-			const response = await fetch('/api/bulk-academic-data', { cache: 'no-store' })
+			const response = await fetchWithRetry(
+				'/api/bulk-academic-data',
+				{ cache: 'no-store' },
+				// Retry only when user is waiting (showLoading)
+				showLoading ? 2 : 0,
+				500
+			)
 			if (!response.ok) throw new Error('Failed to fetch data')
 
 			const data = await response.json()
@@ -115,8 +165,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 			// Update state
 			setProfile(data.profile)
 			setSubjects(Array.isArray(data.subjects) ? data.subjects : [])
-			setStaticData(data.static ?? null)
-			setDynamicData(data.dynamic ?? null)
+			setStaticData((data.static as EnhancedProfileStaticData) ?? null)
+			setDynamicData((data.dynamic as EnhancedProfileDynamicData) ?? null)
 
 			// Update caches
 			ProfileCache.set(session.user.email, data.profile)
@@ -135,8 +185,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 					Array.isArray(data.subjects) ? data.subjects : []
 				)
 			}
-		} catch (err: any) {
-			setError(err?.message || 'Failed to load data')
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : String(err)
+			setError(message || 'Failed to load data')
 			// eslint-disable-next-line no-console
 			console.error('Bulk fetch error:', err)
 		} finally {
@@ -171,9 +222,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 	useEffect(() => {
 		const onVisibilityChange = () => {
 			if (document.visibilityState === 'visible' && profile) {
-				const cachedDynamic = DynamicCache.get()
+				const cachedDynamic = DynamicCache.get<EnhancedProfileDynamicData>()
 				if (!cachedDynamic) {
-					fetchBulkData(false).catch(() => {})
+					fetchBulkData(false).catch((err) => {
+						if (process.env.NODE_ENV !== 'production') {
+							// eslint-disable-next-line no-console
+							console.error('visibilitychange refresh failed:', err)
+						}
+					})
 				}
 			}
 		}

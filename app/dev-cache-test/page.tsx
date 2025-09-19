@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { ProfileCache, StaticCache, SubjectsCache, DynamicCache } from '@/lib/simple-cache'
 
-type BulkResponse = {
+type BulkResponse<TStatic = unknown, TDynamic = unknown> = {
   profile?: {
     id: string
     roll_number?: string
@@ -17,8 +17,8 @@ type BulkResponse = {
     semester: number | null
   }
   subjects?: Array<{ id: string; code: string; name: string; resource_type?: string }>
-  static?: any
-  dynamic?: any
+  static?: TStatic
+  dynamic?: TDynamic
   error?: string
 }
 
