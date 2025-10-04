@@ -1,5 +1,3 @@
-'use client'
-
 // Security-minded caches with SSR guards and safe fallbacks
 
 // Type-guard function to validate CachedProfile shape and types
@@ -34,6 +32,15 @@ export interface CachedProfile {
   semester?: number | null
   section?: string
   role?: string
+}
+
+// Helper function for quota detection
+function isQuotaExceeded(e: unknown): boolean {
+  return e instanceof DOMException && (
+    e.name === 'QuotaExceededError' ||
+    (e as any).code === 22 ||
+    e.name === 'NS_ERROR_DOM_QUOTA_REACHED'
+  )
 }
 
 export class ProfileCache {
@@ -123,7 +130,7 @@ export class StaticCache {
       )
     } catch (e) {
       // Handle quota exceeded: try remove existing entry and retry once
-      if (e instanceof DOMException && (e.name === 'QuotaExceededError' || (e as any).code === 22 || e.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+      if (isQuotaExceeded(e)) {
         try {
           localStorage.removeItem(this.KEY)
           localStorage.setItem(
@@ -139,7 +146,7 @@ export class StaticCache {
     }
   }
 
-  static get<T = unknown>(): T | null {
+  static get<T = unknown>(validator?: (data: unknown) => data is T): T | null {
     if (typeof window === 'undefined') return null
     try {
       const cached = localStorage.getItem(this.KEY)
@@ -151,6 +158,11 @@ export class StaticCache {
         return null
       }
 
+      if (validator && !validator(data)) {
+        console.warn('StaticCache: cached data failed validation')
+        this.clear()
+        return null
+      }
       return (data as T) ?? null
     } catch (e) {
       console.warn('Failed to read static cache:', e)
@@ -182,11 +194,19 @@ export class SubjectsCache {
           JSON.stringify({ subjects, timestamp: Date.now(), context: { branch, year, semester } })
         )
       } catch (e) {
-        if (e instanceof DOMException && (e.name === 'QuotaExceededError' || (e as any).code === 22 || e.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+        if (isQuotaExceeded(e)) {
           try {
             const keys = Object.keys(localStorage).filter(k => k.startsWith('subjects_'))
-            for (let i = 0; i < Math.ceil(keys.length / 2); i++) {
-              try { localStorage.removeItem(keys[i]) } catch (_) {}
+            // Sort by timestamp, remove oldest first
+            const entries = keys.map(k => {
+              try {
+                const item = JSON.parse(localStorage.getItem(k) || '{}')
+                return { key: k, timestamp: item.timestamp || 0 }
+              } catch { return { key: k, timestamp: 0 } }
+            }).sort((a, b) => a.timestamp - b.timestamp)
+
+            for (let i = 0; i < Math.ceil(entries.length / 2); i++) {
+              try { localStorage.removeItem(entries[i].key) } catch (_) {}
             }
             localStorage.setItem(
               key,
@@ -275,7 +295,7 @@ export class DynamicCache {
     }
   }
 
-  static get<T = unknown>(): T | null {
+  static get<T = unknown>(validator?: (data: unknown) => data is T): T | null {
     if (typeof window === 'undefined') return null
     try {
       const cached = sessionStorage.getItem(this.KEY)
@@ -287,6 +307,11 @@ export class DynamicCache {
         return null
       }
 
+      if (validator && !validator(data)) {
+        console.warn('DynamicCache: cached data failed validation')
+        this.clear()
+        return null
+      }
       return (data as T) ?? null
     } catch (e) {
       console.warn('Failed to read dynamic cache:', e)
@@ -350,7 +375,7 @@ export class ProfileDisplayCache {
         this.clear()
         return null
       }
-      return (profile as CachedProfileDisplay) || null
+      return profile || null
     } catch {
       this.clear()
       return null
@@ -368,7 +393,7 @@ export class ProfileDisplayCache {
         this.clear()
         return null
       }
-      return (profile as CachedProfileDisplay) || null
+      return profile || null
     } catch {
       this.clear()
       return null
