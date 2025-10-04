@@ -22,12 +22,8 @@ type BulkResponse<TStatic = unknown, TDynamic = unknown> = {
   error?: string
 }
 
-export default function DevCacheTestPage() {
-  // Environment guard: only allow in development
-  if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'development') {
-    return null
-  }
-
+// Internal component that contains hooks - only rendered in development
+function DevCacheTestPageContent() {
   const { status } = useSession()
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<string>('')
@@ -187,5 +183,18 @@ export default function DevCacheTestPage() {
     </div>
   )
 }
+
+// Environment guard wrapper - returns null when not in development
+function DevCacheTestPageWrapper() {
+  // Environment guard: only allow in development
+  if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'development') {
+    return null
+  }
+
+  return <DevCacheTestPageContent />
+}
+
+// Export the wrapper as the default export
+export default DevCacheTestPageWrapper
 
 

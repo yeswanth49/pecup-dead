@@ -10,6 +10,13 @@ import { getResourceTypeForCategory } from '@/lib/resource-utils'
 import { useProfile } from '@/lib/enhanced-profile-context'
 import { getSubjectDisplay } from '@/lib/subject-display'
 
+type Subject = {
+  id?: string
+  code: string
+  name?: string
+  resource_type?: string
+}
+
 interface ResourcesFiltersClientProps {
   category: string
   categoryData: {
@@ -26,13 +33,13 @@ export default function ResourcesFiltersClient({ category, categoryData }: Resou
     const resourceType = getResourceTypeForCategory(category)
     if (!Array.isArray(subjects) || subjects.length === 0) return []
     if (!resourceType) return subjects
-    return subjects.filter((s: any) => (s?.resource_type || 'resources') === resourceType)
+    return subjects.filter((s: Subject) => (s?.resource_type || 'resources') === resourceType)
   }, [subjects, category])
 
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {!loading && filteredSubjects.map((s: any) => {
+      {!loading && filteredSubjects.map((s: Subject) => {
         const qp = new URLSearchParams()
         const year = searchParams.get('year')
         const semester = searchParams.get('semester')

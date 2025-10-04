@@ -65,7 +65,10 @@ export default function SubjectPage({
   }, [subjectNameFromContext])
 
   const categoryTitle = CATEGORY_TITLES[category]
-  if (!categoryTitle || !decodedSubject) return notFound()
+  if (!categoryTitle || !decodedSubject) {
+    notFound()
+  }
+  // moved above to satisfy hooks-at-top rule
 
   return (
     <div className="space-y-6">
