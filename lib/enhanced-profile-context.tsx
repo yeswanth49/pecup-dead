@@ -18,6 +18,8 @@ export interface EnhancedProfileStaticData {
 export interface EnhancedProfileDynamicData {
 	recentUpdates?: Array<{ id: string; title?: string; created_at?: string }>
 	reminders?: Array<{ id: string; title?: string; due_date?: string; completed?: boolean }>
+	upcomingExams?: Array<{ subject: string; exam_date: string; branch: string; year: string }>
+	upcomingReminders?: Array<{ id: string; title?: string; due_date?: string; completed?: boolean }>
 	resourcesCount?: number
 	lastSyncedAt?: string
 	[key: string]: unknown
@@ -42,7 +44,7 @@ interface Subject {
 	resource_type?: string
 }
 
-interface ProfileContextType {
+export interface ProfileContextType {
 	profile: Profile | null
 	subjects: Subject[]
 	staticData: EnhancedProfileStaticData | null
@@ -94,7 +96,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 			foundCache = true
 
 			// Try to load subjects for this profile
-			if (cachedProfile.branch && cachedProfile.year && cachedProfile.semester) {
+			if (cachedProfile && typeof cachedProfile.year === 'number' && cachedProfile.year > 0 && cachedProfile.branch && cachedProfile.semester) {
 				const cachedSubjects = SubjectsCache.get(
 					cachedProfile.branch,
 					cachedProfile.year,
@@ -300,30 +302,45 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 		if (status !== 'authenticated' || !session?.user?.email) return
 		const email = session.user?.email
 		if (!email) return
+
+		let mounted = true
 		const unsubscribe = subscribeToBulkCacheUpdates((msg) => {
+			if (!mounted) return
 			if (msg.email !== email) return
 			const p = msg.payload
 			if (!p) return
 			try {
 				if (p.profile) {
 					ProfileCache.set(email, p.profile)
-					setProfile((prev) => p.profile ?? prev)
+					if (mounted) {
+						setProfile((prev) => p.profile ?? prev)
+					}
 				}
 				if (p.static) {
 					StaticCache.set(p.static)
-					setStaticData((prev) => p.static ?? prev)
+					if (mounted) {
+						setStaticData((prev) => p.static ?? prev)
+					}
 				}
 				if (p.dynamic) {
 					DynamicCache.set(p.dynamic)
-					setDynamicData((prev) => p.dynamic ?? prev)
+					if (mounted) {
+						setDynamicData((prev) => p.dynamic ?? prev)
+					}
 				}
 				if (p.subjects && p.subjectsContext) {
 					SubjectsCache.set(p.subjectsContext.branch, p.subjectsContext.year, p.subjectsContext.semester, p.subjects)
-					setSubjects((prev) => Array.isArray(p.subjects) ? p.subjects : prev)
+					if (mounted) {
+						setSubjects((prev) => Array.isArray(p.subjects) ? p.subjects : prev)
+					}
 				}
 			} catch (_) {}
 		})
-		return unsubscribe
+
+		return () => {
+			mounted = false
+			unsubscribe()
+		}
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [status, session?.user?.email])
 

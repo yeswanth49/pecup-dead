@@ -8,36 +8,10 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
 import { BookOpen, Bell, Archive, Phone, AlertCircle, Loader2, Settings, Users, CalendarDays, Clock } from 'lucide-react'
-import { useProfile } from '@/lib/enhanced-profile-context'
-
-interface Exam {
-  subject: string
-  exam_date: string
-  branch: string
-  year: string
-}
-
-interface Reminder {
-  id: string
-  title: string
-  due_date: string
-}
-
-interface Update {
-  id: string
-  title?: string
-  created_at?: string
-  description?: string
-}
-
-interface DynamicData {
-  upcomingExams?: Exam[]
-  upcomingReminders?: Reminder[]
-  recentUpdates?: Update[]
-}
+import { useProfile, ProfileContextType, EnhancedProfileDynamicData } from '@/lib/enhanced-profile-context'
 
 export default function HomePage() {
-  const { profile, dynamicData, loading, error } = useProfile() as { profile: any, dynamicData: DynamicData | undefined, loading: boolean, error?: string }
+  const { profile, dynamicData, loading, error } = useProfile()
 
   const [usersCount, setUsersCount] = useState<number>(0)
   const [isLoadingUsersCount, setIsLoadingUsersCount] = useState(true)

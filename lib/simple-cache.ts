@@ -2,6 +2,28 @@
 
 // Security-minded caches with SSR guards and safe fallbacks
 
+// Type-guard function to validate CachedProfile shape and types
+function isCachedProfile(obj: unknown): obj is CachedProfile {
+  if (!obj || typeof obj !== 'object') return false
+
+  const o = obj as Record<string, unknown>
+
+  // Required fields
+  if (typeof o.id !== 'string') return false
+  if (typeof o.email !== 'string') return false
+
+  // Optional fields type validation
+  if (o.name != null && typeof o.name !== 'string') return false
+  if (o.roll_number != null && typeof o.roll_number !== 'string') return false
+  if (o.branch != null && typeof o.branch !== 'string') return false
+  if (o.year != null && typeof o.year !== 'number') return false
+  if (o.semester != null && typeof o.semester !== 'number') return false
+  if (o.section != null && typeof o.section !== 'string') return false
+  if (o.role != null && typeof o.role !== 'string') return false
+
+  return true
+}
+
 export interface CachedProfile {
   id: string
   name?: string
@@ -58,7 +80,7 @@ export class ProfileCache {
       const cached = sessionStorage.getItem(this.KEY)
       if (!cached) return null
 
-      const { email: cachedEmail, profile } = JSON.parse(cached) as { email?: string; profile?: CachedProfile }
+      const { email: cachedEmail, profile } = JSON.parse(cached) as { email?: string; profile?: unknown }
 
       if (!cachedEmail || cachedEmail !== email) {
         // Different user or invalid structure -> clear
@@ -66,7 +88,13 @@ export class ProfileCache {
         return null
       }
 
-      return (profile as CachedProfile) || null
+      if (!isCachedProfile(profile)) {
+        console.warn('Invalid profile structure in cache')
+        this.clear()
+        return null
+      }
+
+      return profile
     } catch (e) {
       console.warn('Failed to read profile cache:', e)
       this.clear()

@@ -50,6 +50,8 @@ export function useProfileInvalidation() {
     setError(null)
     try {
       if (profile && profile.branch && profile.year && profile.semester != null) {
+        SubjectsCache.clearForContext(profile.branch, profile.year, profile.semester)
+      } else {
         SubjectsCache.clearAll()
       }
       ProfileCache.clear()

@@ -23,6 +23,11 @@ type BulkResponse<TStatic = unknown, TDynamic = unknown> = {
 }
 
 export default function DevCacheTestPage() {
+  // Environment guard: only allow in development
+  if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'development') {
+    return null
+  }
+
   const { status } = useSession()
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<string>('')
@@ -76,7 +81,7 @@ export default function DevCacheTestPage() {
       ProfileCache.set(data.profile.email, data.profile)
       if (data.static) StaticCache.set(data.static)
       if (data.dynamic) DynamicCache.set(data.dynamic)
-      if (data.profile.branch && data.profile.year && data.profile.semester && data.subjects) {
+      if (data.profile && typeof data.profile.year === 'number' && data.profile.year > 0 && data.profile.branch && data.profile.semester && data.subjects) {
         SubjectsCache.set(data.profile.branch, data.profile.year, data.profile.semester, data.subjects)
       }
 

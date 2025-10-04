@@ -551,13 +551,15 @@ export function useProfileInvalidation() {
 'use client'
 
 import { useState } from 'react'
+import { useSession } from 'next-auth/react'
 import { ProfileCache, StaticCache, SubjectsCache, DynamicCache } from '@/lib/simple-cache'
 
 export function CacheDebugger() {
   const [showDebug, setShowDebug] = useState(false)
-  
+  const { data: session } = useSession()
+
   if (process.env.NODE_ENV !== 'development') return null
-  
+
   const clearAllCaches = () => {
     ProfileCache.clear()
     StaticCache.clear()
@@ -565,7 +567,25 @@ export function CacheDebugger() {
     SubjectsCache.clearAll()
     alert('All caches cleared!')
   }
-  
+
+  // Safe existence check using actual session email or direct sessionStorage peek
+  const checkProfileCache = () => {
+    if (typeof window === 'undefined') return false
+
+    try {
+      // First try with actual session email if available
+      if (session?.user?.email) {
+        return ProfileCache.get(session.user.email) !== null
+      }
+
+      // Fallback: check if there's any profile cache data without triggering clear
+      const cached = sessionStorage.getItem('profile_cache')
+      return cached !== null && cached.length > 0
+    } catch {
+      return false
+    }
+  }
+
   return (
     <div className="fixed bottom-4 right-4 z-50">
       <button
@@ -574,12 +594,12 @@ export function CacheDebugger() {
       >
         Debug Cache
       </button>
-      
+
       {showDebug && (
         <div className="absolute bottom-8 right-0 bg-white border shadow-lg p-4 rounded w-64">
           <h3 className="font-bold mb-2">Cache Status</h3>
           <div className="space-y-2 text-xs">
-            <div>Profile: {ProfileCache.get('dummy') ? '✅' : '❌'}</div>
+            <div>Profile: {checkProfileCache() ? '✅' : '❌'}</div>
             <div>Static: {StaticCache.get() ? '✅' : '❌'}</div>
             <div>Dynamic: {DynamicCache.get() ? '✅' : '❌'}</div>
           </div>
@@ -616,23 +636,24 @@ class PerformanceMonitor {
   private metrics: PerformanceMetric[] = []
   
   startOperation(operation: string) {
+    const startTime = performance.now()
     return {
       operation,
-      startTime: performance.now(),
+      startTime,
       end: (cacheHit = false) => {
-        const duration = performance.now() - this.startTime
+        const duration = performance.now() - startTime
         this.metrics.push({
           operation,
           duration,
           cacheHit,
           timestamp: Date.now()
         })
-        
+
         // Keep only last 100 metrics
         if (this.metrics.length > 100) {
           this.metrics = this.metrics.slice(-100)
         }
-        
+
         console.log(`[PERF] ${operation}: ${duration.toFixed(2)}ms ${cacheHit ? '(cache hit)' : '(network)'}`)
       }
     }

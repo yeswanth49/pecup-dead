@@ -117,7 +117,12 @@ export function subscribeToBulkCacheUpdates(onMessage: (msg: BulkCacheMessage) =
 		} catch (_) {}
 	}
 	window.addEventListener('storage', storageHandler)
-	return () => { try { window.removeEventListener('storage', storageHandler!) } catch (_) {} }
+	const h = storageHandler
+	return () => {
+		if (h && typeof h === 'function') {
+			window.removeEventListener('storage', h)
+		}
+	}
 }
 
 export function getCurrentTabId(): string { return getTabId() }

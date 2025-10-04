@@ -15,8 +15,6 @@ type CacheStatus = {
 
 export function CacheDebugger() {
   const isDev = process.env.NODE_ENV === 'development'
-  if (!isDev) return null
-
   const { data: session } = useSession()
   const { profile } = useProfile()
   const [open, setOpen] = useState(false)
@@ -25,7 +23,7 @@ export function CacheDebugger() {
   const email = session?.user?.email ?? null
 
   const subjectsContext = useMemo(() => {
-    if (profile && profile.branch && profile.year && profile.semester) {
+    if (profile && typeof profile.year === 'number' && profile.year > 0 && profile.branch && profile.semester) {
       return { branch: profile.branch, year: profile.year, semester: profile.semester }
     }
     return null
@@ -81,7 +79,7 @@ export function CacheDebugger() {
     setMetrics(PerfMon.getSnapshot())
   }
 
-  return (
+  return isDev ? (
     <div style={{ position: 'fixed', right: 12, bottom: 12, zIndex: 50 }}>
       {!open && (
         <button
@@ -187,7 +185,7 @@ export function CacheDebugger() {
         </div>
       )}
     </div>
-  )
+  ) : null
 }
 
 export default CacheDebugger

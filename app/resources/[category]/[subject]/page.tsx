@@ -38,20 +38,18 @@ export default function SubjectPage({
   searchParams: { [key: string]: string | string[] | undefined }
 }) {
   const { category } = params
-  const categoryTitle = CATEGORY_TITLES[category]
-  if (!categoryTitle) return notFound()
+  const { subjects } = useProfile()
 
   let decodedSubject = ''
   try {
     decodedSubject = decodeURIComponent(params.subject)
   } catch {
-    return notFound()
+    decodedSubject = '' // Set to empty string instead of returning
   }
-
-  const { subjects } = useProfile()
 
   // Compute subject display name using context subjects and category filter
   const subjectNameFromContext = useMemo(() => {
+    if (!decodedSubject) return ''
     const resourceType = getResourceTypeForCategory(category)
     const list = Array.isArray(subjects) ? subjects : []
     const filtered = resourceType ? list.filter((s: any) => (s?.resource_type || 'resources') === resourceType) : list
@@ -65,6 +63,9 @@ export default function SubjectPage({
   useEffect(() => {
     setSubjectName(subjectNameFromContext)
   }, [subjectNameFromContext])
+
+  const categoryTitle = CATEGORY_TITLES[category]
+  if (!categoryTitle || !decodedSubject) return notFound()
 
   return (
     <div className="space-y-6">

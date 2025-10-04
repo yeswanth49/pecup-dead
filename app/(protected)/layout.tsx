@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { createSupabaseAdmin } from '@/lib/supabase'
-import { ProfileProvider } from '@/lib/enhanced-profile-context'
 import { RefreshButton } from '@/components/RefreshButton'
 import ClientStatus from './status-client'
 
@@ -30,15 +29,13 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
   }
 
   return (
-    <ProfileProvider>
-      <div className="w-full">
-        <div className="flex w-full items-center justify-end px-4 py-2">
-          <RefreshButton />
-        </div>
-        <ClientStatus />
-        {children}
+    <div className="w-full">
+      <div className="flex w-full items-center justify-end px-4 py-2">
+        <RefreshButton />
       </div>
-    </ProfileProvider>
+      <ClientStatus />
+      {children}
+    </div>
   )
 }
 
