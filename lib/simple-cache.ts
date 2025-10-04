@@ -279,7 +279,7 @@ export class DynamicCache {
       )
     } catch (e) {
       // Handle quota exceeded for sessionStorage
-      if (e instanceof DOMException && (e.name === 'QuotaExceededError' || (e as any).code === 22 || e.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+      if (isQuotaExceeded(e)) {
         try {
           sessionStorage.removeItem(this.KEY)
           sessionStorage.setItem(
