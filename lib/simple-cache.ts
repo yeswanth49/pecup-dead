@@ -44,7 +44,7 @@ function isQuotaExceeded(e: unknown): boolean {
 }
 
 export class ProfileCache {
-  private static KEY = 'profile_cache'
+  public static readonly KEY = 'profile_cache'
 
   // Only store a safe subset of profile fields to avoid accidental PII bloat
   private static whitelistProfile(profile: any) {
@@ -118,7 +118,7 @@ export class ProfileCache {
 }
 
 export class StaticCache {
-  private static KEY = 'static_data_cache'
+  public static readonly KEY = 'static_data_cache'
   private static TTL = 30 * 24 * 60 * 60 * 1000 // 30 days
 
   static set(data: unknown) {
@@ -146,7 +146,10 @@ export class StaticCache {
     }
   }
 
-  static get<T = unknown>(validator?: (data: unknown) => data is T): T | null {
+  // Overload signatures for type-safe cache access
+  static get(): unknown | null
+  static get<T>(validator: (d: unknown) => d is T): T | null
+  static get<T>(validator?: (d: unknown) => d is T): unknown | T | null {
     if (typeof window === 'undefined') return null
     try {
       const cached = localStorage.getItem(this.KEY)
@@ -158,12 +161,20 @@ export class StaticCache {
         return null
       }
 
-      if (validator && !validator(data)) {
-        console.warn('StaticCache: cached data failed validation')
-        this.clear()
-        return null
+      if (validator) {
+        if (!validator(data)) {
+          console.warn('StaticCache: cached data failed validation')
+          this.clear()
+          return null
+        }
+        return data as T
+      } else {
+        // No validator provided - return as unknown and warn in development
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('StaticCache.get() called without validator - data returned as unknown. Consider providing a validator for type safety.')
+        }
+        return data ?? null
       }
-      return (data as T) ?? null
     } catch (e) {
       console.warn('Failed to read static cache:', e)
       this.clear()
@@ -205,13 +216,29 @@ export class SubjectsCache {
               } catch { return { key: k, timestamp: 0 } }
             }).sort((a, b) => a.timestamp - b.timestamp)
 
-            for (let i = 0; i < Math.ceil(entries.length / 2); i++) {
+            // Remove oldest entries one at a time until we have space or run out of old entries
+            const toRemove = Math.min(3, Math.ceil(entries.length / 4))
+            for (let i = 0; i < toRemove; i++) {
               try { localStorage.removeItem(entries[i].key) } catch (_) {}
             }
-            localStorage.setItem(
-              key,
-              JSON.stringify({ subjects, timestamp: Date.now(), context: { branch, year, semester } })
-            )
+
+            try {
+              localStorage.setItem(
+                key,
+                JSON.stringify({ subjects, timestamp: Date.now(), context: { branch, year, semester } })
+              )
+            } catch (retryErr) {
+              if (!isQuotaExceeded(retryErr)) throw retryErr
+              // If still quota exceeded, try more aggressive cleanup
+              const additionalToRemove = Math.min(5, Math.ceil(entries.length / 3))
+              for (let i = toRemove; i < toRemove + additionalToRemove && i < entries.length; i++) {
+                try { localStorage.removeItem(entries[i].key) } catch (_) {}
+              }
+              localStorage.setItem(
+                key,
+                JSON.stringify({ subjects, timestamp: Date.now(), context: { branch, year, semester } })
+              )
+            }
           } catch (retryErr) {
             console.warn('SubjectsCache: quota exceeded; skipping cache write after cleanup:', retryErr)
           }
@@ -267,7 +294,7 @@ export class SubjectsCache {
 }
 
 export class DynamicCache {
-  private static KEY = 'dynamic_data_cache'
+  public static readonly KEY = 'dynamic_data_cache'
   private static TTL = 10 * 60 * 1000 // 10 minutes
 
   static set(data: unknown) {
@@ -295,7 +322,10 @@ export class DynamicCache {
     }
   }
 
-  static get<T = unknown>(validator?: (data: unknown) => data is T): T | null {
+  // Overload signatures for type-safe cache access
+  static get(): unknown | null
+  static get<T>(validator: (d: unknown) => d is T): T | null
+  static get<T>(validator?: (d: unknown) => d is T): unknown | T | null {
     if (typeof window === 'undefined') return null
     try {
       const cached = sessionStorage.getItem(this.KEY)
@@ -307,12 +337,20 @@ export class DynamicCache {
         return null
       }
 
-      if (validator && !validator(data)) {
-        console.warn('DynamicCache: cached data failed validation')
-        this.clear()
-        return null
+      if (validator) {
+        if (!validator(data)) {
+          console.warn('DynamicCache: cached data failed validation')
+          this.clear()
+          return null
+        }
+        return data as T
+      } else {
+        // No validator provided - return as unknown and warn in development
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('DynamicCache.get() called without validator - data returned as unknown. Consider providing a validator for type safety.')
+        }
+        return data ?? null
       }
-      return (data as T) ?? null
     } catch (e) {
       console.warn('Failed to read dynamic cache:', e)
       this.clear()

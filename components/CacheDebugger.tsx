@@ -32,8 +32,8 @@ export function CacheDebugger() {
   const computeStatus = () => {
     try {
       const prof = email ? ProfileCache.get(email) : null
-      const stat = StaticCache.get<any>()
-      const dyn = DynamicCache.get<any>()
+      const stat = StaticCache.get() as any
+      const dyn = DynamicCache.get() as any
       const subs = subjectsContext
         ? SubjectsCache.get(subjectsContext.branch, subjectsContext.year, subjectsContext.semester)
         : null

@@ -25,6 +25,16 @@ export interface EnhancedProfileDynamicData {
 	[key: string]: unknown
 }
 
+// Type guard for EnhancedProfileStaticData
+function isEnhancedProfileStaticData(obj: unknown): obj is EnhancedProfileStaticData {
+	return obj !== null && typeof obj === 'object'
+}
+
+// Type guard for EnhancedProfileDynamicData
+function isEnhancedProfileDynamicData(obj: unknown): obj is EnhancedProfileDynamicData {
+	return obj !== null && typeof obj === 'object'
+}
+
 interface Profile {
 	id: string
 	name?: string
@@ -82,9 +92,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 		// Try to load cached data and record cache checks
 		const cachedProfile = ProfileCache.get(email)
 		PerfMon.recordCacheCheck(!!cachedProfile)
-		const cachedStatic = StaticCache.get<EnhancedProfileStaticData>()
+		const cachedStatic = StaticCache.get(isEnhancedProfileStaticData)
 		PerfMon.recordCacheCheck(!!cachedStatic)
-		const cachedDynamic = DynamicCache.get<EnhancedProfileDynamicData>()
+		const cachedDynamic = DynamicCache.get(isEnhancedProfileDynamicData)
 		PerfMon.recordCacheCheck(!!cachedDynamic)
 
 		let foundCache = false
@@ -278,7 +288,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 	useEffect(() => {
 		const onVisibilityChange = () => {
 			if (document.visibilityState === 'visible' && profile) {
-				const cachedDynamic = DynamicCache.get<EnhancedProfileDynamicData>()
+				const cachedDynamic = DynamicCache.get(isEnhancedProfileDynamicData)
 				if (!cachedDynamic) {
 					fetchBulkData(false).catch((err) => {
 						if (process.env.NODE_ENV !== 'production') {

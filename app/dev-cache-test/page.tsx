@@ -39,11 +39,11 @@ function DevCacheTestPageContent() {
       // Use safe getters; for profile we cannot know email without session, try to infer from stored value
       let hasProfile = false
       if (typeof window !== 'undefined') {
-        const raw = sessionStorage.getItem('profile_cache')
+        const raw = sessionStorage.getItem(ProfileCache.KEY)
         hasProfile = !!raw
       }
-      const hasStatic = typeof window !== 'undefined' && !!localStorage.getItem('static_data_cache')
-      const hasDynamic = typeof window !== 'undefined' && !!sessionStorage.getItem('dynamic_data_cache')
+      const hasStatic = typeof window !== 'undefined' && !!localStorage.getItem(StaticCache.KEY)
+      const hasDynamic = typeof window !== 'undefined' && !!sessionStorage.getItem(DynamicCache.KEY)
       // Heuristic: if any localStorage key starts with subjects_ then we consider subjects cached
       let hasSubjects = false
       if (typeof window !== 'undefined') {
@@ -93,9 +93,9 @@ function DevCacheTestPageContent() {
   const corruptJson = (key: 'profile' | 'static' | 'dynamic') => {
     try {
       if (typeof window === 'undefined') return
-      if (key === 'profile') sessionStorage.setItem('profile_cache', '{bad-json')
-      if (key === 'static') localStorage.setItem('static_data_cache', '{bad-json')
-      if (key === 'dynamic') sessionStorage.setItem('dynamic_data_cache', '{bad-json')
+      if (key === 'profile') sessionStorage.setItem(ProfileCache.KEY, '{bad-json')
+      if (key === 'static') localStorage.setItem(StaticCache.KEY, '{bad-json')
+      if (key === 'dynamic') sessionStorage.setItem(DynamicCache.KEY, '{bad-json')
       setMessage(`Corrupted ${key} cache JSON. Reload to verify auto-clear.`)
       refreshStatus()
     } catch (_) {}
@@ -105,17 +105,17 @@ function DevCacheTestPageContent() {
     try {
       if (typeof window === 'undefined') return
       const nowPast = Date.now() - 1000
-      const staticRaw = localStorage.getItem('static_data_cache')
+      const staticRaw = localStorage.getItem(StaticCache.KEY)
       if (staticRaw) {
         const obj = JSON.parse(staticRaw)
         obj.expiresAt = nowPast
-        localStorage.setItem('static_data_cache', JSON.stringify(obj))
+        localStorage.setItem(StaticCache.KEY, JSON.stringify(obj))
       }
-      const dynamicRaw = sessionStorage.getItem('dynamic_data_cache')
+      const dynamicRaw = sessionStorage.getItem(DynamicCache.KEY)
       if (dynamicRaw) {
         const obj = JSON.parse(dynamicRaw)
         obj.expiresAt = nowPast
-        sessionStorage.setItem('dynamic_data_cache', JSON.stringify(obj))
+        sessionStorage.setItem(DynamicCache.KEY, JSON.stringify(obj))
       }
       setMessage('Set expiresAt in the past for static/dynamic. Reload to verify eviction.')
       refreshStatus()
@@ -187,9 +187,7 @@ function DevCacheTestPageContent() {
 // Environment guard wrapper - returns null when not in development
 function DevCacheTestPageWrapper() {
   // Environment guard: only allow in development
-  if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'development') {
-    return null
-  }
+  if (process.env.NODE_ENV !== 'development') return null
 
   return <DevCacheTestPageContent />
 }

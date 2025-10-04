@@ -273,8 +273,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     
     // Try to load cached data
     const cachedProfile = ProfileCache.get(email)
-    const cachedStatic = StaticCache.get()
-    const cachedDynamic = DynamicCache.get()
+    const cachedStatic = StaticCache.get() as any
+    const cachedDynamic = DynamicCache.get() as any
     
     let foundCache = false
     
@@ -501,7 +501,7 @@ useEffect(() => {
   const handleVisibilityChange = () => {
     if (document.visibilityState === 'visible' && profile) {
       // Only refresh dynamic data on focus
-      const cached = DynamicCache.get()
+      const cached = DynamicCache.get() as any
       if (!cached) {
         fetchBulkData(false) // Background refresh, no loading spinner
       }
@@ -600,8 +600,8 @@ export function CacheDebugger() {
           <h3 className="font-bold mb-2">Cache Status</h3>
           <div className="space-y-2 text-xs">
             <div>Profile: {checkProfileCache() ? '✅' : '❌'}</div>
-            <div>Static: {StaticCache.get() ? '✅' : '❌'}</div>
-            <div>Dynamic: {DynamicCache.get() ? '✅' : '❌'}</div>
+            <div>Static: {StaticCache.get() as any ? '✅' : '❌'}</div>
+            <div>Dynamic: {DynamicCache.get() as any ? '✅' : '❌'}</div>
           </div>
           <button
             onClick={clearAllCaches}

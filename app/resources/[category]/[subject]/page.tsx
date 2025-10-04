@@ -1,7 +1,7 @@
 // app/resources/[category]/[subject]/page.tsx
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import { notFound } from "next/navigation"
@@ -56,13 +56,8 @@ export default function SubjectPage({
     return getSubjectDisplayByCode(filtered as any, decodedSubject, true)
   }, [subjects, category, decodedSubject])
 
-  const [subjectName, setSubjectName] = useState<string>(subjectNameFromContext)
+  const subjectName = subjectNameFromContext
   const units = useMemo(() => defaultUnitsForCategory(category), [category])
-
-  // Keep subjectName in sync with context updates
-  useEffect(() => {
-    setSubjectName(subjectNameFromContext)
-  }, [subjectNameFromContext])
 
   const categoryTitle = CATEGORY_TITLES[category]
   if (!categoryTitle || !decodedSubject) {

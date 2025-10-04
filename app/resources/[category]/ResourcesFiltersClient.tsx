@@ -6,16 +6,12 @@ import { ChevronRight } from "lucide-react"
 import { useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Skeleton } from '@/components/ui/skeleton'
+import type { Subject } from '@/lib/types'
 import { getResourceTypeForCategory } from '@/lib/resource-utils'
 import { useProfile } from '@/lib/enhanced-profile-context'
 import { getSubjectDisplay } from '@/lib/subject-display'
 
-type Subject = {
-  id?: string
-  code: string
-  name?: string
-  resource_type?: string
-}
+type ResourceSubject = Pick<Subject, 'id' | 'code' | 'name' | 'resource_type'>
 
 interface ResourcesFiltersClientProps {
   category: string
@@ -32,14 +28,14 @@ export default function ResourcesFiltersClient({ category, categoryData }: Resou
   const filteredSubjects = useMemo(() => {
     const resourceType = getResourceTypeForCategory(category)
     if (!Array.isArray(subjects) || subjects.length === 0) return []
-    if (!resourceType) return subjects
-    return subjects.filter((s: Subject) => (s?.resource_type || 'resources') === resourceType)
+    if (!resourceType) return subjects as ResourceSubject[]
+    return subjects.filter((s) => (s?.resource_type || 'resources') === resourceType) as ResourceSubject[]
   }, [subjects, category])
 
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {!loading && filteredSubjects.map((s: Subject) => {
+      {!loading && filteredSubjects.map((s: ResourceSubject) => {
         const qp = new URLSearchParams()
         const year = searchParams.get('year')
         const semester = searchParams.get('semester')
