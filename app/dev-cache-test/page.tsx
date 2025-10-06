@@ -52,7 +52,10 @@ function DevCacheTestPageContent() {
         }
       }
       setCacheStatus({ profile: hasProfile, static: hasStatic, dynamic: hasDynamic, subjects: hasSubjects })
-    } catch (_) {}
+    } catch (err: unknown) {
+      console.error("refreshStatus failed:", err);
+      setCacheStatus({ profile: false, static: false, dynamic: false, subjects: false });
+    }
   }
 
   useEffect(() => {
@@ -77,14 +80,21 @@ function DevCacheTestPageContent() {
       ProfileCache.set(data.profile.email, data.profile)
       if (data.static) StaticCache.set(data.static)
       if (data.dynamic) DynamicCache.set(data.dynamic)
-      if (data.profile && typeof data.profile.year === 'number' && data.profile.year > 0 && data.profile.branch && data.profile.semester && data.subjects) {
-        SubjectsCache.set(data.profile.branch, data.profile.year, data.profile.semester, data.subjects)
+      const canCacheSubjects = typeof data.profile?.year === 'number' && data.profile.year > 0 && !!data.profile.branch && !!data.profile.semester && !!data.subjects;
+      if (canCacheSubjects) {
+        SubjectsCache.set(data.profile.branch!, data.profile.year, data.profile.semester!, data.subjects)
       }
 
       setMessage('Caches populated from bulk API')
       refreshStatus()
-    } catch (e: any) {
-      setMessage(e?.message || 'Failed to populate from bulk API')
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        setMessage(e.message || 'Failed to populate from bulk API')
+      } else if (e != null) {
+        setMessage(String(e) || 'Failed to populate from bulk API')
+      } else {
+        setMessage('Failed to populate from bulk API')
+      }
     } finally {
       setLoading(false)
     }
@@ -98,7 +108,12 @@ function DevCacheTestPageContent() {
       if (key === 'dynamic') sessionStorage.setItem(DynamicCache.KEY, '{bad-json')
       setMessage(`Corrupted ${key} cache JSON. Reload to verify auto-clear.`)
       refreshStatus()
-    } catch (_) {}
+    } catch (err: unknown) {
+      console.error(`Corrupt JSON for ${key} failed:`, err);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setMessage(`Failed to corrupt ${key} cache: ${errorMsg}`);
+      refreshStatus();
+    }
   }
 
   const expireTtls = () => {
@@ -134,7 +149,12 @@ function DevCacheTestPageContent() {
       }
       setMessage('Cleared all caches')
       refreshStatus()
-    } catch (_) {}
+    } catch (err: unknown) {
+      console.error('Clear all caches failed:', err);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setMessage(`Failed to clear caches: ${errorMsg}`);
+      refreshStatus();
+    }
   }
 
   return (

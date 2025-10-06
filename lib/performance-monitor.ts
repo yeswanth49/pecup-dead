@@ -21,9 +21,22 @@ type MetricsSnapshot = {
 class PerformanceMonitor {
   private static instance: PerformanceMonitor | null = null
 
+  /**
+   * This class uses a singleton pattern which creates global mutable state that persists
+   * across component mounts, unmounts, and hot-module-reloads. Use with caution in tests
+   * and consider using the _clearInstance() method for test cleanup.
+   */
   static getInstance(): PerformanceMonitor {
     if (!this.instance) this.instance = new PerformanceMonitor()
     return this.instance
+  }
+
+  /**
+   * Testing-only method: clears the singleton instance to allow fresh initialization.
+   * This should only be used in test environments to reset state between tests.
+   */
+  static _clearInstance(): void {
+    this.instance = null
   }
 
   private operations: OperationRecord[] = []
@@ -38,19 +51,25 @@ class PerformanceMonitor {
   private cacheHits = 0
 
   startOperation(name: string, extra?: Record<string, unknown>) {
-    const hasPerf = typeof performance !== 'undefined' && typeof performance.now === 'function' && typeof performance.timeOrigin === 'number'
-    const now = hasPerf ? () => performance.now() : () => Date.now()
-    const start = now()
-    const at = hasPerf ? performance.timeOrigin + start : start
+    const wallClockStart = Date.now()
+    const highResStart = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : null
     return () => {
-      const end = now()
-      const durationMs = end - start
-      this.record(name, durationMs, extra, hasPerf ? performance.timeOrigin + start : at)
+      const durationMs = highResStart !== null ? (performance.now() - highResStart) : (Date.now() - wallClockStart)
+      this.record(name, durationMs, extra, wallClockStart)
       return durationMs
     }
   }
 
   record(name: string, durationMs: number, extra?: Record<string, unknown>, at?: number) {
+    // Validate durationMs to ensure it's a finite, non-negative number
+    if (!Number.isFinite(durationMs) || durationMs < 0) {
+      // Optionally log a warning in development
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`PerformanceMonitor: Invalid durationMs (${durationMs}) for operation "${name}", skipping record.`)
+      }
+      return
+    }
+
     const op: OperationRecord = { name, durationMs, at: at ?? Date.now(), extra }
     this.operations.push(op)
     if (this.operations.length > this.maxOperations) this.operations.shift()

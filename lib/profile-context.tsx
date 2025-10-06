@@ -91,7 +91,13 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       if (session?.user?.email) {
         const cachedProfile = ProfileCache.get(session.user.email)
         const isValidProfile = (p: any): p is Profile => {
-          return !!p && typeof p === 'object' && typeof p.id === 'string' && typeof p.email === 'string' && typeof p.name === 'string'
+          return !!p && typeof p === 'object' &&
+                 typeof p.id === 'string' &&
+                 typeof p.email === 'string' &&
+                 typeof p.name === 'string' &&
+                 typeof p.year === 'number' &&
+                 typeof p.branch === 'string' &&
+                 typeof p.roll_number === 'string'
         }
         if (isValidProfile(cachedProfile)) {
           setProfile(cachedProfile)
@@ -119,10 +125,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }
 
   // Subjects cache using session cache hook
-  const subjectsKey = profile && profile.year && profile.branch ? `subjects:year=${profile.year}:branch=${profile.branch}` : 'subjects:anon'
+  const subjectsKey = profile ? `subjects:year=${profile.year}:branch=${profile.branch}` : 'subjects:anon'
   const subjectsFetcher = async () => {
     // Don't fetch subjects if we don't have complete profile data
-    if (!profile || !profile.year || !profile.branch) {
+    if (!profile) {
       return []
     }
     const params = new URLSearchParams()

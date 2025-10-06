@@ -47,11 +47,11 @@ interface Profile {
 	role?: string
 }
 
-interface Subject {
-	id: string
-	code: string
-	name: string
-	resource_type?: string
+export interface Subject {
+  id: string
+  code: string
+  name: string
+  resource_type?: string
 }
 
 export interface ProfileContextType {
@@ -267,8 +267,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : String(err)
 			setError(message || 'Failed to load data')
-			// eslint-disable-next-line no-console
-			console.error('Bulk fetch error:', err)
+			if (process.env.NODE_ENV !== 'production') {
+				// eslint-disable-next-line no-console
+				console.error('Bulk fetch error:', err)
+			}
 		} finally {
 			setLoading(false)
 		}

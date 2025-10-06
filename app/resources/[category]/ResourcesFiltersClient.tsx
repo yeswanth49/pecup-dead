@@ -6,12 +6,12 @@ import { ChevronRight } from "lucide-react"
 import { useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { Subject } from '@/lib/types'
+import type { Subject } from '@/lib/enhanced-profile-context'
 import { getResourceTypeForCategory } from '@/lib/resource-utils'
 import { useProfile } from '@/lib/enhanced-profile-context'
 import { getSubjectDisplay } from '@/lib/subject-display'
 
-type ResourceSubject = Pick<Subject, 'id' | 'code' | 'name' | 'resource_type'>
+type ResourceSubject = Subject
 
 interface ResourcesFiltersClientProps {
   category: string
@@ -29,7 +29,7 @@ export default function ResourcesFiltersClient({ category, categoryData }: Resou
     const resourceType = getResourceTypeForCategory(category)
     if (!Array.isArray(subjects) || subjects.length === 0) return []
     if (!resourceType) return subjects as ResourceSubject[]
-    return subjects.filter((s) => (s?.resource_type || 'resources') === resourceType) as ResourceSubject[]
+    return subjects.filter((s: Subject) => (s?.resource_type || 'resources') === resourceType) as ResourceSubject[]
   }, [subjects, category])
 
   return (
@@ -50,7 +50,7 @@ export default function ResourcesFiltersClient({ category, categoryData }: Resou
             <Card className="h-full transition-all-smooth hover-lift">
               <CardHeader>
                 <CardTitle>{getSubjectDisplay(s, true)}</CardTitle>
-                <CardDescription>Access {getSubjectDisplay(s, true)} {categoryData.title.toUpperCase()}</CardDescription>
+                <CardDescription>Explore resources and tools for {categoryData.title.toUpperCase()}</CardDescription>
               </CardHeader>
               <CardContent className="flex justify-end">
                 <ChevronRight className="h-5 w-5 text-primary" />

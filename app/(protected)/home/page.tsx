@@ -10,6 +10,27 @@ import Link from 'next/link'
 import { BookOpen, Bell, Archive, Phone, AlertCircle, Loader2, Settings, Users, CalendarDays, Clock } from 'lucide-react'
 import { useProfile, ProfileContextType, EnhancedProfileDynamicData } from '@/lib/enhanced-profile-context'
 
+type Exam = {
+  subject: string
+  exam_date: string
+  branch: string
+  year: string
+}
+
+type Reminder = {
+  id: string
+  title?: string
+  due_date?: string
+  completed?: boolean
+}
+
+type Update = {
+  id: string
+  title?: string
+  created_at?: string
+  description?: string
+}
+
 export default function HomePage() {
   const { profile, dynamicData, loading, error } = useProfile()
 
@@ -216,7 +237,7 @@ export default function HomePage() {
                     <div>
                       <h3 className="font-medium">{exam.subject}</h3>
                       <p className="text-sm text-muted-foreground flex items-center gap-1">
-                        <Clock className="h-3 w-3" /> {new Date(exam.exam_date).toDateString()}
+                        <Clock className="h-3 w-3" /> {exam.exam_date && !isNaN(new Date(exam.exam_date).getTime()) ? new Date(exam.exam_date).toDateString() : "Date unavailable"}
                       </p>
                     </div>
                     <Badge variant="outline">{exam.branch} • {exam.year}</Badge>
@@ -243,7 +264,7 @@ export default function HomePage() {
                 {dynamicData.upcomingReminders.map((r: Reminder) => (
                   <div key={r.id} className="border-l-4 border-primary pl-4">
                     <h3 className="font-medium">{r.title}</h3>
-                    <p className="text-sm text-muted-foreground">Due {new Date(r.due_date).toDateString()}</p>
+                    <p className="text-sm text-muted-foreground">Due {r.due_date && typeof r.due_date === "string" && !isNaN(new Date(r.due_date).getTime()) ? new Date(r.due_date).toDateString() : "Invalid date"}</p>
                   </div>
                 ))}
               </div>

@@ -9,7 +9,7 @@ import { Header } from '@/components/Header'
 import ChatBubble from '@/components/ChatBubble'
 import { ChevronRight, FileText } from "lucide-react"
 import { getResourceTypeForCategory } from '@/lib/resource-utils'
-import { useProfile } from '@/lib/enhanced-profile-context'
+import { useProfile, type Subject } from '@/lib/enhanced-profile-context'
 import { getSubjectDisplayByCode } from '@/lib/subject-display'
 
 const CATEGORY_TITLES: Record<string, string> = {
@@ -51,9 +51,9 @@ export default function SubjectPage({
   const subjectNameFromContext = useMemo(() => {
     if (!decodedSubject) return ''
     const resourceType = getResourceTypeForCategory(category)
-    const list = Array.isArray(subjects) ? subjects : []
-    const filtered = resourceType ? list.filter((s: any) => (s?.resource_type || 'resources') === resourceType) : list
-    return getSubjectDisplayByCode(filtered as any, decodedSubject, true)
+    const list: Subject[] = Array.isArray(subjects) ? subjects : []
+    const filtered = resourceType ? list.filter((s: Subject) => (s?.resource_type || 'resources') === resourceType) : list
+    return getSubjectDisplayByCode(filtered, decodedSubject, true)
   }, [subjects, category, decodedSubject])
 
   const subjectName = subjectNameFromContext

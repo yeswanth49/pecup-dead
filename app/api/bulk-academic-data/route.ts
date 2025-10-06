@@ -93,10 +93,17 @@ export async function GET() {
         .eq('year', currentYear)
         .eq('semester', semesterNumber)
         .eq('active', true)
-        .order('regulation', { ascending: false })
-        .limit(1)
 
-      const regulation = regs && regs.length > 0 ? regs[0].regulation : null
+      const uniqueRegs = regs ? [...new Set(regs.map((r: any) => r.regulation).filter(Boolean))] : []
+      let regulation: string | null = null
+      if (uniqueRegs.length > 0) {
+        const regWithNums = uniqueRegs.map(reg => ({
+          reg,
+          num: parseInt(reg.replace(/\D/g, '')) || 0
+        }))
+        const sortedRegs = regWithNums.sort((a, b) => b.num - a.num)
+        regulation = sortedRegs[0].reg
+      }
 
       let offeringsQuery = supabase
         .from('subject_offerings')
@@ -127,9 +134,18 @@ export async function GET() {
         console.error('[bulk] subjects query error:', subjectsErr)
         return { data: [] as any[] }
       }
-      // Sort by display_order using offerings order mapping
-      const orderMap = new Map<string, number>(offerings.map(o => [o.subject_id, o.display_order ?? 0]))
-      const sorted = (subjects || []).slice().sort((a: any, b: any) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0))
+      // Sort by display_order using offerings order mapping, treating nulls as smaller than numbers, with id tiebreaker for equals including nulls
+      const orderMap = new Map<string, number | null>(offerings.map(o => [o.subject_id, o.display_order]))
+      const sorted = (subjects || []).slice().sort((a: any, b: any) => {
+        const oa = orderMap.get(a.id)
+        const ob = orderMap.get(b.id)
+        if (oa === ob) {
+          return a.id.localeCompare(b.id)
+        }
+        if (oa == null) return -1
+        if (ob == null) return 1
+        return oa - ob
+      })
       const duration = Date.now() - secStart
       return { data: sorted, _meta: { durationMs: duration } }
     })()
