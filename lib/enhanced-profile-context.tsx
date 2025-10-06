@@ -82,6 +82,21 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 	// Load from cache on mount
 	useEffect(() => {
 		if (status !== 'authenticated' || !session?.user?.email) {
+			// Clear all in-memory state and caches when user is not authenticated
+			setProfile(null)
+			setSubjects([])
+			setStaticData(null)
+			setDynamicData(null)
+			setError(null)
+			setWarnings(null)
+
+			// Clear all caches to ensure clean slate for next user
+			ProfileCache.clear()
+			try { ProfileDisplayCache.clear() } catch (_) {}
+			StaticCache.clear()
+			DynamicCache.clear()
+			SubjectsCache.clearAll()
+
 			setLoading(false)
 			return
 		}
