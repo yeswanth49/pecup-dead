@@ -5,11 +5,13 @@ import { useState, useEffect, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Header } from '@/components/Header'
 import ChatBubble from '@/components/ChatBubble'
-import { ChevronRight, FileText, ChevronDown, Download, ExternalLink, Loader2, AlertCircle } from "lucide-react"
+import { ChevronRight, FileText, ChevronDown, Download, ExternalLink, Loader2, AlertCircle, Search, ArrowUpDown, Filter } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getResourceTypeForCategory } from '@/lib/resource-utils'
@@ -33,7 +35,6 @@ const CATEGORY_TITLES: Record<string, string> = {
   records: 'Records',
 }
 
-
 export default function SubjectPage({
   params,
   searchParams,
@@ -51,6 +52,10 @@ export default function SubjectPage({
   const [expandedUnits, setExpandedUnits] = useState<Set<number>>(new Set())
   const [loadingFile, setLoadingFile] = useState<string | null>(null)
   const [selectedUnit, setSelectedUnit] = useState<string>('all')
+  const [selectedType, setSelectedType] = useState<string>('all')
+  const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'name_asc'>('date_desc')
+  const [query, setQuery] = useState<string>('')
+  const [expandAll, setExpandAll] = useState<boolean>(false)
 
   let decodedSubject = ''
   try {
@@ -75,20 +80,69 @@ export default function SubjectPage({
     notFound()
   }
 
-  // Group resources by unit
-  const resourcesByUnit = useMemo(() => {
-    const grouped: Record<number, Resource[]> = {}
-    resources.forEach(resource => {
-      const unit = resource.unit || 1
-      if (!grouped[unit]) {
-        grouped[unit] = []
-      }
-      grouped[unit].push(resource)
+  // Types available across resources
+  const availableTypes = useMemo(() => {
+    const set = new Set<string>()
+    resources.forEach(r => {
+      if (r.type) set.add(r.type)
     })
-    return grouped
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
   }, [resources])
 
-  const units = Object.keys(resourcesByUnit).map(Number).sort((a, b) => a - b)
+  // Derived, filtered, and sorted resources
+  const visibleResources = useMemo(() => {
+    const term = query.trim().toLowerCase()
+    const filtered = resources.filter(r => {
+      const matchesType = selectedType === 'all' || r.type === selectedType
+      const matchesText =
+        term.length === 0 ||
+        r.name.toLowerCase().includes(term) ||
+        (r.description ? r.description.toLowerCase().includes(term) : false)
+      const matchesUnit = selectedUnit === 'all' || (r.unit || 1) === parseInt(selectedUnit)
+      return matchesType && matchesText && matchesUnit
+    })
+    const parseDate = (d: string) => {
+      const t = Date.parse(d)
+      return Number.isNaN(t) ? 0 : t
+    }
+    const sorted = [...filtered].sort((a, b) => {
+      if (sortBy === 'name_asc') return a.name.localeCompare(b.name)
+      if (sortBy === 'date_asc') return parseDate(a.date) - parseDate(b.date)
+      return parseDate(b.date) - parseDate(a.date) // date_desc
+    })
+    return sorted
+  }, [resources, selectedType, query, selectedUnit, sortBy])
+
+  // Group resources by unit (from filtered list)
+  const resourcesByUnit = useMemo(() => {
+    const grouped: Record<number, Resource[]> = {}
+    visibleResources.forEach(resource => {
+      const unit = resource.unit || 1
+      if (!grouped[unit]) grouped[unit] = []
+      grouped[unit].push(resource)
+    })
+    // keep items inside each unit sorted by current sort order (already sorted)
+    return grouped
+  }, [visibleResources])
+
+  const units = useMemo(
+    () => Object.keys(resourcesByUnit).map(Number).sort((a, b) => a - b),
+    [resourcesByUnit]
+  )
+
+  // Keep expanded state in sync with "Expand all"
+  useEffect(() => {
+    if (selectedUnit !== 'all') {
+      setExpandAll(false)
+      setExpandedUnits(new Set()) // not used in single-unit view
+      return
+    }
+    if (expandAll) {
+      setExpandedUnits(new Set(units))
+    } else {
+      setExpandedUnits(new Set())
+    }
+  }, [expandAll, units, selectedUnit])
 
   // Toggle unit expansion
   const toggleUnit = (unit: number) => {
@@ -186,6 +240,8 @@ export default function SubjectPage({
     fetchResources()
   }, [category, decodedSubject])
 
+  const resultCount = visibleResources.length
+
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -203,13 +259,15 @@ export default function SubjectPage({
         <div className="flex items-start">
           <h1 className="text-3xl font-bold tracking-tight">{subjectName} {categoryTitle}</h1>
         </div>
-        <p className="text-muted-foreground">Access all {subjectName} {categoryTitle} organized by unit</p>
+        <p className="text-muted-foreground">Access all {subjectName} {categoryTitle} with quick filters and smart dropdowns</p>
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle>Available Resources</CardTitle>
-          <CardDescription>All {subjectName} {categoryTitle} organized by unit</CardDescription>
+          <CardDescription>
+            Filter, sort and browse all {subjectName} {categoryTitle} organized by unit
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {error && (
@@ -220,20 +278,82 @@ export default function SubjectPage({
             </Alert>
           )}
 
-          {!loading && !error && units.length > 0 && (
-            <div className="mb-4">
-              <Select value={selectedUnit} onValueChange={setSelectedUnit}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Select Unit" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Units</SelectItem>
-                  {units.map(unit => (
-                    <SelectItem key={unit} value={unit.toString()}>Unit {unit}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {!loading && (
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="flex items-center gap-2">
+                  <Select value={selectedUnit} onValueChange={(v) => setSelectedUnit(v)}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select Unit" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Units</SelectItem>
+                      {units.map(unit => (
+                        <SelectItem key={unit} value={unit.toString()}>Unit {unit}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={selectedType} onValueChange={(v) => setSelectedType(v)}>
+                    <SelectTrigger className="w-[160px]">
+                      <div className="flex items-center gap-2">
+                        <Filter className="h-4 w-4" />
+                        <SelectValue placeholder="Type" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      {availableTypes.map(t => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+                    <SelectTrigger className="w-[170px]">
+                      <div className="flex items-center gap-2">
+                        <ArrowUpDown className="h-4 w-4" />
+                        <SelectValue placeholder="Sort by" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="date_desc">Newest first</SelectItem>
+                      <SelectItem value="date_asc">Oldest first</SelectItem>
+                      <SelectItem value="name_asc">Name (A–Z)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="relative w-full md:w-[260px]">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search by name or description"
+                    className="pl-8"
+                  />
+                </div>
+                {selectedUnit === 'all' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setExpandAll(prev => !prev)}
+                    className="hidden sm:inline-flex"
+                  >
+                    <ChevronDown className={`mr-1 h-4 w-4 transition-transform ${expandAll ? 'rotate-180' : ''}`} />
+                    {expandAll ? 'Collapse all' : 'Expand all'}
+                  </Button>
+                )}
+              </div>
             </div>
+          )}
+
+          {!loading && resultCount > 0 && (
+            <p className="mb-2 text-xs text-muted-foreground">
+              Showing {resultCount} {resultCount === 1 ? 'item' : 'items'}
+            </p>
           )}
 
           {loading && (
@@ -261,13 +381,16 @@ export default function SubjectPage({
             <div className="space-y-4">
               {selectedUnit === 'all' ? (
                 units.map(unit => (
-                  <div key={unit} className="border rounded-lg">
+                  <div key={unit} className="border rounded-lg bg-muted/30">
                     <Button
                       variant="ghost"
                       className="w-full justify-between p-4 h-auto"
                       onClick={() => toggleUnit(unit)}
                     >
-                      <span className="font-medium">Unit {unit}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">Unit {unit}</span>
+                        <Badge variant="secondary" className="rounded-full">{resourcesByUnit[unit].length}</Badge>
+                      </div>
                       <ChevronDown className={`h-4 w-4 transition-transform ${expandedUnits.has(unit) ? 'rotate-180' : ''}`} />
                     </Button>
 
@@ -276,18 +399,19 @@ export default function SubjectPage({
                         {resourcesByUnit[unit].map((resource, index) => (
                           <div
                             key={resource.id || `${resource.name}-${index}`}
-                            className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-muted/50 rounded-md"
+                            className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-background rounded-md border"
                           >
-                            <div className="flex items-center gap-3 mb-2 sm:mb-0">
-                              <FileText className="h-4 w-4 text-primary" />
+                            <div className="flex items-start gap-3 mb-2 sm:mb-0">
+                              <FileText className="h-4 w-4 mt-0.5 text-primary" />
                               <div>
                                 <h4 className="font-medium text-sm">{resource.name}</h4>
                                 {resource.description && (
                                   <p className="text-xs text-muted-foreground">{resource.description}</p>
                                 )}
-                                <p className="text-xs text-muted-foreground">
-                                  {resource.type} • {resource.date}
-                                </p>
+                                <div className="mt-1 flex flex-wrap items-center gap-2">
+                                  <Badge variant="outline" className="text-xs">{resource.type}</Badge>
+                                  <span className="text-xs text-muted-foreground">{resource.date}</span>
+                                </div>
                               </div>
                             </div>
                             <div className="flex gap-2">
@@ -331,24 +455,30 @@ export default function SubjectPage({
                   </div>
                 ))
               ) : (
-                <div className="border rounded-lg p-4">
-                  <h3 className="font-medium mb-3">Unit {selectedUnit}</h3>
+                <div className="border rounded-lg p-4 bg-muted/30">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-medium">Unit {selectedUnit}</h3>
+                    <Badge variant="secondary" className="rounded-full">
+                      {resourcesByUnit[parseInt(selectedUnit)]?.length || 0}
+                    </Badge>
+                  </div>
                   <div className="space-y-3">
-                    {resourcesByUnit[parseInt(selectedUnit)].map((resource, index) => (
+                    {resourcesByUnit[parseInt(selectedUnit)]?.map((resource, index) => (
                       <div
                         key={resource.id || `${resource.name}-${index}`}
-                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-muted/50 rounded-md"
+                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-background rounded-md border"
                       >
-                        <div className="flex items-center gap-3 mb-2 sm:mb-0">
-                          <FileText className="h-4 w-4 text-primary" />
+                        <div className="flex items-start gap-3 mb-2 sm:mb-0">
+                          <FileText className="h-4 w-4 mt-0.5 text-primary" />
                           <div>
                             <h4 className="font-medium text-sm">{resource.name}</h4>
                             {resource.description && (
                               <p className="text-xs text-muted-foreground">{resource.description}</p>
                             )}
-                            <p className="text-xs text-muted-foreground">
-                              {resource.type} • {resource.date}
-                            </p>
+                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                              <Badge variant="outline" className="text-xs">{resource.type}</Badge>
+                              <span className="text-xs text-muted-foreground">{resource.date}</span>
+                            </div>
                           </div>
                         </div>
                         <div className="flex gap-2">
@@ -394,7 +524,9 @@ export default function SubjectPage({
           )}
 
           {!loading && !error && units.length === 0 && (
-            <p className="text-muted-foreground">No resources available for this subject.</p>
+            <div className="rounded-lg border p-6 text-center">
+              <p className="text-muted-foreground">No resources match the current filters.</p>
+            </div>
           )}
         </CardContent>
       </Card>
