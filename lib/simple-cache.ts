@@ -402,12 +402,16 @@ export class ResourcesCache {
   static clearForSubject(category: string, subject: string) {
     if (typeof window === 'undefined') return
     try {
-      const key = this.getKey(category, subject)
-      localStorage.removeItem(key)
+      const prefix = `resources_${category}_${subject}_`
+      const keys = Object.keys(localStorage).filter(k => k.startsWith(prefix))
+      for (const key of keys) {
+        try { localStorage.removeItem(key) } catch (_) {}
+      }
       if (process.env.NODE_ENV !== 'production') {
-        console.log(`[DEBUG] ResourcesCache cleared for ${category}_${subject}`)
+        console.log(`[DEBUG] ResourcesCache cleared for ${category}_${subject} (${keys.length} keys)`)
       }
     } catch (_) {}
+  }
   }
 
   static clearAll() {
