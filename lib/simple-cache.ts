@@ -316,17 +316,19 @@ export class SubjectsCache {
 }
 
 export class ResourcesCache {
-  private static getKey(category: string, subject: string) {
-    return `resources_${category}_${subject}`
+  private static readonly TTL = 3 * 24 * 60 * 60 * 1000 // 3 days in milliseconds
+
+  private static getKey(category: string, subject: string, year?: string, semester?: string, branch?: string) {
+    return `resources_${category}_${subject}_${year || 'none'}_${semester || 'none'}_${branch || 'none'}`
   }
 
-  static set(category: string, subject: string, resources: Resource[]) {
+  static set(category: string, subject: string, resources: Resource[], year?: string, semester?: string, branch?: string) {
     if (typeof window === 'undefined') return
     try {
-      const key = this.getKey(category, subject)
+      const key = this.getKey(category, subject, year, semester, branch)
       localStorage.setItem(
         key,
-        JSON.stringify({ resources, timestamp: Date.now(), context: { category, subject } })
+        JSON.stringify({ resources, timestamp: Date.now(), context: { category, subject, year, semester, branch } })
       )
     } catch (e) {
       if (isQuotaExceeded(e)) {
@@ -347,7 +349,7 @@ export class ResourcesCache {
           try {
             localStorage.setItem(
               key,
-              JSON.stringify({ resources, timestamp: Date.now(), context: { category, subject } })
+              JSON.stringify({ resources, timestamp: Date.now(), context: { category, subject, year, semester, branch } })
             )
           } catch (retryErr) {
             console.warn('ResourcesCache: quota exceeded; skipping cache write after cleanup:', retryErr)
@@ -359,25 +361,40 @@ export class ResourcesCache {
     }
   }
 
-  static get(category: string, subject: string): Resource[] | null {
+  static get(category: string, subject: string, year?: string, semester?: string, branch?: string): Resource[] | null {
     if (typeof window === 'undefined') return null
     try {
-      const key = this.getKey(category, subject)
+      const key = this.getKey(category, subject, year, semester, branch)
       const cached = localStorage.getItem(key)
       if (!cached) return null
 
-      const parsed = JSON.parse(cached) as { resources?: Resource[]; context?: { category: string; subject: string } }
+      const parsed = JSON.parse(cached) as { resources?: Resource[]; context?: { category: string; subject: string; year?: string; semester?: string; branch?: string }; timestamp?: number }
       const resources = Array.isArray(parsed?.resources) ? parsed.resources : null
       const context = parsed?.context
-      if (!context || context.category !== category || context.subject !== subject) {
+      const timestamp = parsed?.timestamp
+
+      // Check TTL
+      if (timestamp && Date.now() - timestamp > this.TTL) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[DEBUG] ResourcesCache expired for key: ${key}, age: ${Date.now() - timestamp} ms`)
+        }
         localStorage.removeItem(key)
         return null
+      }
+
+      if (!context || context.category !== category || context.subject !== subject || context.year !== year || context.semester !== semester || context.branch !== branch) {
+        localStorage.removeItem(key)
+        return null
+      }
+
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DEBUG] ResourcesCache hit for key: ${key}, count: ${resources?.length || 0}`)
       }
 
       return resources ?? null
     } catch (e) {
       console.warn('Failed to read resources cache:', e)
-      try { localStorage.removeItem(this.getKey(category, subject)) } catch (_) {}
+      try { localStorage.removeItem(this.getKey(category, subject, year, semester, branch)) } catch (_) {}
       return null
     }
   }

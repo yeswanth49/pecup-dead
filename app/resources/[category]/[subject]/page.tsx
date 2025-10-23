@@ -11,7 +11,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Header } from '@/components/Header'
 import ChatBubble from '@/components/ChatBubble'
-import { ChevronRight, FileText, ChevronDown, Download, ExternalLink, Loader2, AlertCircle, Search, ArrowUpDown, Filter } from "lucide-react"
+import { ChevronRight, FileText, ChevronDown, Download, ExternalLink, Loader2, AlertCircle, Search, ArrowUpDown, Filter, RefreshCw } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getResourceTypeForCategory } from '@/lib/resource-utils'
@@ -57,6 +57,7 @@ export default function SubjectPage({
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'name_asc'>('date_desc')
   const [query, setQuery] = useState<string>('')
   const [expandAll, setExpandAll] = useState<boolean>(false)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   let decodedSubject = ''
   try {
@@ -223,11 +224,34 @@ export default function SubjectPage({
       setLoading(true)
       setError(null)
 
+      // Normalize search params early for cache key
+      const normalize = (value: string | string[] | undefined) =>
+        Array.isArray(value) ? value[0] : value ?? undefined
+      const qpYear = normalize(searchParams.year)
+      const qpSem = normalize(searchParams.semester)
+      const qpBranch = normalize(searchParams.branch)
+
+      // Compute cache key for logging
+      const cacheKey = `resources_${category}_${decodedSubject}_${qpYear || 'none'}_${qpSem || 'none'}_${qpBranch || 'none'}`
+
       // Check cache first
-      const cached = ResourcesCache.get(category, decodedSubject)
+      const cached = ResourcesCache.get(category, decodedSubject, qpYear, qpSem, qpBranch)
       if (cached) {
         if (process.env.NODE_ENV !== 'production') {
-          console.log(`[DEBUG] Resources loaded from cache for ${category}/${decodedSubject}, count: ${cached.length}`)
+          console.log(`[DEBUG] Resources loaded from cache for key: ${cacheKey}, count: ${cached.length}`)
+          // Log cache age
+          const raw = localStorage.getItem(cacheKey)
+          if (raw) {
+            const parsed = JSON.parse(raw)
+            const timestamp = parsed.timestamp
+            if (timestamp) {
+              const age = Date.now() - timestamp
+              console.log(`[DEBUG] Cache age: ${age} ms (${Math.round(age / 1000 / 60 / 60)} hours)`)
+              if (age > 3 * 24 * 60 * 60 * 1000) {
+                console.log('[DEBUG] Cache is expired')
+              }
+            }
+          }
         }
         setResources(cached)
         setLoading(false)
@@ -235,15 +259,13 @@ export default function SubjectPage({
       }
 
       if (process.env.NODE_ENV !== 'production') {
-        console.log(`[DEBUG] Resources not in cache, fetching from API for ${category}/${decodedSubject}`)
+        console.log(`[DEBUG] Resources not in cache, fetching from API for key: ${cacheKey}`)
       }
 
-      const normalize = (value: string | string[] | undefined) =>
-        Array.isArray(value) ? value[0] : value ?? undefined
-      const qpYear = normalize(searchParams.year)
-      const qpSem = normalize(searchParams.semester)
-      const qpBranch = normalize(searchParams.branch)
-
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DEBUG] Fetching for params: category=${category}, subject=${decodedSubject}, year=${qpYear}, semester=${qpSem}, branch=${qpBranch}`)
+      }
+      
       const queryParams = new URLSearchParams({
         category,
         subject: decodedSubject
@@ -279,7 +301,7 @@ export default function SubjectPage({
         const resources = Array.isArray(data) ? data : []
         setResources(resources)
         // Cache the resources
-        ResourcesCache.set(category, decodedSubject, resources)
+        ResourcesCache.set(category, decodedSubject, resources, qpYear, qpSem, qpBranch)
       } catch (err: any) {
         if (process.env.NODE_ENV !== 'production') {
           console.error('[DEBUG] Error fetching resources:', {
@@ -299,7 +321,18 @@ export default function SubjectPage({
     }
 
     fetchResources()
-  }, [category, decodedSubject, searchParams.year, searchParams.semester, searchParams.branch])
+  }, [category, decodedSubject, searchParams.year, searchParams.semester, searchParams.branch, refreshTrigger])
+
+  // Revalidate on window focus
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        setRefreshTrigger(prev => prev + 1)
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [])
 
   const resultCount = visibleResources.length
 
@@ -396,6 +429,16 @@ export default function SubjectPage({
                     className="pl-8"
                   />
                 </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setRefreshTrigger(prev => prev + 1)}
+                  disabled={loading}
+                  className="hidden sm:inline-flex"
+                >
+                  <RefreshCw className="mr-1 h-4 w-4" />
+                  Refresh
+                </Button>
                 {selectedUnit === 'all' && (
                   <Button
                     variant="ghost"
