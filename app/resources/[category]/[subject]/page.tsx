@@ -174,16 +174,19 @@ export default function SubjectPage({
     setLoadingFile(resource.id)
 
     try {
-      const response = await fetch(`/api/resources/${encodeURIComponent(resource.id)}/secure-url`)
-      if (!response.ok) {
-        let msg = 'Failed to get secure URL'
-        try {
-          const err = await response.json()
-          if (err?.error) msg = err.error
-        } catch {}
-        throw new Error(msg)
-      }
-      const { secureUrl } = await response.json()
+       console.log(`Frontend: Fetching secure URL for resource ${resource.id}`)
+       const response = await fetch(`/api/resources/${encodeURIComponent(resource.id)}/secure-url`)
+       console.log(`Frontend: Secure URL response status: ${response.status}`)
+       if (!response.ok) {
+         let msg = 'Failed to get secure URL'
+         try {
+           const err = await response.json()
+           if (err?.error) msg = err.error
+         } catch {}
+         throw new Error(msg)
+       }
+       const { secureUrl } = await response.json()
+       console.log(`Frontend: Secure URL generated for resource ${resource.id}`)
 
       if (action === 'download') {
         const link = document.createElement('a')
@@ -224,14 +227,17 @@ export default function SubjectPage({
       if (qpBranch) queryParams.set('branch', qpBranch)
 
       try {
+        console.log(`Frontend: Fetching resources with params: ${queryParams.toString()}`)
         const response = await fetch(`/api/resources?${queryParams.toString()}`, { cache: 'no-store' })
+        console.log(`Frontend: Response status: ${response.status}`)
         if (!response.ok) {
           throw new Error(`Failed to fetch resources: ${response.status}`)
         }
         const data = await response.json()
+        console.log(`Frontend: Received ${Array.isArray(data) ? data.length : 0} resources`)
         setResources(Array.isArray(data) ? data : [])
       } catch (err: any) {
-        console.error('Error fetching resources:', err)
+        console.error('Frontend: Error fetching resources:', err)
         setError(err.message || 'Failed to load resources')
       } finally {
         setLoading(false)

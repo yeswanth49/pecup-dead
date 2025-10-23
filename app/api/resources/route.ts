@@ -161,14 +161,16 @@ export async function GET(request: Request) {
 
     // Apply filters based on new schema
     if (branch_id) {
-      query = query.eq('branch_id', branch_id);
+       query = query.eq('branch_id', branch_id);
     }
     if (year_id) {
-      query = query.eq('year_id', year_id);
+       query = query.eq('year_id', year_id);
     }
     if (semester_id) {
-      query = query.eq('semester_id', semester_id);
-    }
+        query = query.or(`semester_id.eq.${semester_id},semester_id.is.null`);
+     }
+
+    console.log(`API Route: Applied filters - branch_id: ${branch_id}, year_id: ${year_id}, semester_id: ${semester_id}, unit: ${unitNumber}`);
 
     const { data: resources, error } = await query;
 
@@ -178,35 +180,37 @@ export async function GET(request: Request) {
     }
 
     console.log(`API Route: Found ${resources?.length || 0} matching resources`);
+    console.log(`API Route: Raw resources data (first 2 items for debug):`, resources?.slice(0, 2));
 
     // Transform the data to match both new and legacy expected formats
     const transformedResources = (resources || []).map(resource => ({
-      id: resource.id,
-      name: resource.name,
-      title: resource.name, // Keep both for compatibility
-      description: resource.description || '',
-      drive_link: resource.drive_link,
-      url: resource.url,
-      file_type: resource.type,
-      type: resource.type,
-      branch_id: resource.branch_id,
-      year_id: resource.year_id,
-      semester_id: resource.semester_id,
-      uploader_id: resource.created_by,
-      created_at: resource.created_at,
-      // Legacy fields for backward compatibility
-      category: resource.category,
-      subject: resource.subject,
-      unit: resource.unit,
-      date: resource.date || resource.created_at,
-      is_pdf: resource.is_pdf,
-      // Include relationship data (now single objects)
-      branch: Array.isArray(resource.branch) ? resource.branch[0] : resource.branch,
-      year: Array.isArray(resource.year) ? resource.year[0] : resource.year,
-      semester: Array.isArray(resource.semester) ? resource.semester[0] : resource.semester
-    }));
+       id: resource.id,
+       name: resource.name,
+       title: resource.name, // Keep both for compatibility
+       description: resource.description || '',
+       drive_link: resource.drive_link,
+       url: resource.url,
+       file_type: resource.type,
+       type: resource.type,
+       branch_id: resource.branch_id,
+       year_id: resource.year_id,
+       semester_id: resource.semester_id,
+       uploader_id: resource.created_by,
+       created_at: resource.created_at,
+       // Legacy fields for backward compatibility
+       category: resource.category,
+       subject: resource.subject,
+       unit: resource.unit,
+       date: resource.date || resource.created_at,
+       is_pdf: resource.is_pdf,
+       // Include relationship data (now single objects)
+       branch: Array.isArray(resource.branch) ? resource.branch[0] : resource.branch,
+       year: Array.isArray(resource.year) ? resource.year[0] : resource.year,
+       semester: Array.isArray(resource.semester) ? resource.semester[0] : resource.semester
+     }));
 
     console.log(`API Route: Returning ${transformedResources.length} resources`);
+    console.log(`API Route: Transformed resources sample (first 2 for debug):`, transformedResources.slice(0, 2));
     return NextResponse.json(transformedResources as unknown as Resource[]);
 
   } catch (error: any) {
