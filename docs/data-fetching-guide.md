@@ -66,11 +66,15 @@ export function HomeSummary() {
 ```
 
 Key behaviors:
-- **Caching**: `ProfileCache`, `DynamicCache`, and `ResourcesCache` use `localStorage` with TTL/keys; `StaticCache` and `SubjectsCache` use `localStorage` with TTL/keys.
+- **Caching**:
+  - `ProfileCache`: sessionStorage (no TTL; session-scoped)
+  - `DynamicCache`: sessionStorage (TTL: 10 minutes)
+  - `StaticCache`: localStorage (TTL: 30 days)
+  - `SubjectsCache`: localStorage (no TTL; context-keyed)
+  - `ResourcesCache`: localStorage (TTL: 3 days; context-keyed)
 - **Auto-refresh**: Dynamic data is refreshed when the tab regains focus if the cache expired.
 - **Cross-tab sync**: Updates are broadcast between tabs to avoid duplicate network calls.
 - **Prefetching**: Resources are prefetched in the bulk API and cached per category/subject for instant loading.
-
 ## Database Schema Overview
 
 The system uses the following key tables for data retrieval:
