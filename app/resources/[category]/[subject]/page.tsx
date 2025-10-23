@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { getResourceTypeForCategory } from '@/lib/resource-utils'
 import { useProfile, type Subject } from '@/lib/enhanced-profile-context'
 import { getSubjectDisplayByCode } from '@/lib/subject-display'
+import { ResourcesCache } from '@/lib/simple-cache'
 
 interface Resource {
   id?: string
@@ -222,6 +223,21 @@ export default function SubjectPage({
       setLoading(true)
       setError(null)
 
+      // Check cache first
+      const cached = ResourcesCache.get(category, decodedSubject)
+      if (cached) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[DEBUG] Resources loaded from cache for ${category}/${decodedSubject}, count: ${cached.length}`)
+        }
+        setResources(cached)
+        setLoading(false)
+        return
+      }
+
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DEBUG] Resources not in cache, fetching from API for ${category}/${decodedSubject}`)
+      }
+
       const normalize = (value: string | string[] | undefined) =>
         Array.isArray(value) ? value[0] : value ?? undefined
       const qpYear = normalize(searchParams.year)
@@ -237,6 +253,7 @@ export default function SubjectPage({
       if (qpSem) queryParams.set('semester', qpSem)
       if (qpBranch) queryParams.set('branch', qpBranch)
 
+      const startTime = performance.now()
 
       try {
         if (process.env.NODE_ENV !== 'production') {
@@ -259,7 +276,10 @@ export default function SubjectPage({
         if (process.env.NODE_ENV !== 'production') {
           console.log(`[DEBUG] Received ${Array.isArray(data) ? data.length : 0} resources`)
         }
-        setResources(Array.isArray(data) ? data : [])
+        const resources = Array.isArray(data) ? data : []
+        setResources(resources)
+        // Cache the resources
+        ResourcesCache.set(category, decodedSubject, resources)
       } catch (err: any) {
         if (process.env.NODE_ENV !== 'production') {
           console.error('[DEBUG] Error fetching resources:', {
@@ -270,6 +290,10 @@ export default function SubjectPage({
         }
         setError(err.message || 'Failed to load resources')
       } finally {
+        const duration = performance.now() - startTime
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[DEBUG] Resource fetch duration: ${Math.round(duration)}ms`)
+        }
         setLoading(false)
       }
     }

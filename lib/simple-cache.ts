@@ -1,5 +1,15 @@
 // Security-minded caches with SSR guards and safe fallbacks
 
+interface Resource {
+  id?: string
+  name: string
+  description?: string
+  date: string
+  type: string
+  url: string
+  unit?: number
+}
+
 // Type-guard function to validate CachedProfile shape and types
 function isCachedProfile(obj: unknown): obj is CachedProfile {
   if (!obj || typeof obj !== 'object') return false
@@ -113,6 +123,9 @@ export class ProfileCache {
     if (typeof window === 'undefined') return
     try {
       sessionStorage.removeItem(this.KEY)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[DEBUG] ProfileCache cleared')
+      }
     } catch (_) {}
   }
 }
@@ -186,6 +199,9 @@ export class StaticCache {
     if (typeof window === 'undefined') return
     try {
       localStorage.removeItem(this.KEY)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[DEBUG] StaticCache cleared')
+      }
     } catch (_) {}
   }
 }
@@ -279,6 +295,9 @@ export class SubjectsCache {
     try {
       const key = this.getKey(branch, year, semester)
       localStorage.removeItem(key)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DEBUG] SubjectsCache cleared for context: ${branch}_${year}_${semester}`)
+      }
     } catch (_) {}
   }
 
@@ -288,6 +307,101 @@ export class SubjectsCache {
       const keys = Object.keys(localStorage).filter(key => key.startsWith('subjects_'))
       for (const key of keys) {
         try { localStorage.removeItem(key) } catch (_) {}
+      }
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DEBUG] SubjectsCache cleared all (${keys.length} keys)`)
+      }
+    } catch (_) {}
+  }
+}
+
+export class ResourcesCache {
+  private static getKey(category: string, subject: string) {
+    return `resources_${category}_${subject}`
+  }
+
+  static set(category: string, subject: string, resources: Resource[]) {
+    if (typeof window === 'undefined') return
+    try {
+      const key = this.getKey(category, subject)
+      localStorage.setItem(
+        key,
+        JSON.stringify({ resources, timestamp: Date.now(), context: { category, subject } })
+      )
+    } catch (e) {
+      if (isQuotaExceeded(e)) {
+        try {
+          const keys = Object.keys(localStorage).filter(k => k.startsWith('resources_'))
+          const entries = keys.map(k => {
+            try {
+              const item = JSON.parse(localStorage.getItem(k) || '{}')
+              return { key: k, timestamp: item.timestamp || 0 }
+            } catch { return { key: k, timestamp: 0 } }
+          }).sort((a, b) => a.timestamp - b.timestamp)
+
+          const toRemove = Math.min(3, Math.ceil(entries.length / 4))
+          for (let i = 0; i < toRemove; i++) {
+            try { localStorage.removeItem(entries[i].key) } catch (_) {}
+          }
+
+          try {
+            localStorage.setItem(
+              key,
+              JSON.stringify({ resources, timestamp: Date.now(), context: { category, subject } })
+            )
+          } catch (retryErr) {
+            console.warn('ResourcesCache: quota exceeded; skipping cache write after cleanup:', retryErr)
+          }
+        } catch (_) {}
+      } else {
+        console.warn('Failed to cache resources:', e)
+      }
+    }
+  }
+
+  static get(category: string, subject: string): Resource[] | null {
+    if (typeof window === 'undefined') return null
+    try {
+      const key = this.getKey(category, subject)
+      const cached = localStorage.getItem(key)
+      if (!cached) return null
+
+      const parsed = JSON.parse(cached) as { resources?: Resource[]; context?: { category: string; subject: string } }
+      const resources = Array.isArray(parsed?.resources) ? parsed.resources : null
+      const context = parsed?.context
+      if (!context || context.category !== category || context.subject !== subject) {
+        localStorage.removeItem(key)
+        return null
+      }
+
+      return resources ?? null
+    } catch (e) {
+      console.warn('Failed to read resources cache:', e)
+      try { localStorage.removeItem(this.getKey(category, subject)) } catch (_) {}
+      return null
+    }
+  }
+
+  static clearForSubject(category: string, subject: string) {
+    if (typeof window === 'undefined') return
+    try {
+      const key = this.getKey(category, subject)
+      localStorage.removeItem(key)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DEBUG] ResourcesCache cleared for ${category}_${subject}`)
+      }
+    } catch (_) {}
+  }
+
+  static clearAll() {
+    if (typeof window === 'undefined') return
+    try {
+      const keys = Object.keys(localStorage).filter(key => key.startsWith('resources_'))
+      for (const key of keys) {
+        try { localStorage.removeItem(key) } catch (_) {}
+      }
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DEBUG] ResourcesCache cleared all (${keys.length} keys)`)
       }
     } catch (_) {}
   }
@@ -362,6 +476,9 @@ export class DynamicCache {
     if (typeof window === 'undefined') return
     try {
       sessionStorage.removeItem(this.KEY)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[DEBUG] DynamicCache cleared')
+      }
     } catch (_) {}
   }
 }
@@ -440,7 +557,12 @@ export class ProfileDisplayCache {
 
   static clear() {
     if (typeof window === 'undefined') return
-    try { localStorage.removeItem(this.KEY) } catch (_) {}
+    try {
+      localStorage.removeItem(this.KEY)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[DEBUG] ProfileDisplayCache cleared')
+      }
+    } catch (_) {}
   }
 }
 

@@ -31,6 +31,7 @@ export async function GET() {
     subjectsMs: 0,
     staticMs: 0,
     dynamicMs: 0,
+    resourcesMs: 0,
   }
   try {
     const supabase = createSupabaseAdmin()
@@ -73,6 +74,10 @@ export async function GET() {
       : null
     const branchCode = branchRel?.code || null
     const semesterNumber = semesterRel?.semester_number || null
+
+    const branchId = profileRow.branch_id
+    const yearId = profileRow.year_id
+    const semesterId = profileRow.semester_id
 
     // Defensive: If missing critical context, advise re-auth workflow in message
     const contextWarnings: string[] = []
@@ -215,10 +220,42 @@ export async function GET() {
       return { recentUpdates, upcomingExams, upcomingReminders }
     })()
 
-    const [subjectsResult, staticResults, dynamicResults] = await Promise.all([
+    // Resources data
+    const resourcesPromise = (async () => {
+      const secStart = Date.now()
+      if (!branchId || !yearId || !semesterId) return {}
+
+      const { data: resources, error } = await supabase
+        .from('resources')
+        .select('*')
+        .eq('branch_id', branchId)
+        .eq('year_id', yearId)
+        .or(`semester_id.eq.${semesterId},semester_id.is.null`)
+        .order('unit', { ascending: true })
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('[bulk] resources query error:', error)
+        return {}
+      }
+
+      // Group by category and subject
+      const grouped = {} as Record<string, Record<string, any[]>>
+      (resources || []).forEach((r: any) => {
+        if (!grouped[r.subject]) grouped[r.subject] = {}
+        if (!grouped[r.subject][r.category]) grouped[r.subject][r.category] = []
+        grouped[r.subject][r.category].push(r)
+      })
+
+      t.resourcesMs = Date.now() - secStart
+      return grouped
+    })()
+
+    const [subjectsResult, staticResults, dynamicResults, resourcesResult] = await Promise.all([
       subjectsPromise,
       staticPromise,
-      dynamicPromise
+      dynamicPromise,
+      resourcesPromise
     ])
     t.subjectsMs = (subjectsResult as any)?._meta?.durationMs ?? t.subjectsMs
 
@@ -248,6 +285,7 @@ export async function GET() {
         upcomingExams: upcomingExams?.data || [],
         upcomingReminders: upcomingReminders?.data || []
       },
+      resources: resourcesResult || {},
       contextWarnings,
       timestamp: Date.now(),
       meta: {
@@ -257,6 +295,7 @@ export async function GET() {
           subjectsMs: t.subjectsMs,
           staticMs: t.staticMs,
           dynamicMs: t.dynamicMs,
+          resourcesMs: t.resourcesMs,
         }
       }
     }

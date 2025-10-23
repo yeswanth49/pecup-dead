@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
-import { ProfileCache, StaticCache, SubjectsCache, DynamicCache } from '@/lib/simple-cache'
+import { ProfileCache, StaticCache, SubjectsCache, DynamicCache, ResourcesCache } from '@/lib/simple-cache'
 import { useProfile } from '@/lib/enhanced-profile-context'
 import { PerfMon } from '@/lib/performance-monitor'
 
@@ -11,6 +11,7 @@ type CacheStatus = {
   staticData: { present: boolean; keys?: string[] }
   dynamicData: { present: boolean }
   subjects: { present: boolean; count?: number; context?: { branch: string; year: number; semester: number } | null }
+  resources: { present: boolean; count?: number }
 }
 
 export function CacheDebugger() {
@@ -38,6 +39,10 @@ export function CacheDebugger() {
         ? SubjectsCache.get(subjectsContext.branch, subjectsContext.year, subjectsContext.semester)
         : null
 
+      // Check resources cache
+      const resourcesKeys = Object.keys(localStorage).filter(key => key.startsWith('resources_'))
+      const resourcesPresent = resourcesKeys.length > 0
+
       const s: CacheStatus = {
         profile: { present: !!prof, email, id: (prof as any)?.id ?? null },
         staticData: { present: !!stat, keys: stat ? Object.keys(stat as any) : [] },
@@ -46,6 +51,10 @@ export function CacheDebugger() {
           present: Array.isArray(subs) && subs.length > 0,
           count: Array.isArray(subs) ? subs.length : 0,
           context: subjectsContext
+        },
+        resources: {
+          present: resourcesPresent,
+          count: resourcesKeys.length
         }
       }
       setStatus(s)
@@ -70,6 +79,7 @@ export function CacheDebugger() {
       StaticCache.clear()
       DynamicCache.clear()
       SubjectsCache.clearAll()
+      ResourcesCache.clearAll()
     } catch (_) {}
     computeStatus()
   }
@@ -158,6 +168,14 @@ export function CacheDebugger() {
                 <div><span className="text-muted-foreground">present:</span> {status?.subjects.present ? 'yes' : 'no'}</div>
                 {typeof status?.subjects.count === 'number' && (
                   <div><span className="text-muted-foreground">count:</span> {status?.subjects.count}</div>
+                )}
+              </section>
+
+              <section className="rounded border p-2">
+                <div className="font-medium mb-1">ResourcesCache</div>
+                <div><span className="text-muted-foreground">present:</span> {status?.resources.present ? 'yes' : 'no'}</div>
+                {typeof status?.resources.count === 'number' && (
+                  <div><span className="text-muted-foreground">count:</span> {status?.resources.count}</div>
                 )}
               </section>
 

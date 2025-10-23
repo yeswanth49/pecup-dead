@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { useSession } from 'next-auth/react'
-import { ProfileCache, StaticCache, SubjectsCache, DynamicCache, ProfileDisplayCache } from './simple-cache'
+import { ProfileCache, StaticCache, SubjectsCache, DynamicCache, ProfileDisplayCache, ResourcesCache } from './simple-cache'
 import { PerfMon } from './performance-monitor'
 import { broadcastBulkCacheUpdate, subscribeToBulkCacheUpdates } from './cross-tab'
 
@@ -121,17 +121,18 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 			foundCache = true
 
 			// Try to load subjects for this profile
-			if (cachedProfile && typeof cachedProfile.year === 'number' && cachedProfile.year > 0 && cachedProfile.branch && cachedProfile.semester) {
-				const cachedSubjects = SubjectsCache.get(
-					cachedProfile.branch,
-					cachedProfile.year,
-					cachedProfile.semester
-				)
-				PerfMon.recordCacheCheck(!!cachedSubjects)
-				if (cachedSubjects) {
-					setSubjects(cachedSubjects)
+				let cachedSubjects: Subject[] | null = null
+				if (cachedProfile && typeof cachedProfile.year === 'number' && cachedProfile.year > 0 && cachedProfile.branch && cachedProfile.semester) {
+					cachedSubjects = SubjectsCache.get(
+						cachedProfile.branch,
+						cachedProfile.year,
+						cachedProfile.semester
+					)
+					PerfMon.recordCacheCheck(!!cachedSubjects)
+					if (cachedSubjects) {
+						setSubjects(cachedSubjects)
+					}
 				}
-			}
 		}
 
 		if (cachedStatic) {
@@ -162,6 +163,22 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 					// eslint-disable-next-line no-console
 					console.error('Initial fetch failed (no cache):', err)
 				}
+			})
+		}
+
+		// Log cache status for debugging
+		if (process.env.NODE_ENV !== 'production') {
+			let subjectsCount = 0
+			if (cachedProfile && typeof cachedProfile.year === 'number' && cachedProfile.year > 0 && cachedProfile.branch && cachedProfile.semester) {
+				const subjects = SubjectsCache.get(cachedProfile.branch, cachedProfile.year, cachedProfile.semester)
+				subjectsCount = subjects?.length || 0
+			}
+			console.log('[DEBUG] ProfileContext cache status:', {
+				hasCachedProfile: !!cachedProfile,
+				hasCachedStatic: !!cachedStatic,
+				hasCachedDynamic: !!cachedDynamic,
+				hasCachedSubjects: subjectsCount > 0,
+				subjectsCount
 			})
 		}
 	// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -252,6 +269,15 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 				)
 			}
 
+			// Cache resources
+			if (data.resources) {
+				Object.keys(data.resources).forEach(subject => {
+					Object.keys(data.resources[subject]).forEach(category => {
+						ResourcesCache.set(category, subject, data.resources[subject][category])
+					})
+				})
+			}
+
 			// Cross-tab broadcast so other tabs can hydrate their session caches/state
 			try {
 				broadcastBulkCacheUpdate(email, {
@@ -291,10 +317,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 	}
 
 	const forceRefresh = async () => {
+		if (process.env.NODE_ENV !== 'production') {
+			console.log('[DEBUG] Force refresh triggered')
+		}
 		ProfileCache.clear()
 		StaticCache.clear()
 		DynamicCache.clear()
 		try { ProfileDisplayCache.clear() } catch (_) {}
+		ResourcesCache.clearAll()
 		if (profile && profile.branch && profile.year && profile.semester) {
 			SubjectsCache.clearForContext(profile.branch, profile.year, profile.semester)
 		}

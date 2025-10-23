@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react'
 import { useProfile } from '@/lib/enhanced-profile-context'
-import { ProfileCache, SubjectsCache } from '@/lib/simple-cache'
+import { ProfileCache, SubjectsCache, ResourcesCache } from '@/lib/simple-cache'
 
 /**
  * Hook that exposes cache invalidation helpers for profile-related data.
@@ -35,7 +35,11 @@ export function useProfileInvalidation() {
     setIsLoading(true)
     setError(null)
     try {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[DEBUG] Invalidating profile cache on update')
+      }
       ProfileCache.clear()
+      ResourcesCache.clearAll()
       await refreshProfile()
     } catch (e: any) {
       const err = e instanceof Error ? e : new Error(e?.message || 'Failed to refresh profile')
@@ -49,6 +53,10 @@ export function useProfileInvalidation() {
     setIsLoading(true)
     setError(null)
     try {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[DEBUG] Invalidating cache on semester change')
+      }
+      ResourcesCache.clearAll()
       if (profile && profile.branch && profile.year && profile.semester != null) {
         SubjectsCache.clearForContext(profile.branch, profile.year, profile.semester)
       } else {

@@ -15,8 +15,8 @@ This guide explains how to fetch academic data efficiently. The preferred approa
 ## Bulk API Approach
 
 - **Endpoint**: `GET /api/bulk-academic-data`
-- **What it returns**: `profile`, `subjects`, `static` (branches, years, semesters), `dynamic` (recentUpdates, upcomingExams, upcomingReminders), optional `contextWarnings`, and `meta.timings`.
-- **Why**: Reduces redundant calls and DB queries by ~80%, enables robust client-side caching.
+- **What it returns**: `profile`, `subjects`, `static` (branches, years, semesters), `dynamic` (recentUpdates, upcomingExams, upcomingReminders), `resources` (all resources for subjects), optional `contextWarnings`, and `meta.timings`.
+- **Why**: Reduces redundant calls and DB queries by ~80%, enables robust client-side caching, prefetches resources to eliminate on-demand loading.
 
 Response shape (simplified):
 ```json
@@ -24,7 +24,13 @@ Response shape (simplified):
   "profile": { "id": "uuid", "email": "...", "year": 1, "branch": "CSE", "semester": 1 },
   "subjects": [ { "id": "uuid", "code": "CS101", "name": "Programming" } ],
   "static": { "branches": [], "years": [], "semesters": [] },
-  "dynamic": { "recentUpdates": [], "upcomingExams": [], "upcomingReminders": [] }
+  "dynamic": { "recentUpdates": [], "upcomingExams": [], "upcomingReminders": [] },
+  "resources": {
+    "CS101": {
+      "notes": [ { "id": "uuid", "name": "Lecture 1", "type": "pdf", "url": "...", "unit": 1 } ],
+      "assignments": [ { "id": "uuid", "name": "Assignment 1", "type": "doc", "url": "...", "unit": 1 } ]
+    }
+  }
 }
 ```
 
@@ -60,9 +66,10 @@ export function HomeSummary() {
 ```
 
 Key behaviors:
-- **Caching**: `ProfileCache` and `DynamicCache` use `sessionStorage`; `StaticCache` and `SubjectsCache` use `localStorage` with TTL/keys.
+- **Caching**: `ProfileCache`, `DynamicCache`, and `ResourcesCache` use `localStorage` with TTL/keys; `StaticCache` and `SubjectsCache` use `localStorage` with TTL/keys.
 - **Auto-refresh**: Dynamic data is refreshed when the tab regains focus if the cache expired.
 - **Cross-tab sync**: Updates are broadcast between tabs to avoid duplicate network calls.
+- **Prefetching**: Resources are prefetched in the bulk API and cached per category/subject for instant loading.
 
 ## Database Schema Overview
 

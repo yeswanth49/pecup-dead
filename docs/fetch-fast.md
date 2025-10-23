@@ -51,11 +51,20 @@ This document outlines a simplified, practical implementation plan to optimize d
     "upcomingExams": [ { "subject": "CS101", "exam_date": "YYYY-MM-DD", "year": 1, "branch": "CSE" } ],
     "upcomingReminders": [ { "id": "uuid", "title": "...", "due_date": "YYYY-MM-DD" } ]
   },
+  "resources": {
+    "CS101": {
+      "notes": [ { "id": "uuid", "name": "Lecture 1", "type": "pdf", "url": "...", "unit": 1 } ],
+      "assignments": [ { "id": "uuid", "name": "Assignment 1", "type": "doc", "url": "...", "unit": 1 } ]
+    },
+    "CS102": {
+      "notes": [ { "id": "uuid", "name": "Lecture 1", "type": "pdf", "url": "...", "unit": 1 } ]
+    }
+  },
   "contextWarnings": [],
   "timestamp": 1720000000000,
   "meta": {
     "loadedInMs": 123,
-    "timings": { "profileMs": 10, "subjectsMs": 20, "staticMs": 30, "dynamicMs": 40 }
+    "timings": { "profileMs": 10, "subjectsMs": 20, "staticMs": 30, "dynamicMs": 40, "resourcesMs": 50 }
   }
 }
 ```
@@ -207,6 +216,7 @@ export async function GET(request: Request) {
 - **ProfileCache**: sessionStorage, whitelists safe fields; clears on user mismatch
 - **StaticCache**: localStorage with 30-day TTL; handles quota exceeded with retry
 - **SubjectsCache**: localStorage per-context key `subjects_{branch}_{year}_{semester}`; cleans up on quota
+- **ResourcesCache**: localStorage per-subject-category key `resources_{category}_{subject}`; prefetches all resources for subjects
 - **DynamicCache**: sessionStorage with 10-minute TTL; safe clear on parse errors
 
 #### Step 3: Update Profile Context
@@ -520,18 +530,20 @@ useEffect(() => {
 ```typescript
 import { useCallback } from 'react'
 import { useProfile } from './enhanced-profile-context'
-import { ProfileCache, SubjectsCache } from './simple-cache'
+import { ProfileCache, SubjectsCache, ResourcesCache } from './simple-cache'
 
 export function useProfileInvalidation() {
   const { refreshProfile } = useProfile()
   
   const invalidateOnProfileUpdate = useCallback(() => {
     ProfileCache.clear()
+    ResourcesCache.clearAll()
     refreshProfile()
   }, [refreshProfile])
   
   const invalidateOnSemesterChange = useCallback(() => {
     SubjectsCache.clearAll()
+    ResourcesCache.clearAll()
     ProfileCache.clear()
     refreshProfile()
   }, [refreshProfile])
@@ -552,7 +564,7 @@ export function useProfileInvalidation() {
 
 import { useState } from 'react'
 import { useSession } from 'next-auth/react'
-import { ProfileCache, StaticCache, SubjectsCache, DynamicCache } from '@/lib/simple-cache'
+import { ProfileCache, StaticCache, SubjectsCache, DynamicCache, ResourcesCache } from '@/lib/simple-cache'
 
 export function CacheDebugger() {
   const [showDebug, setShowDebug] = useState(false)
@@ -565,6 +577,7 @@ export function CacheDebugger() {
     StaticCache.clear()
     DynamicCache.clear()
     SubjectsCache.clearAll()
+    ResourcesCache.clearAll()
     alert('All caches cleared!')
   }
 
@@ -586,6 +599,16 @@ export function CacheDebugger() {
     }
   }
 
+  const checkResourcesCache = () => {
+    if (typeof window === 'undefined') return false
+    try {
+      const keys = Object.keys(localStorage).filter(key => key.startsWith('resources_'))
+      return keys.length > 0
+    } catch {
+      return false
+    }
+  }
+
   return (
     <div className="fixed bottom-4 right-4 z-50">
       <button
@@ -602,6 +625,7 @@ export function CacheDebugger() {
             <div>Profile: {checkProfileCache() ? '✅' : '❌'}</div>
             <div>Static: {StaticCache.get() as any ? '✅' : '❌'}</div>
             <div>Dynamic: {DynamicCache.get() as any ? '✅' : '❌'}</div>
+            <div>Resources: {checkResourcesCache() ? '✅' : '❌'}</div>
           </div>
           <button
             onClick={clearAllCaches}
@@ -779,6 +803,7 @@ describe('/api/bulk-academic-data', () => {
 - **Profile Cache**: Clear on profile updates, user role changes
 - **Static Cache**: Manual invalidation, 30-day TTL
 - **Subjects Cache**: Clear on semester changes, manual admin updates
+- **Resources Cache**: Clear on profile/semester changes, manual refresh
 - **Dynamic Cache**: 10-minute TTL, refresh on focus
 
 ### Rollback Plan
