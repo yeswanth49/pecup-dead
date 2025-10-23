@@ -208,10 +208,11 @@ export default function SubjectPage({
       setLoading(true)
       setError(null)
 
-      const currentUrl = new URL(window.location.href)
-      const qpYear = currentUrl.searchParams.get('year') || undefined
-      const qpSem = currentUrl.searchParams.get('semester') || undefined
-      const qpBranch = currentUrl.searchParams.get('branch') || undefined
+      const normalize = (value: string | string[] | undefined) =>
+        Array.isArray(value) ? value[0] : value ?? undefined
+      const qpYear = normalize(searchParams.year)
+      const qpSem = normalize(searchParams.semester)
+      const qpBranch = normalize(searchParams.branch)
 
       const queryParams = new URLSearchParams({
         category,
@@ -238,7 +239,7 @@ export default function SubjectPage({
     }
 
     fetchResources()
-  }, [category, decodedSubject])
+  }, [category, decodedSubject, searchParams.year, searchParams.semester, searchParams.branch])
 
   const resultCount = visibleResources.length
 
