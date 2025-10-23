@@ -174,9 +174,13 @@ export default function SubjectPage({
     setLoadingFile(resource.id)
 
     try {
-       console.log(`Frontend: Fetching secure URL for resource ${resource.id}`)
+       if (process.env.NODE_ENV !== 'production') {
+         console.log(`[DEBUG] Fetching secure URL for resource ${resource.id}`)
+       }
        const response = await fetch(`/api/resources/${encodeURIComponent(resource.id)}/secure-url`)
-       console.log(`Frontend: Secure URL response status: ${response.status}`)
+       if (process.env.NODE_ENV !== 'production') {
+         console.log(`[DEBUG] Secure URL response status: ${response.status}`)
+       }
        if (!response.ok) {
          let msg = 'Failed to get secure URL'
          try {
@@ -186,7 +190,9 @@ export default function SubjectPage({
          throw new Error(msg)
        }
        const { secureUrl } = await response.json()
-       console.log(`Frontend: Secure URL generated for resource ${resource.id}`)
+       if (process.env.NODE_ENV !== 'production') {
+         console.log(`[DEBUG] Secure URL generated for resource ${resource.id}`)
+       }
 
       if (action === 'download') {
         const link = document.createElement('a')
@@ -199,7 +205,12 @@ export default function SubjectPage({
         window.open(secureUrl, '_blank', 'noopener,noreferrer')
       }
     } catch (error: unknown) {
-      console.error('Failed to access secure file:', error)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[DEBUG] Failed to access secure file:', {
+          message: error instanceof Error ? error.message : String(error),
+          errorType: typeof error
+        })
+      }
     } finally {
       setLoadingFile(null)
     }
@@ -226,18 +237,37 @@ export default function SubjectPage({
       if (qpSem) queryParams.set('semester', qpSem)
       if (qpBranch) queryParams.set('branch', qpBranch)
 
+
       try {
-        console.log(`Frontend: Fetching resources with params: ${queryParams.toString()}`)
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[DEBUG] Fetching resources - sanitized params:`, {
+            category,
+            subject: decodedSubject,
+            hasYear: !!qpYear,
+            hasSem: !!qpSem,
+            hasBranch: !!qpBranch
+          })
+        }
         const response = await fetch(`/api/resources?${queryParams.toString()}`, { cache: 'no-store' })
-        console.log(`Frontend: Response status: ${response.status}`)
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[DEBUG] Response status: ${response.status}`)
+        }
         if (!response.ok) {
           throw new Error(`Failed to fetch resources: ${response.status}`)
         }
         const data = await response.json()
-        console.log(`Frontend: Received ${Array.isArray(data) ? data.length : 0} resources`)
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[DEBUG] Received ${Array.isArray(data) ? data.length : 0} resources`)
+        }
         setResources(Array.isArray(data) ? data : [])
       } catch (err: any) {
-        console.error('Frontend: Error fetching resources:', err)
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('[DEBUG] Error fetching resources:', {
+            message: err.message,
+            hasSensitiveInfo: err.message?.includes('year') || err.message?.includes('semester') || err.message?.includes('branch'),
+            errorType: typeof err
+          })
+        }
         setError(err.message || 'Failed to load resources')
       } finally {
         setLoading(false)
