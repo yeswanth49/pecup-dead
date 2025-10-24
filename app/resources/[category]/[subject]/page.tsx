@@ -163,15 +163,19 @@ export default function SubjectPage({
   // Handle secure file access
   const handleSecureFileAccess = async (resource: Resource, action: 'view' | 'download') => {
     if (!resource.id) {
+      if (!resource.url) {
+        console.error('Resource has neither id nor url')
+        return
+      }
       if (action === 'download') {
         const link = document.createElement('a')
-        link.href = resource.url!
+        link.href = resource.url
         link.download = resource.name
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
       } else {
-        window.open(resource.url!, '_blank', 'noopener,noreferrer')
+        window.open(resource.url, '_blank', 'noopener,noreferrer')
       }
       return
     }
