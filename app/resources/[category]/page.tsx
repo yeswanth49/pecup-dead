@@ -24,11 +24,13 @@ const resourceData = {
   },
 } as const
 
-export default function CategoryPage({ params, searchParams }: { 
-  params: { category: string }
-  searchParams: { year?: string; semester?: string; branch?: string }
+export default async function CategoryPage({ params, searchParams }: {
+  params: Promise<{ category: string }>
+  searchParams: Promise<{ year?: string; semester?: string; branch?: string }>
 }) {
-  const { category } = params
+  const { category } = await params
+  const resolvedSearchParams = await searchParams
+
   if (!resourceData[category as keyof typeof resourceData]) {
     notFound()
   }
