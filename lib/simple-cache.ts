@@ -324,8 +324,8 @@ export class ResourcesCache {
 
   static set(category: string, subject: string, resources: Resource[], year?: string, semester?: string, branch?: string) {
     if (typeof window === 'undefined') return
+    const key = this.getKey(category, subject, year, semester, branch)
     try {
-      const key = this.getKey(category, subject, year, semester, branch)
       localStorage.setItem(
         key,
         JSON.stringify({ resources, timestamp: Date.now(), context: { category, subject, year, semester, branch } })
@@ -412,8 +412,7 @@ export class ResourcesCache {
       }
     } catch (_) {}
   }
-  }
-
+ 
   static clearAll() {
     if (typeof window === 'undefined') return
     try {
