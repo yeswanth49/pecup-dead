@@ -32,6 +32,12 @@ function sanitizeForLogging(payload: any): any {
   return sanitized;
 }
 
+function maskEmail(e?: string | null) {
+  if (!e) return '[unknown]';
+  const [u, d] = e.split('@');
+  return `${u?.slice(0, 2) || ''}***@${d || ''}`;
+}
+
 interface ProfilePayload {
   name: string;
   branch_id: string;
@@ -115,10 +121,19 @@ export async function GET() {
 
     const userRole = base?.role || 'student';
     const calculatedYear = batchYear ? await calculateYearLevel(batchYear) : 1;
+    const validYear = Math.min(2, calculatedYear);
+
+    // Enhanced logging for GET endpoint
+    console.log('DEBUG: GET Profile year calculation:', {
+      batchYear,
+      calculatedYear,
+      validYear,
+      userId: maskEmail(email)
+    });
 
     profile = {
       ...base,
-      year: calculatedYear,
+      year: validYear,
       branch: branchCode || 'Unknown',
       role: userRole
     };
@@ -140,34 +155,13 @@ export async function POST(request: Request) {
   }
 
   const validation = validatePayload(body);
-  if (!validation.ok) return NextResponse.json({ error: validation.error }, { status: 400 });
+  if (!validation.ok) return NextResponse.json({ error: (validation as any).error }, { status: 400 });
 
   const supabase = createSupabaseAdmin();
   const payload = { email, ...validation.data };
 
-  // Calculate the year level from year_id
-  let computedYear = 1; // Default
-  if (payload.year_id) {
-    const { data: yearData } = await supabase
-      .from('years')
-      .select('batch_year')
-      .eq('id', payload.year_id)
-      .maybeSingle();
-    if (yearData?.batch_year) {
-      computedYear = await calculateYearLevel(yearData.batch_year);
-    }
-  }
-  payload.year = computedYear;
-
-  // Fetch and set branch code from branch_id
-  if (payload.branch_id) {
-    const { data: branchData } = await supabase
-      .from('branches')
-      .select('code')
-      .eq('id', payload.branch_id)
-      .maybeSingle();
-    payload.branch = branchData?.code || null;
-  }
+  // Note: year and branch are computed on API response, not stored in database
+  // The database stores only the foreign keys (year_id, branch_id, semester_id)
 
   // Validate foreign key references before inserting
   const [branchCheck, yearCheck, semesterCheck] = await Promise.all([
@@ -210,16 +204,101 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid semester ID' }, { status: 422 });
   }
 
+  // Fetch batch_year from years table and branch code from branches table
+  const [yearRes, branchRes] = await Promise.all([
+    supabase.from('years').select('batch_year').eq('id', payload.year_id).maybeSingle(),
+    supabase.from('branches').select('code').eq('id', payload.branch_id).maybeSingle()
+  ]);
+
+  if (yearRes.error) {
+    console.error('Year fetch error:', yearRes.error);
+    return NextResponse.json({ error: 'Database error during year fetch', details: yearRes.error.message }, { status: 500 });
+  }
+
+  if (branchRes.error) {
+    console.error('Branch fetch error:', branchRes.error);
+    return NextResponse.json({ error: 'Database error during branch fetch', details: branchRes.error.message }, { status: 500 });
+  }
+
+  const fetchedBatchYear = yearRes.data?.batch_year;
+  const fetchedBranchCode = branchRes.data?.code || 'Unknown';
+  const computedYear = fetchedBatchYear ? await calculateYearLevel(fetchedBatchYear) : 1;
+
+  // Use batch year for database insert to match constraint (2020-2030)
+  payload.year = fetchedBatchYear;
+
+  // Add logging to debug
+  console.log('DEBUG: Profile year calculation:', {
+    fetchedBatchYear,
+    computedYear,
+    userId: maskEmail(email)
+  });
+
+  // Enhanced logging to understand constraint violation
+  const configDetails = await academicConfig.getConfig();
+  console.log('DEBUG: Academic config details:', {
+    programLength: configDetails.programLength,
+    startMonth: configDetails.startMonth,
+    currentAcademicYear: configDetails.currentAcademicYear,
+    yearMappings: configDetails.yearMappings
+  });
+  payload.branch = fetchedBranchCode;
+
+  // Log the final payload structure that will be inserted into the database
+  console.log('DEBUG: Payload structure before database insert:', {
+    keys: Object.keys(payload),
+    values: Object.fromEntries(
+      Object.entries(payload).map(([key, value]) => [key, key === 'email' ? maskEmail(value as string) : value])
+    )
+  });
+
   // Check if profile exists before update
   const { data: existingProfile, error: checkError } = await supabase
     .from('profiles')
     .select('id')
     .eq('email', email)
     .maybeSingle();
-
-  console.log('Profile check for email:', email, {
+  console.log('Profile check for user:', maskEmail(email), {
     exists: !!existingProfile,
     error: checkError ? { code: checkError.code, message: checkError.message } : null
+  });
+
+  // DEBUG: Log the final payload before upsert to understand constraint violation
+  console.log('DEBUG: Profile upsert payload:', sanitizeForLogging(payload));
+
+  // Log the profiles_year_check constraint details for debugging
+  const { data: constraints, error: constraintError } = await supabase
+    .from('information_schema.check_constraints')
+    .select('constraint_name, check_clause')
+    .eq('constraint_name', 'profiles_year_check')
+    .eq('table_name', 'profiles');
+
+  if (constraintError) {
+    console.error('DEBUG: Failed to fetch constraint:', constraintError);
+  } else if (constraints && constraints.length > 0) {
+    console.log('DEBUG: profiles_year_check constraint:', constraints[0]);
+  } else {
+    console.log('DEBUG: profiles_year_check constraint not found');
+    // Also check for any other constraints on the profiles table
+    const { data: allConstraints, error: allError } = await supabase
+      .from('information_schema.check_constraints')
+      .select('constraint_name, check_clause')
+      .eq('table_name', 'profiles');
+    if (!allError && allConstraints) {
+      console.log('DEBUG: All check constraints on profiles table:', allConstraints);
+    }
+  }
+
+  // Enhanced logging before upsert
+  console.log('DEBUG: Final values before database insert:', {
+    email: maskEmail(email),
+    computedYear,
+    fetchedBatchYear,
+    payloadYear: payload.year,
+    payloadBranch: payload.branch,
+    yearId: payload.year_id,
+    branchId: payload.branch_id,
+    semesterId: payload.semester_id
   });
 
   if (checkError) {
@@ -256,7 +335,7 @@ export async function POST(request: Request) {
       details: error.details,
       hint: error.hint,
       payload: sanitizeForLogging(payload),
-      userId: email // Safe identifier for debugging
+      userId: maskEmail(email)
     });
 
     // Handle uniqueness violations (e.g., roll_number)
@@ -272,8 +351,8 @@ export async function POST(request: Request) {
   // Enrich without relationship expansion
   const base = data as any;
 
-  let branchCode: string | null = null;
-  let batchYear: number | null = null;
+  let enrichedBranchCode: string | null = null;
+  let enrichedBatchYear: number | null = null;
 
   if (base.branch_id) {
     const { data: b } = await supabase
@@ -281,7 +360,7 @@ export async function POST(request: Request) {
       .select('code')
       .eq('id', base.branch_id)
       .maybeSingle();
-    branchCode = (b as any)?.code ?? null;
+    enrichedBranchCode = (b as any)?.code ?? null;
   }
 
   if (base.year_id) {
@@ -290,16 +369,19 @@ export async function POST(request: Request) {
       .select('batch_year')
       .eq('id', base.year_id)
       .maybeSingle();
-    batchYear = (y as any)?.batch_year ?? null;
+    enrichedBatchYear = (y as any)?.batch_year ?? null;
   }
 
   const userRole = base?.role || 'student';
-  const calculatedYear = batchYear ? await calculateYearLevel(batchYear) : 1;
+  const enrichedCalculatedYear = enrichedBatchYear ? await calculateYearLevel(enrichedBatchYear) : 1;
+
+  // Clamp year for response (academic year level)
+  const validEnrichedYear = Math.min(2, enrichedCalculatedYear);
 
   const profile = {
     ...base,
-    year: calculatedYear,
-    branch: branchCode || 'Unknown',
+    year: validEnrichedYear,
+    branch: enrichedBranchCode || 'Unknown',
     role: userRole
   };
 
