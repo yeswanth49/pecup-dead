@@ -1,14 +1,6 @@
 // Security-minded caches with SSR guards and safe fallbacks
 
-interface Resource {
-  id?: string
-  name: string
-  description?: string
-  date: string
-  type: string
-  url: string
-  unit?: number
-}
+import type { Resource } from './types'
 
 // Type-guard function to validate CachedProfile shape and types
 function isCachedProfile(obj: unknown): obj is CachedProfile {
