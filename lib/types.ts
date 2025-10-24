@@ -210,7 +210,7 @@ export interface SubjectOffering {
 
 // Utility types
 export type BranchCode = 'CSE' | 'AIML' | 'DS' | 'AI' | 'ECE' | 'EEE' | 'MEC' | 'CE';
-export type SemesterNumber = 1 | 2;
+export type SemesterNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 export type AdminRole = 'admin' | 'yeshh';
 export type UserRole = 'student' | 'representative' | 'admin' | 'yeshh' | null;
 

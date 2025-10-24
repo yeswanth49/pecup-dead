@@ -10,8 +10,16 @@ import { academicConfig } from '@/lib/academic-config';
 
 const supabaseAdmin = createSupabaseAdmin();
 
-// Maximum academic year level for this program
-const MAX_YEAR_LEVEL = 2;
+// Helper function to get maximum academic year level from configuration
+async function getMaxYearLevel(): Promise<number> {
+  try {
+    const config = await academicConfig.getConfig();
+    return config.programLength;
+  } catch (error) {
+    console.warn('Failed to fetch academic config, using default max year level:', error);
+    return 4; // Default fallback value
+  }
+}
 
 // Helper function to dynamically calculate academic year level from batch year
 async function calculateYearLevel(batchYear: number | undefined): Promise<number> {
@@ -122,7 +130,8 @@ export async function GET() {
 
     const userRole = base?.role || 'student';
     const calculatedYear = batchYear ? await calculateYearLevel(batchYear) : 1;
-    const validYear = Math.min(MAX_YEAR_LEVEL, calculatedYear);
+    const maxYearLevel = await getMaxYearLevel();
+    const validYear = Math.min(maxYearLevel, calculatedYear);
 
     // Debug logging for development
     if (process.env.NODE_ENV === 'development') {
@@ -319,7 +328,8 @@ export async function POST(request: Request) {
   const enrichedCalculatedYear = enrichedBatchYear ? await calculateYearLevel(enrichedBatchYear) : 1;
 
   // Clamp year for response (academic year level)
-  const validEnrichedYear = Math.min(MAX_YEAR_LEVEL, enrichedCalculatedYear);
+  const maxYearLevel = await getMaxYearLevel();
+  const validEnrichedYear = Math.min(maxYearLevel, enrichedCalculatedYear);
 
   const profile = {
     ...base,
