@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useSessionCachedResource } from '@/lib/profile-context'
+import { useSessionCachedResource } from '@/lib/session-cache'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -46,7 +46,7 @@ export function RemindersSection({ userContext }: { userContext: UserContext | n
       }
     } else if (profile?.year || profile?.branch) {
       // For admins, use profile if available
-      if (profile.year) p.set('year', String(profile.year))
+      if (typeof profile.year === 'number' && profile.year > 0) p.set('year', String(profile.year))
       if (profile.branch) p.set('branch', profile.branch)
     }
     

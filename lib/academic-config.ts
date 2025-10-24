@@ -81,8 +81,26 @@ export class AcademicConfigManager {
       .in('config_key', ['program_settings', 'year_mappings']);
 
     if (error) {
-      console.warn('Failed to load academic configuration (table may not exist), using defaults:', error.message);
-      // Return default configuration on error
+      // Gracefully handle missing table (Postgres undefined_table: 42P01) and similar messages
+      const code = (error as any)?.code;
+      const msg = typeof (error as any)?.message === 'string' ? (error as any).message : String(error);
+      const details = (error as any)?.details || '';
+      const isMissingTable =
+        code === '42P01' ||
+        /relation .*academic_config.* does not exist/i.test(msg) ||
+        /undefined_table/i.test(String(details));
+
+      if (isMissingTable) {
+        // Table not created yet; operate with defaults (avoid noisy warnings in prod)
+        if (process.env.NODE_ENV !== 'production') {
+          console.info(
+            '[academic-config] academic_config table missing; using defaults. Apply the migration to create it.'
+          );
+        }
+        return this.getDefaultConfig();
+      }
+
+      console.warn('[academic-config] Failed to load academic configuration; using defaults:', { code, msg });
       return this.getDefaultConfig();
     }
 

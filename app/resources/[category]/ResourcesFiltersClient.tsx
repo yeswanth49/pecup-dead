@@ -3,11 +3,15 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import { ChevronRight } from "lucide-react"
-import { useEffect, useState } from 'react'
+import { useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Subject } from '@/lib/types'
-import { buildSubjectsQuery } from '@/lib/resource-utils'
+import type { Subject } from '@/lib/enhanced-profile-context'
+import { getResourceTypeForCategory } from '@/lib/resource-utils'
+import { useProfile } from '@/lib/enhanced-profile-context'
+import { getSubjectDisplay } from '@/lib/subject-display'
+
+type ResourceSubject = Subject
 
 interface ResourcesFiltersClientProps {
   category: string
@@ -18,77 +22,20 @@ interface ResourcesFiltersClientProps {
 }
 
 export default function ResourcesFiltersClient({ category, categoryData }: ResourcesFiltersClientProps) {
-  const [subjects, setSubjects] = useState<Subject[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const searchParams = useSearchParams()
+  const { subjects, loading } = useProfile()
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
-      setError(null)
-      try {
-        const qp = buildSubjectsQuery(searchParams, category)
-        
-        // Check if we have at least some meaningful parameters before making the API call
-        const hasYear = qp.has('year') && qp.get('year')
-        const hasBranch = qp.has('branch') && qp.get('branch')
-        
-        if (!hasYear && !hasBranch) {
-          // If we don't have year or branch, don't make the API call
-          // The API will try to infer from profile, but if profile is incomplete, it will fail
-          console.log('ResourcesFiltersClient: No year/branch parameters, skipping subjects fetch')
-          setSubjects([])
-          setLoading(false)
-          return
-        }
-        
-        const res = await fetch(`/api/subjects?${qp.toString()}`, { cache: 'no-store' })
-        const json = await res.json()
-        
-        if (!res.ok) {
-          throw new Error(json?.error || `HTTP ${res.status}`)
-        }
-        
-        setSubjects(json?.subjects || [])
-      } catch (err) {
-        console.error('Failed to load subjects:', err)
-        setError('Failed to load subjects. Please try again.')
-        setSubjects([])
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [searchParams, category])
-
-  const handleRetry = () => {
-    setError(null)
-    // Trigger reload by updating loading state
-    setLoading(true)
-    // The useEffect will handle the actual reload
-  }
-
-  if (error) {
-    return (
-      <div className="space-y-4">
-        <div className="text-center p-6 border border-red-200 rounded-lg bg-red-50">
-          <p className="text-red-600 mb-2">{error}</p>
-          <button 
-            onClick={handleRetry}
-            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    )
-  }
+  const filteredSubjects = useMemo(() => {
+    const resourceType = getResourceTypeForCategory(category)
+    if (!Array.isArray(subjects) || subjects.length === 0) return []
+    if (!resourceType) return subjects as ResourceSubject[]
+    return subjects.filter((s: Subject) => (s?.resource_type || 'resources') === resourceType) as ResourceSubject[]
+  }, [subjects, category])
 
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {!loading && subjects.map((s) => {
+      {!loading && filteredSubjects.map((s: ResourceSubject) => {
         const qp = new URLSearchParams()
         const year = searchParams.get('year')
         const semester = searchParams.get('semester')
@@ -102,8 +49,8 @@ export default function ResourcesFiltersClient({ category, categoryData }: Resou
           <Link key={s.code} href={`/resources/${category}/${encodeURIComponent(s.code)}${q ? `?${q}` : ''}`} className="block">
             <Card className="h-full transition-all-smooth hover-lift">
               <CardHeader>
-                <CardTitle>{s.code}</CardTitle>
-                <CardDescription>Access {s.code} {categoryData.title.toUpperCase()}</CardDescription>
+                <CardTitle>{getSubjectDisplay(s, true)}</CardTitle>
+                <CardDescription>Explore resources and tools for {categoryData.title.toUpperCase()}</CardDescription>
               </CardHeader>
               <CardContent className="flex justify-end">
                 <ChevronRight className="h-5 w-5 text-primary" />
@@ -112,7 +59,7 @@ export default function ResourcesFiltersClient({ category, categoryData }: Resou
           </Link>
         )
       })}
-      {!loading && subjects.length === 0 && (
+      {!loading && filteredSubjects.length === 0 && (
         <div className="text-sm text-muted-foreground">No subjects configured for your context.</div>
       )}
       {loading && (

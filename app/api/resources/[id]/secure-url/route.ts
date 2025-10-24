@@ -36,9 +36,10 @@ export async function GET(
     }
 
     // 3. Generate secure URL for the resource
+    console.log(`${DEBUG_PREFIX} Attempting to generate secure URL for resource ${params.id}`);
     const secureUrlResult = await generateSecureFileUrl(params.id, userContext);
     if (!secureUrlResult) {
-      console.warn(`${DEBUG_PREFIX} Access denied or resource not found`);
+      console.warn(`${DEBUG_PREFIX} Access denied or resource not found for resource ${params.id}`);
       return NextResponse.json({ error: 'Access denied or resource not found' }, { status: 403 });
     }
 

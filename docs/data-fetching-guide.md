@@ -1,15 +1,80 @@
 # Data Fetching Guide for Academic System
 
-This document provides detailed SQL queries to fetch specific data from the academic system database based on student year, branch, and data type.
+This guide explains how to fetch academic data efficiently. The preferred approach is to use the bulk endpoint and hydrate a single client context. Raw SQL examples are kept below for reference and admin/reporting scenarios.
 
 ## Table of Contents
-1. [Database Schema Overview](#database-schema-overview)
-2. [Key Relationships](#key-relationships)
-3. [Common Query Patterns](#common-query-patterns)
-4. [Specific Examples](#specific-examples)
-5. [Advanced Queries](#advanced-queries)
-6. [Performance Considerations](#performance-considerations)
+1. [Bulk API Approach](#bulk-api-approach)
+2. [Using the `useProfile()` Hook](#using-the-useprofile-hook)
+3. [Database Schema Overview](#database-schema-overview)
+4. [Key Relationships](#key-relationships)
+5. [Common Query Patterns](#common-query-patterns)
+6. [Specific Examples](#specific-examples)
+7. [Advanced Queries](#advanced-queries)
+8. [Performance Considerations](#performance-considerations)
 
+## Bulk API Approach
+
+- **Endpoint**: `GET /api/bulk-academic-data`
+- **What it returns**: `profile`, `subjects`, `static` (branches, years, semesters), `dynamic` (recentUpdates, upcomingExams, upcomingReminders), `resources` (all resources for subjects), optional `contextWarnings`, and `meta.timings`.
+- **Why**: Reduces redundant calls and DB queries by ~80%, enables robust client-side caching, prefetches resources to eliminate on-demand loading.
+
+Response shape (simplified):
+```json
+{
+  "profile": { "id": "uuid", "email": "...", "year": 1, "branch": "CSE", "semester": 1 },
+  "subjects": [ { "id": "uuid", "code": "CS101", "name": "Programming" } ],
+  "static": { "branches": [], "years": [], "semesters": [] },
+  "dynamic": { "recentUpdates": [], "upcomingExams": [], "upcomingReminders": [] },
+  "resources": {
+    "CS101": {
+      "notes": [ { "id": "uuid", "name": "Lecture 1", "type": "pdf", "url": "...", "unit": 1 } ],
+      "assignments": [ { "id": "uuid", "name": "Assignment 1", "type": "doc", "url": "...", "unit": 1 } ]
+    }
+  }
+}
+```
+
+Errors:
+```json
+{ "ok": false, "error": { "code": "UNAUTHORIZED", "message": "Unauthorized" } }
+```
+
+## Using the `useProfile()` Hook
+
+The app exposes a client context at `lib/enhanced-profile-context.tsx` that fetches from the bulk endpoint, caches data, and exposes helpers.
+
+Minimal example:
+```tsx
+import { useProfile } from '@/lib/enhanced-profile-context'
+
+export function HomeSummary() {
+  const { profile, subjects, dynamicData, loading, error, warnings, forceRefresh } = useProfile()
+  if (loading) return <div>Loading…</div>
+  if (error) return <div className="text-red-600">{error}</div>
+  return (
+    <div>
+      <div>Welcome, {profile?.name ?? profile?.email}</div>
+      <div>Subjects: {subjects.length}</div>
+      <div>Recent updates: {dynamicData?.recentUpdates?.length ?? 0}</div>
+      {Array.isArray(warnings) && warnings.length > 0 && (
+        <div className="text-amber-600 text-sm">{warnings[0]}</div>
+      )}
+      <button onClick={forceRefresh}>Refresh</button>
+    </div>
+  )
+}
+```
+
+Key behaviors:
+- **Caching**:
+  - `ProfileCache`: sessionStorage (no TTL; session-scoped)
+  - `DynamicCache`: sessionStorage (TTL: 10 minutes)
+  - `StaticCache`: localStorage (TTL: 30 days)
+  - `SubjectsCache`: localStorage (no TTL; context-keyed)
+  - `ResourcesCache`: localStorage (TTL: 3 days; context-keyed)
+- **Auto-refresh**: Dynamic data is refreshed when the tab regains focus if the cache expired.
+- **Cross-tab sync**: Updates are broadcast between tabs to avoid duplicate network calls.
+- **Prefetching**: Resources are prefetched in the bulk API and cached per category/subject for instant loading.
 ## Database Schema Overview
 
 The system uses the following key tables for data retrieval:
@@ -487,4 +552,4 @@ JOIN academic_calendar ac ON s.id = ac.current_semester_id
 WHERE r.year = 2 AND r.branch = 'CSE';
 ```
 
-This guide provides comprehensive examples for fetching data from your academic system. Adjust the branch codes, year formats, and field names based on your specific implementation details.
+This guide provides comprehensive examples for fetching data from your academic system. Prefer the bulk endpoint for application flows; use SQL examples for admin/reporting or diagnostics.

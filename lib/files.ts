@@ -145,6 +145,7 @@ export async function generateSecureFileUrl(
   const supabase = createSupabaseAdmin()
 
   // 1. Get resource details from database
+  console.log(`[DEBUG generateSecureFileUrl] Fetching resource details for ID: ${resourceId}`)
   const { data: resource, error: resourceError } = await supabase
     .from('resources')
     .select('file_path, storage_location, branch_id, year_id, semester_id')
@@ -152,25 +153,29 @@ export async function generateSecureFileUrl(
     .single()
 
   if (resourceError || !resource) {
-    console.warn('Resource not found or access error:', resourceError?.message)
+    console.warn(`[DEBUG generateSecureFileUrl] Resource not found or access error for ID ${resourceId}:`, resourceError?.message)
     return null
   }
+  console.log(`[DEBUG generateSecureFileUrl] Resource details:`, { ...resource, file_path: resource.file_path ? '[PRESENT]' : '[MISSING]' })
 
   // 2. Check user permissions for this resource
+  console.log(`[DEBUG generateSecureFileUrl] Checking access for user ${userContext.email} to resource ${resourceId}`)
   const hasAccess = await checkResourceAccess(resource, userContext)
+  console.log(`[DEBUG generateSecureFileUrl] Access check result: ${hasAccess}`)
   if (!hasAccess) {
-    console.warn('Access denied for user', userContext.email, 'to resource', resourceId)
+    console.warn(`[DEBUG generateSecureFileUrl] Access denied for user ${userContext.email} to resource ${resourceId}`)
     return null
   }
 
   // 3. Generate signed URL based on storage location
+  console.log(`[DEBUG generateSecureFileUrl] Generating URL for storage: ${resource.storage_location}`)
   if (resource.storage_location === 'Supabase Storage' && resource.file_path) {
     return await generateSupabaseSignedUrl(resource.file_path)
   } else if (resource.storage_location === 'Google Drive' && resource.file_path) {
     return await generateDriveSignedUrl(resource.file_path)
   }
 
-  console.warn('Unsupported storage location:', resource.storage_location)
+  console.warn(`[DEBUG generateSecureFileUrl] Unsupported storage location: ${resource.storage_location}`)
   return null
 }
 

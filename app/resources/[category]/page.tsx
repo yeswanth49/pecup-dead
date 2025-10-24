@@ -24,11 +24,13 @@ const resourceData = {
   },
 } as const
 
-export default function CategoryPage({ params, searchParams }: { 
-  params: { category: string }
-  searchParams: { year?: string; semester?: string; branch?: string }
+export default async function CategoryPage({ params, searchParams }: {
+  params: Promise<{ category: string }>
+  searchParams: Promise<{ year?: string; semester?: string; branch?: string }>
 }) {
-  const { category } = params
+  const { category } = await params
+  const resolvedSearchParams = await searchParams
+
   if (!resourceData[category as keyof typeof resourceData]) {
     notFound()
   }
@@ -38,13 +40,13 @@ export default function CategoryPage({ params, searchParams }: {
     <div className="space-y-6">
       <div className="space-y-2">
         <Header/>
-        <div className="flex items-center pt-2 gap-2 text-sm text-muted-foreground">
-          <Link href="/resources" className="hover:text-foreground">
-            Resources
-          </Link>
+        <nav className="flex items-center pt-2 gap-2 text-sm text-muted-foreground" aria-label="Breadcrumb">
+          <Link href="/" className="hover:text-foreground">Home</Link>
           <ChevronRight className="h-4 w-4" />
-          <span>{categoryData.title}</span>
-        </div>
+          <Link href="/resources" className="hover:text-foreground">Resources</Link>
+          <ChevronRight className="h-4 w-4" />
+          <span aria-current="page">{categoryData.title}</span>
+        </nav>
         <div className="flex items-start">
           <h1 className="text-3xl font-bold tracking-tight">{categoryData.title}</h1>
         </div>

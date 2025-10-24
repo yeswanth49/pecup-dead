@@ -56,6 +56,10 @@ export interface Resource {
   unit?: number;
   date?: string;
   is_pdf?: boolean;
+  // Additional legacy compatibility fields for UI backward compatibility
+  name?: string; // legacy alias for title
+  url?: string; // legacy alias for drive_link
+  type?: string; // legacy alias for file_type
   regulation?: string;
   archived?: boolean;
   deleted_at?: string;

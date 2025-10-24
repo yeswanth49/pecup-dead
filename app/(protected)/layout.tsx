@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { createSupabaseAdmin } from '@/lib/supabase'
+import { RefreshButton } from '@/components/RefreshButton'
+import { ProfileProvider } from '@/lib/enhanced-profile-context'
 
 export default async function ProtectedLayout({ children }: { children: ReactNode }) {
   const session = await getServerSession(authOptions)
@@ -26,7 +28,16 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
     redirect('/onboarding')
   }
 
-  return <>{children}</>
+  return (
+    <div className="w-full">
+      <div className="flex w-full items-center justify-end px-4 py-2">
+        <RefreshButton />
+      </div>
+      <ProfileProvider>
+        {children}
+      </ProfileProvider>
+    </div>
+  )
 }
 
 

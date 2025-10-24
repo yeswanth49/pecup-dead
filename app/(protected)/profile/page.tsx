@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { useProfile } from '@/lib/profile-context'
+import { useProfile } from '@/lib/enhanced-profile-context'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,7 +19,7 @@ const BRANCHES: BranchType[] = ['CSE', 'AIML', 'DS', 'AI', 'ECE', 'EEE', 'MEC', 
 export default function ProfilePage() {
   const router = useRouter()
   const { data: session, status } = useSession()
-  const { profile, loading: profileLoading, error: profileError, refetch } = useProfile()
+  const { profile, loading: profileLoading, error: profileError, refreshProfile } = useProfile()
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
@@ -38,10 +38,10 @@ export default function ProfilePage() {
   useEffect(() => {
     // Use cached profile data from context
     if (profile) {
-      setName(profile.name)
-      setYear(profile.year)
-      setBranch(profile.branch as BranchType)
-      setRollNumber(profile.roll_number)
+      setName(profile.name || '')
+      setYear(profile.year ?? undefined)
+      setBranch((profile.branch as BranchType | null) || '')
+      setRollNumber(profile.roll_number || '')
     } else if (profileError && status === 'authenticated') {
       // If profile missing, send to onboarding
       router.replace('/onboarding')
@@ -92,7 +92,7 @@ export default function ProfilePage() {
       }
       setSuccess('Profile updated successfully!')
       // Refetch profile to update context
-      await refetch()
+      await refreshProfile()
       // Auto-redirect after 2 seconds
       setTimeout(() => router.push('/home'), 2000)
     } catch (err: any) {

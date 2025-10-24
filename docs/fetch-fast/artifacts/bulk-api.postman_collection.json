@@ -1,0 +1,96 @@
+{
+  "info": {
+    "name": "Bulk Academic Data API",
+    "_postman_id": "bulk-academic-data-collection",
+    "description": "Collection to test /api/bulk-academic-data endpoint (unauthenticated and authenticated).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Unauthenticated - should 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/api/bulk-academic-data",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "api",
+            "bulk-academic-data"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 401', function () {",
+              "  pm.response.to.have.status(401);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Authenticated - should 200",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Cookie",
+            "value": "{{session_cookie}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:3000/api/bulk-academic-data",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "api",
+            "bulk-academic-data"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Response has required keys', function () {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json).to.have.property('profile');",
+              "  pm.expect(json).to.have.property('subjects');",
+              "  pm.expect(json).to.have.property('static');",
+              "  pm.expect(json).to.have.property('dynamic');",
+              "  pm.expect(json).to.have.property('timestamp');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "session_cookie",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
+

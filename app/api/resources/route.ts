@@ -1,6 +1,6 @@
 // Updated Resources API Route for New Schema
-// This file contains the updated implementation that works with the refactored database schema
-// Replace the existing route.ts with this content after migration is complete
+// This file contains the updated implementation that works with the resources table directly
+// Modified to support fetching resources from all units when no unit parameter is specified
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -28,9 +28,9 @@ export async function GET(request: Request) {
   console.log(`API Route: Query Params - category: ${category}, encodedSubject: ${encodedSubject}, unit: ${unit}`);
 
   // Parameter Validation
-  if (!category || !encodedSubject || !unit) {
+  if (!category || !encodedSubject) {
     console.warn("API Route: Missing required query parameters.");
-    return NextResponse.json({ error: 'Missing required query parameters: category, subject, unit' }, { status: 400 });
+    return NextResponse.json({ error: 'Missing required query parameters: category, subject' }, { status: 400 });
   }
 
   let subject = '';
@@ -110,12 +110,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Invalid subject parameter encoding' }, { status: 400 });
   }
 
-  const unitNumber = parseInt(unit, 10);
-  if (isNaN(unitNumber) || unitNumber <= 0) {
-    console.warn(`API Route: Invalid unit number: ${unit}`);
-    return NextResponse.json({ error: 'Invalid unit number' }, { status: 400 });
+  let unitNumber: number | null = null;
+  if (unit) {
+    unitNumber = parseInt(unit, 10);
+    if (isNaN(unitNumber) || unitNumber <= 0) {
+      console.warn(`API Route: Invalid unit number: ${unit}`);
+      return NextResponse.json({ error: 'Invalid unit number' }, { status: 400 });
+    }
+    console.log(`API Route: Parsed unit number: ${unitNumber}`);
+  } else {
+    console.log(`API Route: No unit specified, fetching from all units`);
   }
-  console.log(`API Route: Parsed unit number: ${unitNumber}`);
 
   try {
     console.log(`API Route: Querying Supabase for resources...`);
@@ -125,14 +130,15 @@ export async function GET(request: Request) {
       .from('resources')
       .select(`
         id,
-        title,
+        name,
         description,
         drive_link,
-        file_type,
+        url,
+        type,
         branch_id,
         year_id,
         semester_id,
-        uploader_id,
+        created_by,
         created_at,
         category,
         subject,
@@ -145,19 +151,26 @@ export async function GET(request: Request) {
       `)
       .eq('category', category)
       .eq('subject', subject)
-      .eq('unit', unitNumber)
+      .order('unit', { ascending: true })
       .order('created_at', { ascending: false });
+
+   // Apply unit filter only if specified
+   if (unitNumber !== null) {
+     query = query.eq('unit', unitNumber);
+   }
 
     // Apply filters based on new schema
     if (branch_id) {
-      query = query.eq('branch_id', branch_id);
+       query = query.eq('branch_id', branch_id);
     }
     if (year_id) {
-      query = query.eq('year_id', year_id);
+       query = query.eq('year_id', year_id);
     }
     if (semester_id) {
-      query = query.eq('semester_id', semester_id);
-    }
+        query = query.or(`semester_id.eq.${semester_id},semester_id.is.null`);
+     }
+
+    console.log(`API Route: Applied filters - branch_id: ${branch_id}, year_id: ${year_id}, semester_id: ${semester_id}, unit: ${unitNumber}`);
 
     const { data: resources, error } = await query;
 
@@ -167,36 +180,37 @@ export async function GET(request: Request) {
     }
 
     console.log(`API Route: Found ${resources?.length || 0} matching resources`);
+    console.log(`API Route: Raw resources data (first 2 items for debug):`, resources?.slice(0, 2));
 
     // Transform the data to match both new and legacy expected formats
     const transformedResources = (resources || []).map(resource => ({
-      id: resource.id,
-      title: resource.title,
-      description: resource.description || '',
-      drive_link: resource.drive_link,
-      file_type: resource.file_type,
-      branch_id: resource.branch_id,
-      year_id: resource.year_id,
-      semester_id: resource.semester_id,
-      uploader_id: resource.uploader_id,
-      created_at: resource.created_at,
-      // Legacy fields for backward compatibility
-      category: resource.category,
-      subject: resource.subject,
-      unit: resource.unit,
-      name: resource.title, // Map new title to old name
-      date: resource.date || resource.created_at,
-      type: resource.file_type,
-      url: resource.drive_link,
-      is_pdf: resource.is_pdf,
-      // Include relationship data (now single objects)
-      branch: resource.branch,
-      year: resource.year,
-      semester: resource.semester,
-      uploader: Array.isArray(resource.uploader) ? resource.uploader[0] : resource.uploader
-    }));
+       id: resource.id,
+       name: resource.name,
+       title: resource.name, // Keep both for compatibility
+       description: resource.description || '',
+       drive_link: resource.drive_link,
+       url: resource.url,
+       file_type: resource.type,
+       type: resource.type,
+       branch_id: resource.branch_id,
+       year_id: resource.year_id,
+       semester_id: resource.semester_id,
+       uploader_id: resource.created_by,
+       created_at: resource.created_at,
+       // Legacy fields for backward compatibility
+       category: resource.category,
+       subject: resource.subject,
+       unit: resource.unit,
+       date: resource.date || resource.created_at,
+       is_pdf: resource.is_pdf,
+       // Include relationship data (now single objects)
+       branch: Array.isArray(resource.branch) ? resource.branch[0] : resource.branch,
+       year: Array.isArray(resource.year) ? resource.year[0] : resource.year,
+       semester: Array.isArray(resource.semester) ? resource.semester[0] : resource.semester
+     }));
 
     console.log(`API Route: Returning ${transformedResources.length} resources`);
+    console.log(`API Route: Transformed resources sample (first 2 for debug):`, transformedResources.slice(0, 2));
     return NextResponse.json(transformedResources as unknown as Resource[]);
 
   } catch (error: any) {
