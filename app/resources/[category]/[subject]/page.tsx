@@ -1,7 +1,7 @@
 // app/resources/[category]/[subject]/page.tsx
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -58,6 +58,9 @@ export default function SubjectPage({
   const [query, setQuery] = useState<string>('')
   const [expandAll, setExpandAll] = useState<boolean>(false)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+
+  const lastFetchRef = useRef<number>(0)
+  const REVALIDATE_COOLDOWN = 5 * 60 * 1000 // 5 minutes
 
   let decodedSubject = ''
   try {
@@ -221,6 +224,7 @@ export default function SubjectPage({
   // Fetch resources on mount
   useEffect(() => {
     async function fetchResources() {
+      lastFetchRef.current = Date.now()
       setLoading(true)
       setError(null)
 
@@ -237,25 +241,24 @@ export default function SubjectPage({
       // Check cache first
       const cached = ResourcesCache.get(category, decodedSubject, qpYear, qpSem, qpBranch)
       if (cached) {
-        if (process.env.NODE_ENV !== 'production') {
-          console.log(`[DEBUG] Resources loaded from cache for key: ${cacheKey}, count: ${cached.length}`)
-          // Log cache age
-          const raw = localStorage.getItem(cacheKey)
-          if (raw) {
-            const parsed = JSON.parse(raw)
-            const timestamp = parsed.timestamp
-            if (timestamp) {
-              const age = Date.now() - timestamp
-              console.log(`[DEBUG] Cache age: ${age} ms (${Math.round(age / 1000 / 60 / 60)} hours)`)
-              if (age > 3 * 24 * 60 * 60 * 1000) {
-                console.log('[DEBUG] Cache is expired')
-              }
+        const metadata = ResourcesCache.getCacheMetadata(category, decodedSubject, qpYear, qpSem, qpBranch)
+        if (metadata) {
+          if (process.env.NODE_ENV !== 'production') {
+            console.log(`[DEBUG] Resources loaded from cache for key: ${metadata.key}, count: ${cached.length}`)
+            console.log(`[DEBUG] Cache age: ${metadata.age} ms (${Math.round(metadata.age / 1000 / 60 / 60)} hours)`)
+            if (metadata.isExpired) {
+              console.log('[DEBUG] Cache is expired, refetching...')
             }
           }
+
+          // Only use cache if not expired
+          if (!metadata.isExpired) {
+            setResources(cached)
+            setLoading(false)
+            return
+          }
+          // If expired, proceed to fetch fresh data
         }
-        setResources(cached)
-        setLoading(false)
-        return
       }
 
       if (process.env.NODE_ENV !== 'production') {
@@ -326,7 +329,9 @@ export default function SubjectPage({
   // Revalidate on window focus
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (!document.hidden) {
+      const now = Date.now()
+      if (!document.hidden && now - lastFetchRef.current > REVALIDATE_COOLDOWN) {
+        lastFetchRef.current = now
         setRefreshTrigger(prev => prev + 1)
       }
     }

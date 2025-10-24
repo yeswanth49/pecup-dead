@@ -399,6 +399,33 @@ export class ResourcesCache {
     }
   }
 
+  static getCacheMetadata(category: string, subject: string, year?: string, semester?: string, branch?: string) {
+    if (typeof window === 'undefined') return null
+    try {
+      const key = this.getKey(category, subject, year, semester, branch)
+      const raw = localStorage.getItem(key)
+      if (!raw) return null
+
+      const parsed = JSON.parse(raw) as { timestamp?: number }
+      const timestamp = parsed?.timestamp
+
+      if (!timestamp) return null
+
+      const age = Date.now() - timestamp
+      const isExpired = age > this.TTL
+
+      return {
+        key,
+        timestamp,
+        age,
+        isExpired
+      }
+    } catch (e) {
+      console.warn('Failed to read cache metadata:', e)
+      return null
+    }
+  }
+
   static clearForSubject(category: string, subject: string) {
     if (typeof window === 'undefined') return
     try {
