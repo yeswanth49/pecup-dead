@@ -39,6 +39,8 @@ interface ProfilePayload {
   semester_id: string;
   roll_number: string;
   section?: string;
+  year?: number;
+  branch?: string;
 }
 
 function validatePayload(body: any): { ok: true; data: ProfilePayload } | { ok: false; error: string } {
@@ -143,6 +145,30 @@ export async function POST(request: Request) {
   const supabase = createSupabaseAdmin();
   const payload = { email, ...validation.data };
 
+  // Calculate the year level from year_id
+  let computedYear = 1; // Default
+  if (payload.year_id) {
+    const { data: yearData } = await supabase
+      .from('years')
+      .select('batch_year')
+      .eq('id', payload.year_id)
+      .maybeSingle();
+    if (yearData?.batch_year) {
+      computedYear = await calculateYearLevel(yearData.batch_year);
+    }
+  }
+  payload.year = computedYear;
+
+  // Fetch and set branch code from branch_id
+  if (payload.branch_id) {
+    const { data: branchData } = await supabase
+      .from('branches')
+      .select('code')
+      .eq('id', payload.branch_id)
+      .maybeSingle();
+    payload.branch = branchData?.code || null;
+  }
+
   // Validate foreign key references before inserting
   const [branchCheck, yearCheck, semesterCheck] = await Promise.all([
     supabase.from('branches').select('id').eq('id', payload.branch_id).maybeSingle(),
@@ -184,10 +210,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid semester ID' }, { status: 422 });
   }
 
+  // Check if profile exists before update
+  const { data: existingProfile, error: checkError } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('email', email)
+    .maybeSingle();
+
+  console.log('Profile check for email:', email, {
+    exists: !!existingProfile,
+    error: checkError ? { code: checkError.code, message: checkError.message } : null
+  });
+
+  if (checkError) {
+    console.error('Profile check error:', checkError);
+    return NextResponse.json({
+      error: 'Database error during profile check',
+      details: checkError.message
+    }, { status: 500 });
+  }
+
   const { data, error } = await supabase
     .from('profiles')
-    .update(payload)
-    .eq('email', email)
+    .upsert(payload, { onConflict: 'email' })
     .select(`
       id,
       roll_number,
