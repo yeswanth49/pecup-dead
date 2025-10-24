@@ -18,15 +18,60 @@ import { getResourceTypeForCategory } from '@/lib/resource-utils'
 import { useProfile, type Subject } from '@/lib/enhanced-profile-context'
 import { getSubjectDisplayByCode } from '@/lib/subject-display'
 import { ResourcesCache } from '@/lib/simple-cache'
+import { Resource } from '@/lib/types'
 
-interface Resource {
-  id?: string
+// DTO type that matches the API response format (hybrid format with both legacy and canonical fields)
+interface ResourceDTO {
+  id: string
   name: string
+  title: string
   description?: string
-  date: string
-  type: string
+  drive_link: string
   url: string
+  file_type: string
+  type: string
+  branch_id: string
+  year_id: string
+  semester_id: string
+  uploader_id?: string
+  created_at: string
+  category?: string
+  subject?: string
   unit?: number
+  date?: string
+  is_pdf?: boolean
+  branch?: any
+  year?: any
+  semester?: any
+}
+
+// Transformation function to convert API/DTO format to canonical Resource format
+function transformResourceDTOToResource(dto: ResourceDTO): Resource {
+  return {
+    id: dto.id,
+    title: dto.title || dto.name, // prefer canonical field, fallback to legacy
+    description: dto.description,
+    drive_link: dto.drive_link || dto.url, // prefer canonical field, fallback to legacy
+    file_type: dto.file_type || dto.type, // prefer canonical field, fallback to legacy
+    branch_id: dto.branch_id,
+    year_id: dto.year_id,
+    semester_id: dto.semester_id,
+    uploader_id: dto.uploader_id,
+    created_at: dto.created_at || dto.date || new Date().toISOString(), // prefer canonical field, fallback to legacy or current time
+    category: dto.category,
+    subject: dto.subject,
+    unit: dto.unit,
+    date: dto.date || dto.created_at, // for backward compatibility in UI
+    is_pdf: dto.is_pdf,
+    regulation: undefined, // not provided by current API
+    archived: false, // default value
+    deleted_at: undefined,
+    updated_at: dto.created_at,
+    branch: dto.branch,
+    year: dto.year,
+    semester: dto.semester,
+    uploader: undefined // not provided by current API
+  }
 }
 
 const CATEGORY_TITLES: Record<string, string> = {
@@ -89,7 +134,7 @@ export default function SubjectPage({
   const availableTypes = useMemo(() => {
     const set = new Set<string>()
     resources.forEach(r => {
-      if (r.type) set.add(r.type)
+      if (r.type || r.file_type) set.add(r.type || r.file_type)
     })
     return Array.from(set).sort((a, b) => a.localeCompare(b))
   }, [resources])
@@ -98,10 +143,10 @@ export default function SubjectPage({
   const visibleResources = useMemo(() => {
     const term = query.trim().toLowerCase()
     const filtered = resources.filter(r => {
-      const matchesType = selectedType === 'all' || r.type === selectedType
+      const matchesType = selectedType === 'all' || (r.type || r.file_type) === selectedType
       const matchesText =
         term.length === 0 ||
-        r.name.toLowerCase().includes(term) ||
+        (r.name || r.title).toLowerCase().includes(term) ||
         (r.description ? r.description.toLowerCase().includes(term) : false)
       const matchesUnit = selectedUnit === 'all' || (r.unit || 1) === parseInt(selectedUnit)
       return matchesType && matchesText && matchesUnit
@@ -111,9 +156,9 @@ export default function SubjectPage({
       return Number.isNaN(t) ? 0 : t
     }
     const sorted = [...filtered].sort((a, b) => {
-      if (sortBy === 'name_asc') return a.name.localeCompare(b.name)
-      if (sortBy === 'date_asc') return parseDate(a.date) - parseDate(b.date)
-      return parseDate(b.date) - parseDate(a.date) // date_desc
+      if (sortBy === 'name_asc') return (a.name || a.title).localeCompare(b.name || b.title)
+      if (sortBy === 'date_asc') return parseDate(a.date || a.created_at) - parseDate(b.date || b.created_at)
+      return parseDate(b.date || b.created_at) - parseDate(a.date || a.created_at) // date_desc
     })
     return sorted
   }, [resources, selectedType, query, selectedUnit, sortBy])
@@ -169,13 +214,13 @@ export default function SubjectPage({
       }
       if (action === 'download') {
         const link = document.createElement('a')
-        link.href = resource.url
-        link.download = resource.name
+        link.href = resource.url || resource.drive_link
+        link.download = resource.name || resource.title
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
       } else {
-        window.open(resource.url, '_blank', 'noopener,noreferrer')
+        window.open(resource.url || resource.drive_link, '_blank', 'noopener,noreferrer')
       }
       return
     }
@@ -206,7 +251,7 @@ export default function SubjectPage({
       if (action === 'download') {
         const link = document.createElement('a')
         link.href = secureUrl
-        link.download = resource.name
+        link.download = resource.name || resource.title || 'resource'
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
@@ -257,6 +302,10 @@ export default function SubjectPage({
 
           // Only use cache if not expired
           if (!metadata.isExpired) {
+            if (process.env.NODE_ENV !== 'production') {
+              console.log(`[DEBUG] Resources loaded from cache for key: ${metadata.key}, count: ${cached.length}`)
+            }
+
             setResources(cached)
             setLoading(false)
             return
@@ -305,10 +354,19 @@ export default function SubjectPage({
         if (process.env.NODE_ENV !== 'production') {
           console.log(`[DEBUG] Received ${Array.isArray(data) ? data.length : 0} resources`)
         }
-        const resources = Array.isArray(data) ? data : []
-        setResources(resources)
-        // Cache the resources
-        ResourcesCache.set(category, decodedSubject, resources, qpYear, qpSem, qpBranch)
+        const apiResources = Array.isArray(data) ? data : []
+
+        // Transform API response (DTO format) to canonical Resource format
+        const transformedResources: Resource[] = apiResources.map(transformResourceDTOToResource)
+
+        // Log successful transformation for debugging
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[DEBUG] API returned ${apiResources.length} resources, transformed to canonical Resource format`)
+        }
+
+        setResources(transformedResources)
+        // Cache the transformed resources (canonical format)
+        ResourcesCache.set(category, decodedSubject, transformedResources, qpYear, qpSem, qpBranch)
       } catch (err: any) {
         if (process.env.NODE_ENV !== 'production') {
           console.error('[DEBUG] Error fetching resources:', {
@@ -511,24 +569,24 @@ export default function SubjectPage({
                       <div className="px-4 pb-4 space-y-3">
                         {resourcesByUnit[unit].map((resource, index) => (
                           <div
-                            key={resource.id || `${resource.name}-${index}`}
+                            key={resource.id || `${resource.name || resource.title}-${index}`}
                             className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-background rounded-md border"
                           >
                             <div className="flex items-start gap-3 mb-2 sm:mb-0">
                               <FileText className="h-4 w-4 mt-0.5 text-primary" />
                               <div>
-                                <h4 className="font-medium text-sm">{resource.name}</h4>
+                                <h4 className="font-medium text-sm">{resource.name || resource.title}</h4>
                                 {resource.description && (
                                   <p className="text-xs text-muted-foreground">{resource.description}</p>
                                 )}
                                 <div className="mt-1 flex flex-wrap items-center gap-2">
-                                  <Badge variant="outline" className="text-xs">{resource.type}</Badge>
-                                  <span className="text-xs text-muted-foreground">{resource.date}</span>
+                                  <Badge variant="outline" className="text-xs">{resource.type || resource.file_type}</Badge>
+                                  <span className="text-xs text-muted-foreground">{resource.date || resource.created_at}</span>
                                 </div>
                               </div>
                             </div>
                             <div className="flex gap-2">
-                              {(resource.id || resource.url) && (
+                              {(resource.id || resource.url || resource.drive_link) && (
                                 <>
                                   <Button
                                     variant="outline"
@@ -578,24 +636,24 @@ export default function SubjectPage({
                   <div className="space-y-3">
                     {resourcesByUnit[parseInt(selectedUnit)]?.map((resource, index) => (
                       <div
-                        key={resource.id || `${resource.name}-${index}`}
+                        key={resource.id || `${resource.name || resource.title}-${index}`}
                         className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-background rounded-md border"
                       >
                         <div className="flex items-start gap-3 mb-2 sm:mb-0">
                           <FileText className="h-4 w-4 mt-0.5 text-primary" />
                           <div>
-                            <h4 className="font-medium text-sm">{resource.name}</h4>
+                            <h4 className="font-medium text-sm">{resource.name || resource.title}</h4>
                             {resource.description && (
                               <p className="text-xs text-muted-foreground">{resource.description}</p>
                             )}
                             <div className="mt-1 flex flex-wrap items-center gap-2">
-                              <Badge variant="outline" className="text-xs">{resource.type}</Badge>
-                              <span className="text-xs text-muted-foreground">{resource.date}</span>
+                              <Badge variant="outline" className="text-xs">{resource.type || resource.file_type}</Badge>
+                              <span className="text-xs text-muted-foreground">{resource.date || resource.created_at}</span>
                             </div>
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          {(resource.id || resource.url) && (
+                          {(resource.id || resource.url || resource.drive_link) && (
                             <>
                               <Button
                                 variant="outline"
