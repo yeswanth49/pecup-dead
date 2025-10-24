@@ -10,6 +10,9 @@ import { academicConfig } from '@/lib/academic-config';
 
 const supabaseAdmin = createSupabaseAdmin();
 
+// Maximum academic year level for this program
+const MAX_YEAR_LEVEL = 2;
+
 // Helper function to dynamically calculate academic year level from batch year
 async function calculateYearLevel(batchYear: number | undefined): Promise<number> {
   return academicConfig.calculateAcademicYear(batchYear);
@@ -45,8 +48,6 @@ interface ProfilePayload {
   semester_id: string;
   roll_number: string;
   section?: string;
-  year?: number;
-  branch?: string;
 }
 
 function validatePayload(body: any): { ok: true; data: ProfilePayload } | { ok: false; error: string } {
@@ -121,15 +122,17 @@ export async function GET() {
 
     const userRole = base?.role || 'student';
     const calculatedYear = batchYear ? await calculateYearLevel(batchYear) : 1;
-    const validYear = Math.min(2, calculatedYear);
+    const validYear = Math.min(MAX_YEAR_LEVEL, calculatedYear);
 
-    // Enhanced logging for GET endpoint
-    console.log('DEBUG: GET Profile year calculation:', {
-      batchYear,
-      calculatedYear,
-      validYear,
-      userId: maskEmail(email)
-    });
+    // Debug logging for development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('DEBUG: GET Profile year calculation:', {
+        batchYear,
+        calculatedYear,
+        validYear,
+        userId: maskEmail(email)
+      });
+    }
 
     profile = {
       ...base,
@@ -224,33 +227,8 @@ export async function POST(request: Request) {
   const fetchedBranchCode = branchRes.data?.code || 'Unknown';
   const computedYear = fetchedBatchYear ? await calculateYearLevel(fetchedBatchYear) : 1;
 
-  // Use batch year for database insert to match constraint (2020-2030)
-  payload.year = fetchedBatchYear;
-
-  // Add logging to debug
-  console.log('DEBUG: Profile year calculation:', {
-    fetchedBatchYear,
-    computedYear,
-    userId: maskEmail(email)
-  });
-
-  // Enhanced logging to understand constraint violation
-  const configDetails = await academicConfig.getConfig();
-  console.log('DEBUG: Academic config details:', {
-    programLength: configDetails.programLength,
-    startMonth: configDetails.startMonth,
-    currentAcademicYear: configDetails.currentAcademicYear,
-    yearMappings: configDetails.yearMappings
-  });
-  payload.branch = fetchedBranchCode;
-
-  // Log the final payload structure that will be inserted into the database
-  console.log('DEBUG: Payload structure before database insert:', {
-    keys: Object.keys(payload),
-    values: Object.fromEntries(
-      Object.entries(payload).map(([key, value]) => [key, key === 'email' ? maskEmail(value as string) : value])
-    )
-  });
+  // Note: year and branch are computed from foreign keys, not stored in database
+  // Database only stores year_id and branch_id, values are enriched on response
 
   // Check if profile exists before update
   const { data: existingProfile, error: checkError } = await supabase
@@ -258,48 +236,13 @@ export async function POST(request: Request) {
     .select('id')
     .eq('email', email)
     .maybeSingle();
-  console.log('Profile check for user:', maskEmail(email), {
-    exists: !!existingProfile,
-    error: checkError ? { code: checkError.code, message: checkError.message } : null
-  });
 
-  // DEBUG: Log the final payload before upsert to understand constraint violation
-  console.log('DEBUG: Profile upsert payload:', sanitizeForLogging(payload));
-
-  // Log the profiles_year_check constraint details for debugging
-  const { data: constraints, error: constraintError } = await supabase
-    .from('information_schema.check_constraints')
-    .select('constraint_name, check_clause')
-    .eq('constraint_name', 'profiles_year_check')
-    .eq('table_name', 'profiles');
-
-  if (constraintError) {
-    console.error('DEBUG: Failed to fetch constraint:', constraintError);
-  } else if (constraints && constraints.length > 0) {
-    console.log('DEBUG: profiles_year_check constraint:', constraints[0]);
-  } else {
-    console.log('DEBUG: profiles_year_check constraint not found');
-    // Also check for any other constraints on the profiles table
-    const { data: allConstraints, error: allError } = await supabase
-      .from('information_schema.check_constraints')
-      .select('constraint_name, check_clause')
-      .eq('table_name', 'profiles');
-    if (!allError && allConstraints) {
-      console.log('DEBUG: All check constraints on profiles table:', allConstraints);
-    }
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Profile check for user:', maskEmail(email), {
+      exists: !!existingProfile,
+      error: checkError ? { code: checkError.code, message: checkError.message } : null
+    });
   }
-
-  // Enhanced logging before upsert
-  console.log('DEBUG: Final values before database insert:', {
-    email: maskEmail(email),
-    computedYear,
-    fetchedBatchYear,
-    payloadYear: payload.year,
-    payloadBranch: payload.branch,
-    yearId: payload.year_id,
-    branchId: payload.branch_id,
-    semesterId: payload.semester_id
-  });
 
   if (checkError) {
     console.error('Profile check error:', checkError);
@@ -376,7 +319,7 @@ export async function POST(request: Request) {
   const enrichedCalculatedYear = enrichedBatchYear ? await calculateYearLevel(enrichedBatchYear) : 1;
 
   // Clamp year for response (academic year level)
-  const validEnrichedYear = Math.min(2, enrichedCalculatedYear);
+  const validEnrichedYear = Math.min(MAX_YEAR_LEVEL, enrichedCalculatedYear);
 
   const profile = {
     ...base,
