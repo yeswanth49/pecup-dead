@@ -1,28 +1,8 @@
-// Updated Profile API Route for New Schema
-// Fixed to use batch_year instead of calculated academic year level
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { academicConfig } from '@/lib/academic-config';
-
-const supabaseAdmin = createSupabaseAdmin();
-
-// Helper function to get maximum academic year level from configuration
-async function getMaxYearLevel(): Promise<number> {
-  try {
-    const config = await academicConfig.getConfig();
-    return config.programLength;
-  } catch (error) {
-    console.warn('Failed to fetch academic config, using default max year level:', error);
-    return 4; // Default fallback value
-  }
-}
-
-// Helper function to dynamically calculate academic year level from batch year
-async function calculateYearLevel(batchYear: number | undefined): Promise<number> {
-  return academicConfig.calculateAcademicYear(batchYear);
-}
 
 // Helper function to sanitize payload for logging
 function sanitizeForLogging(payload: any): any {
@@ -47,20 +27,35 @@ function maskEmail(e?: string | null) {
 interface ProfilePayload {
   name: string;
   branch_id: string;
-  year_id: string;
+  year_id?: string;
+  academic_year_level?: number;
   semester_id: string;
   roll_number: string;
   section?: string;
 }
 
 function validatePayload(body: any): { ok: true; data: ProfilePayload } | { ok: false; error: string } {
-  const { name, branch_id, year_id, semester_id, roll_number, section } = body;
-  if (!name || typeof name !== 'string') return { ok: false, error: 'Name is required and must be a string' };
-  if (!branch_id || typeof branch_id !== 'string') return { ok: false, error: 'Branch ID is required and must be a string' };
-  if (!year_id || typeof year_id !== 'string') return { ok: false, error: 'Year ID is required and must be a string' };
-  if (!semester_id || typeof semester_id !== 'string') return { ok: false, error: 'Semester ID is required and must be a string' };
-  if (!roll_number || typeof roll_number !== 'string') return { ok: false, error: 'Roll number is required and must be a string' };
-  return { ok: true, data: { name, branch_id, year_id, semester_id, roll_number, section } };
+  const { name, branch_id, year_id, academic_year_level, semester_id, roll_number, section } = body;
+  
+  if (!name || typeof name !== 'string') {
+    return { ok: false, error: 'Name is required and must be a string' };
+  }
+  if (!branch_id || typeof branch_id !== 'string') {
+    return { ok: false, error: 'Branch ID is required and must be a string' };
+  }
+  if (!semester_id || typeof semester_id !== 'string') {
+    return { ok: false, error: 'Semester ID is required and must be a string' };
+  }
+  if (!roll_number || typeof roll_number !== 'string') {
+    return { ok: false, error: 'Roll number is required and must be a string' };
+  }
+  
+  // Must have either year_id OR academic_year_level
+  if (!year_id && !academic_year_level) {
+    return { ok: false, error: 'Either year_id or academic_year_level is required' };
+  }
+  
+  return { ok: true, data: { name, branch_id, year_id, academic_year_level, semester_id, roll_number, section } };
 }
 
 export async function GET() {
@@ -70,7 +65,6 @@ export async function GET() {
 
   const supabase = createSupabaseAdmin();
 
-  // Query the profiles table once for all needed data
   const { data: profileData, error } = await supabase
     .from('profiles')
     .select(`
@@ -94,12 +88,10 @@ export async function GET() {
     return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
 
-  // Transform to include legacy format for backward compatibility
   let profile = null as any;
   if (profileData) {
     const base = profileData as any;
 
-    // Safely enrich with branch code and batch year without relationship expansion
     let branchCode: string | null = null;
     let batchYear: number | null = null;
 
@@ -122,11 +114,10 @@ export async function GET() {
     }
 
     const userRole = base?.role || 'student';
-    const calculatedYear = batchYear ? await calculateYearLevel(batchYear) : 1;
-    const maxYearLevel = await getMaxYearLevel();
-    const validYear = Math.min(maxYearLevel, calculatedYear);
+    const calculatedYear = batchYear ? await academicConfig.calculateAcademicYear(batchYear) : 1;
+    const config = await academicConfig.getConfig();
+    const validYear = Math.min(config.programLength, calculatedYear);
 
-    // Debug logging for development
     if (process.env.NODE_ENV === 'development') {
       console.log('DEBUG: GET Profile year calculation:', {
         batchYear,
@@ -139,6 +130,7 @@ export async function GET() {
     profile = {
       ...base,
       year: validYear,
+      batch_year: batchYear,
       branch: branchCode || 'Unknown',
       role: userRole
     };
@@ -160,31 +152,104 @@ export async function POST(request: Request) {
   }
 
   const validation = validatePayload(body);
-  if (!validation.ok) return NextResponse.json({ error: (validation as any).error }, { status: 400 });
+  if (!validation.ok) {
+    return NextResponse.json({ error: (validation as any).error }, { status: 400 });
+  }
 
   const supabase = createSupabaseAdmin();
-  const payload = { email, ...validation.data };
+  const payload = validation.data;
 
-  // Validate foreign key references before inserting
-  const [branchCheck, yearCheck, semesterCheck] = await Promise.all([
-    supabase.from('branches').select('id').eq('id', payload.branch_id).maybeSingle(),
-    supabase.from('years').select('id').eq('id', payload.year_id).maybeSingle(),
+  // Determine batch_year and year_id
+  let batchYear: number;
+  let yearId: string;
+
+  if (payload.year_id) {
+    // Option 1: year_id provided directly
+    yearId = payload.year_id;
+    
+    const { data: yearData, error: yearError } = await supabase
+      .from('years')
+      .select('batch_year')
+      .eq('id', yearId)
+      .maybeSingle();
+
+    if (yearError) {
+      console.error('Year fetch error:', yearError);
+      return NextResponse.json({ 
+        error: 'Database error during year fetch', 
+        details: yearError.message 
+      }, { status: 500 });
+    }
+
+    if (!yearData) {
+      return NextResponse.json({ error: 'Invalid year ID' }, { status: 422 });
+    }
+
+    batchYear = yearData.batch_year;
+
+  } else if (payload.academic_year_level) {
+    // Option 2: User selected academic year level (1-4)
+    const academicYearLevel = payload.academic_year_level;
+    
+    if (academicYearLevel < 1 || academicYearLevel > 4) {
+      return NextResponse.json({ 
+        error: 'Invalid academic year level (must be 1-4)' 
+      }, { status: 400 });
+    }
+
+    // Calculate batch year from academic level
+    batchYear = await academicConfig.academicYearToBatchYear(academicYearLevel);
+
+    // Find or create year record
+    const { data: existingYear } = await supabase
+      .from('years')
+      .select('id')
+      .eq('batch_year', batchYear)
+      .maybeSingle();
+
+    if (existingYear) {
+      yearId = existingYear.id;
+    } else {
+      // Create new year record
+      const { data: newYear, error: createError } = await supabase
+        .from('years')
+        .insert({
+          batch_year: batchYear,
+          display_name: `${batchYear}-${batchYear + 4}`,
+          program_type: 'btech',
+          total_semesters: 8
+        })
+        .select('id')
+        .single();
+
+      if (createError || !newYear) {
+        console.error('Failed to create year record:', createError);
+        return NextResponse.json({ 
+          error: 'Failed to create year record',
+          details: createError?.message 
+        }, { status: 500 });
+      }
+      yearId = newYear.id;
+    }
+
+    console.log(`DEBUG: Created/found year record - batch_year: ${batchYear}, year_id: ${yearId}`);
+  } else {
+    return NextResponse.json({ 
+      error: 'Either year_id or academic_year_level must be provided' 
+    }, { status: 400 });
+  }
+
+  // Validate other foreign keys
+  const [branchCheck, semesterCheck] = await Promise.all([
+    supabase.from('branches').select('id, code').eq('id', payload.branch_id).maybeSingle(),
     supabase.from('semesters').select('id').eq('id', payload.semester_id).maybeSingle()
   ]);
 
-  // Check for database errors first
   if (branchCheck.error) {
     console.error('Branch validation error:', branchCheck.error);
     return NextResponse.json({
       error: 'Database error during branch validation',
       details: branchCheck.error.message
-    }, { status: 500 });
-  }
-  if (yearCheck.error) {
-    console.error('Year validation error:', yearCheck.error);
-    return NextResponse.json({
-      error: 'Database error during year validation',
-      details: yearCheck.error.message
     }, { status: 500 });
   }
   if (semesterCheck.error) {
@@ -195,78 +260,28 @@ export async function POST(request: Request) {
     }, { status: 500 });
   }
 
-  // Check for missing records
   if (!branchCheck.data) {
     return NextResponse.json({ error: 'Invalid branch ID' }, { status: 422 });
-  }
-  if (!yearCheck.data) {
-    return NextResponse.json({ error: 'Invalid year ID' }, { status: 422 });
   }
   if (!semesterCheck.data) {
     return NextResponse.json({ error: 'Invalid semester ID' }, { status: 422 });
   }
 
-  // Fetch batch_year from years table and branch code from branches table
-  const [yearRes, branchRes] = await Promise.all([
-    supabase.from('years').select('batch_year').eq('id', payload.year_id).maybeSingle(),
-    supabase.from('branches').select('code').eq('id', payload.branch_id).maybeSingle()
-  ]);
+  const branchCode = branchCheck.data.code;
 
-  if (yearRes.error) {
-    console.error('Year fetch error:', yearRes.error);
-    return NextResponse.json({ error: 'Database error during year fetch', details: yearRes.error.message }, { status: 500 });
-  }
-  if (branchRes.error) {
-    console.error('Branch fetch error:', branchRes.error);
-    return NextResponse.json({ error: 'Database error during branch fetch', details: branchRes.error.message }, { status: 500 });
-  }
-
-  const fetchedBatchYear = yearRes.data?.batch_year;
-  const fetchedBranchCode = branchRes.data?.code || 'Unknown';
-
-  // CRITICAL FIX: Use batch_year directly instead of calculating academic year level
-  // The profiles.year column expects the batch year (2023, 2024, etc.)
-  // NOT the academic year level (1, 2, 3, 4)
-  if (!fetchedBatchYear) {
-    console.error('Missing batch_year for year_id:', payload.year_id);
-    return NextResponse.json({ 
-      error: 'Invalid year data', 
-      details: 'Year record missing batch_year value' 
-    }, { status: 422 });
-  }
-
-  // Check if profile exists before update
-  const { data: existingProfile, error: checkError } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('email', email)
-    .maybeSingle();
-
-  if (process.env.NODE_ENV === 'development') {
-    console.log('Profile check for user:', maskEmail(email), {
-      exists: !!existingProfile,
-      error: checkError ? { code: checkError.code, message: checkError.message } : null
-    });
-  }
-
-  if (checkError) {
-    console.error('Profile check error:', checkError);
-    return NextResponse.json({
-      error: 'Database error during profile check',
-      details: checkError.message
-    }, { status: 500 });
-  }
-
-  // Add batch_year and branch code to payload for insert
+  // Insert profile with batch_year
   const insertPayload = {
-    ...payload,
-    year: fetchedBatchYear,  // Use batch_year (2023, 2024) not academic level (1, 2, 3, 4)
-    branch: fetchedBranchCode
+    email,
+    name: payload.name,
+    branch_id: payload.branch_id,
+    year_id: yearId,
+    semester_id: payload.semester_id,
+    roll_number: payload.roll_number,
+    section: payload.section || null,
+    year: batchYear,  // Store batch_year in profiles.year
+    branch: branchCode
   };
 
-  // Debug logs: Log payload and computed values before upsert
-  console.log('DEBUG: Profile POST - Payload before upsert:', sanitizeForLogging(payload));
-  console.log('DEBUG: Profile POST - Using batch_year:', fetchedBatchYear, 'Branch code:', fetchedBranchCode, 'User:', maskEmail(email));
   console.log('DEBUG: Profile POST - Insert payload:', sanitizeForLogging(insertPayload));
 
   const { data, error } = await supabase
@@ -288,21 +303,18 @@ export async function POST(request: Request) {
     .single();
 
   if (error) {
-    // Log the error for debugging (with sanitized payload)
     console.error('Profile update error:', {
       code: error.code,
       message: error.message,
       details: error.details,
       hint: error.hint,
       payload: sanitizeForLogging(insertPayload),
-      batchYear: fetchedBatchYear,
-      fetchedBranchCode,
       userId: maskEmail(email)
     });
 
-    // Handle uniqueness violations (e.g., roll_number)
     const isUniqueViolation = 'code' in error && typeof error.code === 'string' && error.code === '23505';
     const message = isUniqueViolation ? 'Roll number or email already exists' : 'Database error';
+    
     return NextResponse.json({
       error: message,
       details: error.message,
@@ -310,41 +322,17 @@ export async function POST(request: Request) {
     }, { status: 400 });
   }
 
-  // Enrich without relationship expansion
-  const base = data as any;
-  let enrichedBranchCode: string | null = null;
-  let enrichedBatchYear: number | null = null;
-
-  if (base.branch_id) {
-    const { data: b } = await supabase
-      .from('branches')
-      .select('code')
-      .eq('id', base.branch_id)
-      .maybeSingle();
-    enrichedBranchCode = (b as any)?.code ?? null;
-  }
-
-  if (base.year_id) {
-    const { data: y } = await supabase
-      .from('years')
-      .select('batch_year')
-      .eq('id', base.year_id)
-      .maybeSingle();
-    enrichedBatchYear = (y as any)?.batch_year ?? null;
-  }
-
-  const userRole = base?.role || 'student';
-  const enrichedCalculatedYear = enrichedBatchYear ? await calculateYearLevel(enrichedBatchYear) : 1;
-
-  // Clamp year for response (academic year level)
-  const maxYearLevel = await getMaxYearLevel();
-  const validEnrichedYear = Math.min(maxYearLevel, enrichedCalculatedYear);
+  // Calculate current academic year for response
+  const currentAcademicYear = await academicConfig.calculateAcademicYear(batchYear);
+  const config = await academicConfig.getConfig();
+  const validYear = Math.min(config.programLength, currentAcademicYear);
 
   const profile = {
-    ...base,
-    year: validEnrichedYear,  // Return calculated academic year level for backward compatibility
-    branch: enrichedBranchCode || 'Unknown',
-    role: userRole
+    ...data,
+    year: validYear,
+    batch_year: batchYear,
+    branch: branchCode,
+    role: data.role || 'student'
   };
 
   return NextResponse.json({ profile });

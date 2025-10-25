@@ -1,61 +1,24 @@
 import { getSupabaseAdmin } from './supabase';
 
-interface AcademicConfig {
-  programLength: number;
-  startMonth: number;
-  currentAcademicYear: number;
-  yearMappings: Record<number, number>;
-}
-
-interface ProgramSettings {
-  program_length: number;
-  start_month: number;
-  current_academic_year: number;
-}
-
-interface YearMappings {
-  [key: string]: number;
-}
-
 /**
- * Type guard to validate ProgramSettings
+ * Simple year mapping: batch_year → academic_year
+ * Update this once a year!
  */
-function isValidProgramSettings(value: any): value is ProgramSettings {
-  return (
-    value &&
-    typeof value === 'object' &&
-    typeof value.program_length === 'number' &&
-    typeof value.start_month === 'number' &&
-    typeof value.current_academic_year === 'number' &&
-    Number.isFinite(value.program_length) &&
-    Number.isFinite(value.start_month) &&
-    Number.isFinite(value.current_academic_year)
-  );
-}
+const DEFAULT_YEAR_MAPPINGS: Record<number, number> = {
+  2025: 1,  // Joined 2025 = 1st year (current freshers)
+  2024: 2,  // Joined 2024 = 2nd year
+  2023: 3,  // Joined 2023 = 3rd year
+  2022: 4,  // Joined 2022 = 4th year (final year)
+  2021: 4,  // Graduated but still in system
+};
 
-/**
- * Type guard to validate YearMappings
- */
-function isValidYearMappings(value: any): value is YearMappings {
-  return (
-    value &&
-    typeof value === 'object' &&
-    Object.keys(value).every(key => typeof value[key] === 'number' && Number.isFinite(value[key]))
-  );
-}
-
-/**
- * Academic Configuration Manager
- * Handles dynamic academic year calculations and caching
- */
 export class AcademicConfigManager {
   private static instance: AcademicConfigManager | null = null;
-  private config: AcademicConfig | null = null;
-  private configCacheExpiry: number = 0;
+  private yearMappings: Record<number, number> | null = null;
+  private cacheExpiry: number = 0;
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   static getInstance(): AcademicConfigManager {
-    // Lazy initialization to prevent client-side initialization
     if (!AcademicConfigManager.instance) {
       AcademicConfigManager.instance = new AcademicConfigManager();
     }
@@ -63,218 +26,118 @@ export class AcademicConfigManager {
   }
 
   /**
-   * Get the current academic configuration with caching
+   * Get year mappings from database or use defaults
    */
-  async getConfig(): Promise<AcademicConfig> {
+  async getYearMappings(): Promise<Record<number, number>> {
     const now = Date.now();
 
-    if (this.config && now < this.configCacheExpiry) {
-      return this.config;
+    if (this.yearMappings && now < this.cacheExpiry) {
+      return this.yearMappings;
     }
 
     const supabase = getSupabaseAdmin();
 
-    // Fetch both program settings and year mappings
-    const { data: configs, error } = await supabase
+    const { data, error } = await supabase
       .from('academic_config')
-      .select('config_key, config_value')
-      .in('config_key', ['program_settings', 'year_mappings']);
+      .select('config_value')
+      .eq('config_key', 'year_mappings')
+      .maybeSingle();
 
-    if (error) {
-      // Gracefully handle missing table (Postgres undefined_table: 42P01) and similar messages
-      const code = (error as any)?.code;
-      const msg = typeof (error as any)?.message === 'string' ? (error as any).message : String(error);
-      const details = (error as any)?.details || '';
-      const isMissingTable =
-        code === '42P01' ||
-        /relation .*academic_config.* does not exist/i.test(msg) ||
-        /undefined_table/i.test(String(details));
-
-      if (isMissingTable) {
-        // Table not created yet; operate with defaults (avoid noisy warnings in prod)
-        if (process.env.NODE_ENV !== 'production') {
-          console.info(
-            '[academic-config] academic_config table missing; using defaults. Apply the migration to create it.'
-          );
-        }
-        return this.getDefaultConfig();
+    if (error || !data?.config_value) {
+      console.info('[academic-config] Using default year mappings');
+      this.yearMappings = DEFAULT_YEAR_MAPPINGS;
+    } else {
+      // Convert string keys to numbers
+      const mappings: Record<number, number> = {};
+      for (const [key, value] of Object.entries(data.config_value as any)) {
+        mappings[parseInt(key)] = value as number;
       }
-
-      console.warn('[academic-config] Failed to load academic configuration; using defaults:', { code, msg });
-      return this.getDefaultConfig();
+      this.yearMappings = mappings;
     }
 
-    const programSettings = configs?.find(c => c.config_key === 'program_settings');
-    const yearMappings = configs?.find(c => c.config_key === 'year_mappings');
-
-    // Validate program settings
-    let settings: ProgramSettings | null = null;
-    if (programSettings?.config_value != null) {
-      if (isValidProgramSettings(programSettings.config_value)) {
-        settings = programSettings.config_value;
-      } else {
-        console.warn('Invalid program settings found in database, using defaults');
-      }
-    }
-
-    // Validate year mappings
-    let mappings: YearMappings = {};
-    if (yearMappings?.config_value != null) {
-      if (isValidYearMappings(yearMappings.config_value)) {
-        mappings = yearMappings.config_value;
-      } else {
-        console.warn('Invalid year mappings found in database, using empty mappings');
-      }
-    }
-
-    this.config = {
-      programLength: settings?.program_length ?? 4,
-      startMonth: settings?.start_month ?? 6,
-      currentAcademicYear: settings?.current_academic_year ?? new Date().getFullYear(),
-      yearMappings: this.convertMappingsToNumbers(mappings)
-    };
-
-    this.configCacheExpiry = now + this.CACHE_DURATION;
-    return this.config;
+    this.cacheExpiry = now + this.CACHE_DURATION;
+    return this.yearMappings;
   }
 
   /**
-   * Calculate academic year level from batch year
+   * Get academic year for a batch year - Simple lookup!
    */
   async calculateAcademicYear(batchYear: number | undefined): Promise<number> {
     if (!batchYear) return 1;
 
-    const config = await this.getConfig();
-
-    // Validate and normalize batchYear
-    if (!Number.isFinite(batchYear) || batchYear < 0 || !Number.isInteger(batchYear)) {
-      console.warn(`Invalid batchYear: ${batchYear}, must be a non-negative integer`);
-      return 1;
+    const mappings = await this.getYearMappings();
+    
+    // Direct lookup
+    if (mappings[batchYear]) {
+      return mappings[batchYear];
     }
 
-    // Check if we have an explicit mapping
-    if (config.yearMappings[batchYear]) {
-      return config.yearMappings[batchYear];
-    }
-
-    // Dynamic calculation based on current date
-    const currentDate = new Date();
-    const currentYear = currentDate.getFullYear();
-    const currentMonth = currentDate.getMonth() + 1;
-
-    // Adjust for academic year (if we're before start month, we're still in previous academic year)
-    const adjustedYear = currentMonth >= config.startMonth ? currentYear : currentYear - 1;
-
-    // Handle future batch years (students who haven't started yet)
-    if (batchYear > adjustedYear) {
-      return 1; // Future batches start at year 1
-    }
-
-    const academicYear = adjustedYear - batchYear + 1;
-
-    // Clamp within valid range
-    return Math.max(1, Math.min(academicYear, config.programLength));
+    // Fallback: assume older = graduated (Year 4)
+    return 4;
   }
 
   /**
-   * Get all academic year mappings
+   * Update year mappings (admin only)
    */
-  async getYearMappings(): Promise<Record<number, number>> {
-    const config = await this.getConfig();
-    return config.yearMappings;
-  }
-
-  /**
-   * Update academic configuration (admin function)
-   */
-  async updateConfig(updates: Partial<AcademicConfig>): Promise<void> {
+  async updateYearMappings(newMappings: Record<number, number>): Promise<void> {
     const supabase = getSupabaseAdmin();
-    const currentConfig = await this.getConfig();
 
-    const newConfig = { ...currentConfig, ...updates };
-
-    // Update program settings
-    const programSettings = {
-      program_length: newConfig.programLength,
-      start_month: newConfig.startMonth,
-      current_academic_year: newConfig.currentAcademicYear
-    };
-
-    const { error: programError } = await supabase
-      .from('academic_config')
-      .upsert({
-        config_key: 'program_settings',
-        config_value: programSettings,
-        updated_at: new Date().toISOString()
-      });
-
-    if (programError) {
-      throw new Error(`Failed to update program settings: ${programError.message}`);
-    }
-
-    // Update year mappings
-    const { error: mappingsError } = await supabase
+    const { error } = await supabase
       .from('academic_config')
       .upsert({
         config_key: 'year_mappings',
-        config_value: newConfig.yearMappings,
+        config_value: newMappings,
         updated_at: new Date().toISOString()
-      });
+      }, { onConflict: 'config_key' });
 
-    if (mappingsError) {
-      // Consider rolling back the first update or logging the inconsistency
-      console.error('Failed to update year mappings after program settings were updated:', mappingsError);
-      throw new Error(`Failed to update year mappings: ${mappingsError.message}`);
+    if (error) {
+      throw new Error(`Failed to update year mappings: ${error.message}`);
     }
 
-    // Clear cache to force reload only after successful updates
-    this.config = null;
-    this.configCacheExpiry = 0;
+    this.clearCache();
   }
 
   /**
-   * Convert string keys to numbers for year mappings
+   * Promote all students by one year
+   * Simply shift the mappings!
    */
-  private convertMappingsToNumbers(mappings: YearMappings): Record<number, number> {
-    const result: Record<number, number> = {};
-    for (const [key, value] of Object.entries(mappings)) {
-      const parsed = parseInt(key, 10);
-      if (Number.isNaN(parsed)) {
-        console.warn(`Skipping invalid year mapping key "${key}" - not a valid number`);
-        continue;
-      }
-      result[parsed] = value;
+  async promoteAllStudents(): Promise<void> {
+    const currentMappings = await this.getYearMappings();
+    const newMappings: Record<number, number> = {};
+
+    // Shift everyone up by 1 year
+    for (const [batchYear, academicYear] of Object.entries(currentMappings)) {
+      const year = parseInt(batchYear);
+      // Year 1→2, Year 2→3, Year 3→4, Year 4 stays at 4
+      newMappings[year] = Math.min(4, academicYear + 1);
     }
-    return result;
+
+    await this.updateYearMappings(newMappings);
   }
 
   /**
-   * Get default configuration when database is unavailable
+   * Demote all students by one year
    */
-  private getDefaultConfig(): AcademicConfig {
-    return {
-      programLength: 4,
-      startMonth: 6, // June
-      currentAcademicYear: 2025,
-      yearMappings: {
-        2024: 2, // 2024 batch = Academic year 2 (current Year 2 students)
-        2023: 3, // 2023 batch = Academic year 3 (current Year 3 students)
-        2022: 4, // 2022 batch = Academic year 4 (current Year 4 students)
-        2021: 4  // 2021 batch = Academic year 4 (graduated, final year)
-      }
-    };
+  async demoteAllStudents(): Promise<void> {
+    const currentMappings = await this.getYearMappings();
+    const newMappings: Record<number, number> = {};
+
+    for (const [batchYear, academicYear] of Object.entries(currentMappings)) {
+      const year = parseInt(batchYear);
+      // Year 2→1, Year 3→2, Year 4→3, Year 1 stays at 1
+      newMappings[year] = Math.max(1, academicYear - 1);
+    }
+
+    await this.updateYearMappings(newMappings);
   }
 
-  /**
-   * Clear cache (useful for testing or forced refresh)
-   */
   clearCache(): void {
-    this.config = null;
-    this.configCacheExpiry = 0;
+    this.yearMappings = null;
+    this.cacheExpiry = 0;
   }
 }
 
-// Lazy-loaded instance to prevent client-side initialization
+// Export singleton
 let academicConfigInstance: AcademicConfigManager | null = null;
 
 function getAcademicConfig(): AcademicConfigManager {
@@ -291,11 +154,3 @@ export const academicConfig = new Proxy({} as AcademicConfigManager, {
     return typeof value === 'function' ? value.bind(instance) : value;
   }
 });
-
-/**
- * Legacy function for backward compatibility
- * @deprecated Use academicConfig.calculateAcademicYear() instead
- */
-export async function calculateYearLevel(batchYear: number | undefined): Promise<number> {
-  return getAcademicConfig().calculateAcademicYear(batchYear);
-}
