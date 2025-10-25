@@ -22,7 +22,7 @@ export default function SimpleYearManager() {
       const res = await fetch('/api/admin/year-mappings');
       if (!res.ok) {
         const errorText = await res.text();
-        setError(`Failed to fetch mappings: ${res.status} ${res.statusText}`);
+        setError(`Failed to fetch mappings: ${res.status} ${res.statusText} - ${errorText}`);
         return;
       }
       const data = await res.json();
