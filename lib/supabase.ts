@@ -28,9 +28,9 @@ export function getSupabaseAdmin(): SupabaseClient {
   if (typeof window !== 'undefined') {
     throw new Error(
       'getSupabaseAdmin must only be used in server-side code (API routes, server actions, middleware, or SSR). '
+      // @coderabbitai this error is raising even though i adjusted. what might be the issue it is causing?
     );
   }
-  // @coderabbitai this above error is thrrowing, what might be the issue? and how can i solve it?
 
   if (supabaseAdminInstance) {
     return supabaseAdminInstance;

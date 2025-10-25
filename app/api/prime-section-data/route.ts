@@ -6,7 +6,6 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { createSupabaseAdmin } from '@/lib/supabase';
-const supabaseAdmin = createSupabaseAdmin();
 
 // Configuration
 const UPCOMING_EXAM_DAYS_THRESHOLD = 4; // Days from today to look ahead
@@ -59,6 +58,7 @@ function isDateWithinDays(dateString: string, daysThreshold: number): boolean {
 }
 
 export async function GET(request: Request) {
+    const supabaseAdmin = createSupabaseAdmin();
     const startTime = Date.now();
     console.log(`API Route: /api/prime-section-data called at ${new Date().toISOString()}`);
     
