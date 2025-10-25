@@ -1,7 +1,5 @@
 // Updated Profile API Route for New Schema
-// This file contains the updated implementation that works with the refactored database schema
-// Replace the existing route.ts with this content after migration is complete
-
+// Fixed to use batch_year instead of calculated academic year level
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
@@ -29,17 +27,14 @@ async function calculateYearLevel(batchYear: number | undefined): Promise<number
 // Helper function to sanitize payload for logging
 function sanitizeForLogging(payload: any): any {
   if (!payload || typeof payload !== 'object') return payload;
-
   const sensitiveKeys = ['password', 'email', 'ssn', 'token', 'secret', 'key', 'auth'];
   const sanitized = { ...payload };
-
   Object.keys(sanitized).forEach(key => {
     const lowerKey = key.toLowerCase();
     if (sensitiveKeys.some(sensitive => lowerKey.includes(sensitive))) {
       sanitized[key] = '[REDACTED]';
     }
   });
-
   return sanitized;
 }
 
@@ -60,13 +55,11 @@ interface ProfilePayload {
 
 function validatePayload(body: any): { ok: true; data: ProfilePayload } | { ok: false; error: string } {
   const { name, branch_id, year_id, semester_id, roll_number, section } = body;
-
   if (!name || typeof name !== 'string') return { ok: false, error: 'Name is required and must be a string' };
   if (!branch_id || typeof branch_id !== 'string') return { ok: false, error: 'Branch ID is required and must be a string' };
   if (!year_id || typeof year_id !== 'string') return { ok: false, error: 'Year ID is required and must be a string' };
   if (!semester_id || typeof semester_id !== 'string') return { ok: false, error: 'Semester ID is required and must be a string' };
   if (!roll_number || typeof roll_number !== 'string') return { ok: false, error: 'Roll number is required and must be a string' };
-
   return { ok: true, data: { name, branch_id, year_id, semester_id, roll_number, section } };
 }
 
@@ -172,9 +165,6 @@ export async function POST(request: Request) {
   const supabase = createSupabaseAdmin();
   const payload = { email, ...validation.data };
 
-  // Note: year and branch are computed on API response, not stored in database
-  // The database stores only the foreign keys (year_id, branch_id, semester_id)
-
   // Validate foreign key references before inserting
   const [branchCheck, yearCheck, semesterCheck] = await Promise.all([
     supabase.from('branches').select('id').eq('id', payload.branch_id).maybeSingle(),
@@ -226,7 +216,6 @@ export async function POST(request: Request) {
     console.error('Year fetch error:', yearRes.error);
     return NextResponse.json({ error: 'Database error during year fetch', details: yearRes.error.message }, { status: 500 });
   }
-
   if (branchRes.error) {
     console.error('Branch fetch error:', branchRes.error);
     return NextResponse.json({ error: 'Database error during branch fetch', details: branchRes.error.message }, { status: 500 });
@@ -234,10 +223,17 @@ export async function POST(request: Request) {
 
   const fetchedBatchYear = yearRes.data?.batch_year;
   const fetchedBranchCode = branchRes.data?.code || 'Unknown';
-  const computedYear = fetchedBatchYear ? await calculateYearLevel(fetchedBatchYear) : 1;
 
-  // Note: year and branch are computed from foreign keys, not stored in database
-  // Database only stores year_id and branch_id, values are enriched on response
+  // CRITICAL FIX: Use batch_year directly instead of calculating academic year level
+  // The profiles.year column expects the batch year (2023, 2024, etc.)
+  // NOT the academic year level (1, 2, 3, 4)
+  if (!fetchedBatchYear) {
+    console.error('Missing batch_year for year_id:', payload.year_id);
+    return NextResponse.json({ 
+      error: 'Invalid year data', 
+      details: 'Year record missing batch_year value' 
+    }, { status: 422 });
+  }
 
   // Check if profile exists before update
   const { data: existingProfile, error: checkError } = await supabase
@@ -261,9 +257,21 @@ export async function POST(request: Request) {
     }, { status: 500 });
   }
 
+  // Add batch_year and branch code to payload for insert
+  const insertPayload = {
+    ...payload,
+    year: fetchedBatchYear,  // Use batch_year (2023, 2024) not academic level (1, 2, 3, 4)
+    branch: fetchedBranchCode
+  };
+
+  // Debug logs: Log payload and computed values before upsert
+  console.log('DEBUG: Profile POST - Payload before upsert:', sanitizeForLogging(payload));
+  console.log('DEBUG: Profile POST - Using batch_year:', fetchedBatchYear, 'Branch code:', fetchedBranchCode, 'User:', maskEmail(email));
+  console.log('DEBUG: Profile POST - Insert payload:', sanitizeForLogging(insertPayload));
+
   const { data, error } = await supabase
     .from('profiles')
-    .upsert(payload, { onConflict: 'email' })
+    .upsert(insertPayload, { onConflict: 'email' })
     .select(`
       id,
       roll_number,
@@ -286,7 +294,9 @@ export async function POST(request: Request) {
       message: error.message,
       details: error.details,
       hint: error.hint,
-      payload: sanitizeForLogging(payload),
+      payload: sanitizeForLogging(insertPayload),
+      batchYear: fetchedBatchYear,
+      fetchedBranchCode,
       userId: maskEmail(email)
     });
 
@@ -302,7 +312,6 @@ export async function POST(request: Request) {
 
   // Enrich without relationship expansion
   const base = data as any;
-
   let enrichedBranchCode: string | null = null;
   let enrichedBatchYear: number | null = null;
 
@@ -333,12 +342,10 @@ export async function POST(request: Request) {
 
   const profile = {
     ...base,
-    year: validEnrichedYear,
+    year: validEnrichedYear,  // Return calculated academic year level for backward compatibility
     branch: enrichedBranchCode || 'Unknown',
     role: userRole
   };
 
   return NextResponse.json({ profile });
 }
-
-
