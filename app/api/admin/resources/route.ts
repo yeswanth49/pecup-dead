@@ -26,12 +26,14 @@ export async function GET(request: Request) {
   let userContext
   try {
     userContext = await getCurrentUserContext()
+    console.log(`[API DEBUG AdminResources GET] User context: ${JSON.stringify({ role: userContext?.role, email: userContext?.email, representatives: userContext?.representatives?.map(r => ({ branch_id: r.branch_id, year_id: r.year_id, active: r.active })) })}`);
     if (!userContext) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    
+
     // Only allow admins and representatives to access this admin endpoint
-    if (!['admin', 'yeshh', 'representative'].includes(userContext.role)) {
+    if (!userContext.role || !['admin', 'yeshh', 'representative', 'superadmin'].includes(userContext.role)) {
+      console.log(`[API DEBUG AdminResources GET] Forbidden: role '${userContext.role}' not in allowed list`);
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
   } catch (err) {
@@ -39,6 +41,7 @@ export async function GET(request: Request) {
     if (!isDev) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
+    console.log(`[API DEBUG AdminResources GET] Error in getCurrentUserContext: ${err}`);
   }
   const supabase = createSupabaseAdmin()
   const url = new URL(request.url)
@@ -228,7 +231,10 @@ export async function POST(request: Request) {
         console.error(`${REQ_DEBUG_PREFIX} Branch and year not specified for representative.`);
         return NextResponse.json({ error: 'Branch and year must be specified for representatives' }, { status: 400 });
       }
+      console.log(`${REQ_DEBUG_PREFIX} Checking permissions for representative. userContext: ${JSON.stringify({ role: userContext.role, representatives: userContext.representatives?.map(r => ({ branch_id: r.branch_id, year_id: r.year_id, active: r.active })) })}`);
+      console.log(`${REQ_DEBUG_PREFIX} Target branchId: ${branchId}, yearId: ${yearId}`);
       const canManage = await canManageResources(branchId, yearId);
+      console.log(`${REQ_DEBUG_PREFIX} canManage result: ${canManage}`);
       if (!canManage) {
         console.error(`${REQ_DEBUG_PREFIX} Representative forbidden from managing resources for branchId: ${branchId}, yearId: ${yearId}.`);
         return NextResponse.json({ error: 'Forbidden: Cannot manage resources for this branch/year' }, { status: 403 });

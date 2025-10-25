@@ -110,14 +110,8 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
 
   // Dynamic calculation of academic year level from batch year
   const calculateYearLevel = async (batchYear: number | undefined): Promise<number> => {
-    if (!batchYear) return 1;
-    // Simple fallback logic when academicConfig is not available
-    const currentYear = new Date().getFullYear();
-    if (batchYear > currentYear) return 1; // Future batch = freshman
-    if (batchYear === currentYear) return 1; // Current batch = freshman
-    if (batchYear === currentYear - 1) return 2; // Last year = sophomore
-    if (batchYear === currentYear - 2) return 3; // Two years ago = junior
-    return 4; // Older = senior/graduated
+    const { academicConfig } = await import('@/lib/academic-config');
+    return academicConfig.calculateAcademicYear(batchYear);
   }
 
   // Use profile data as primary source, with student data as fallback for academic info
