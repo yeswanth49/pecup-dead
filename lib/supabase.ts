@@ -30,6 +30,7 @@ export function getSupabaseAdmin(): SupabaseClient {
       'getSupabaseAdmin must only be used in server-side code (API routes, server actions, middleware, or SSR). '
     );
   }
+  // @coderabbitai this above error is thrrowing, what might be the issue? and how can i solve it?
 
   if (supabaseAdminInstance) {
     return supabaseAdminInstance;

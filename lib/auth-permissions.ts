@@ -3,6 +3,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { createSupabaseAdmin } from '@/lib/supabase'
 import { UserRole, UserPermissions } from '@/lib/types'
 import { UserContext, AdminContext, Representative, StudentWithRelations, RepresentativeWithRelations } from '@/lib/types/auth'
+import { academicConfig } from '@/lib/academic-config'
 
 /**
  * Get the current user's context including their role and permissions
@@ -110,8 +111,6 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
 
   // Dynamic calculation of academic year level from batch year
   const calculateYearLevel = async (batchYear: number | undefined): Promise<number> => {
-    // Lazy import to avoid client-side initialization
-    const { academicConfig } = await import('@/lib/academic-config');
     return academicConfig.calculateAcademicYear(batchYear);
   }
 
