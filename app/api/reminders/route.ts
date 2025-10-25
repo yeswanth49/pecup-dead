@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { createSupabaseAdmin } from '@/lib/supabase';
-const supabaseAdmin = createSupabaseAdmin();
 
 // Define the structure for a reminder item
 interface Reminder {
@@ -16,6 +15,7 @@ interface Reminder {
 }
 
 export async function GET(request: Request) {
+  const supabaseAdmin = createSupabaseAdmin();
   console.log(`\nAPI Route (Reminders): Received request at ${new Date().toISOString()}`);
 
   try {

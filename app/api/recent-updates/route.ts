@@ -6,8 +6,6 @@ import { createSupabaseAdmin } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
 
-const supabaseAdmin = createSupabaseAdmin();
-
 // Define the structure for a recent update item
 interface RecentUpdate {
     id: string;
@@ -17,6 +15,7 @@ interface RecentUpdate {
 }
 
 export async function GET(request: Request) {
+    const supabaseAdmin = createSupabaseAdmin();
     try {
         console.log(`API Route: /api/recent-updates called at ${new Date().toISOString()}`);
         const url = new URL(request.url)
