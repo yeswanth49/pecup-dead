@@ -47,12 +47,29 @@ export class AcademicConfigManager {
       console.info('[academic-config] Using default year mappings');
       this.yearMappings = DEFAULT_YEAR_MAPPINGS;
     } else {
-      // Convert string keys to numbers
-      const mappings: Record<number, number> = {};
-      for (const [key, value] of Object.entries(data.config_value as any)) {
-        mappings[parseInt(key)] = value as number;
+      // Validate that config_value is a plain object and process valid entries
+      if (typeof data.config_value !== 'object' || Array.isArray(data.config_value) || data.config_value === null) {
+        console.warn('[academic-config] Invalid config_value structure, falling back to defaults');
+        this.yearMappings = DEFAULT_YEAR_MAPPINGS;
+      } else {
+        const mappings: Record<number, number> = {};
+        let hasValidEntries = false;
+        for (const [key, value] of Object.entries(data.config_value as any)) {
+          const parsedKey = parseInt(key);
+          if (isNaN(parsedKey)) continue;
+          const coercedValue = Number(value);
+          if (!isNaN(coercedValue) && isFinite(coercedValue)) {
+            mappings[parsedKey] = coercedValue;
+            hasValidEntries = true;
+          }
+        }
+        if (!hasValidEntries) {
+          console.warn('[academic-config] No valid mappings found, falling back to defaults');
+          this.yearMappings = DEFAULT_YEAR_MAPPINGS;
+        } else {
+          this.yearMappings = mappings;
+        }
       }
-      this.yearMappings = mappings;
     }
 
     this.cacheExpiry = now + this.CACHE_DURATION;
@@ -66,27 +83,61 @@ export class AcademicConfigManager {
     if (!batchYear) return 1;
 
     const mappings = await this.getYearMappings();
-    
+
     // Direct lookup
     if (mappings[batchYear]) {
       return mappings[batchYear];
     }
 
-    // Fallback: assume older = graduated (Year 4)
-    return 4;
+    // Fallback: if batchYear is in the future, return 1 (freshman), otherwise 4 (graduated)
+    const currentYear = new Date().getFullYear();
+    return batchYear > currentYear ? 1 : 4;
   }
 
   /**
    * Update year mappings (admin only)
    */
   async updateYearMappings(newMappings: Record<number, number>): Promise<void> {
+    // Validation rules: newMappings must be a non-empty plain object,
+    // each key must be an integer 1-4 (academic year), each value an integer 1900-2100 (batch year).
+    // Normalize string keys/values to numbers, reject duplicates, undefined values, or extra keys.
+    if (!newMappings || typeof newMappings !== 'object' || Array.isArray(newMappings) || Object.keys(newMappings).length === 0) {
+      throw new Error('newMappings must be a non-empty plain object');
+    }
+
+    const normalizedMappings: Record<number, number> = {};
+    const seenBatchYears = new Set<number>();
+    const seenAcademicYears = new Set<number>();
+
+    for (const [key, value] of Object.entries(newMappings)) {
+      const academicYear = parseInt(key);
+      if (isNaN(academicYear) || academicYear < 1 || academicYear > 4) {
+        throw new Error(`Invalid academic year: ${key}. Must be an integer between 1 and 4`);
+      }
+      if (seenAcademicYears.has(academicYear)) {
+        throw new Error(`Duplicate academic year: ${academicYear}`);
+      }
+      seenAcademicYears.add(academicYear);
+
+      const batchYear = Number(value);
+      if (isNaN(batchYear) || !isFinite(batchYear) || batchYear < 1900 || batchYear > 2100) {
+        throw new Error(`Invalid batch year: ${value}. Must be an integer between 1900 and 2100`);
+      }
+      if (seenBatchYears.has(batchYear)) {
+        throw new Error(`Duplicate batch year: ${batchYear}`);
+      }
+      seenBatchYears.add(batchYear);
+
+      normalizedMappings[academicYear] = batchYear;
+    }
+
     const supabase = getSupabaseAdmin();
 
     const { error } = await supabase
       .from('academic_config')
       .upsert({
         config_key: 'year_mappings',
-        config_value: newMappings,
+        config_value: normalizedMappings,
         updated_at: new Date().toISOString()
       }, { onConflict: 'config_key' });
 
