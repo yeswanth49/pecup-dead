@@ -51,9 +51,12 @@ export default function OnboardingPage() {
       })
 
       const mappingJson = await mappingResponse.json()
+      console.log('Mapping API response:', { status: mappingResponse.status, mappingJson })
       if (!mappingResponse.ok) {
         throw new Error(mappingJson?.error || 'Failed to map branch/year data')
       }
+
+      console.log('Mapping response:', mappingJson)
 
       const response = await fetch('/api/profile', {
         method: 'POST',
@@ -67,6 +70,7 @@ export default function OnboardingPage() {
         }),
       })
       const json = await response.json().catch(() => ({}))
+      console.log('Profile API response:', { status: response.status, json })
       if (!response.ok) {
         throw new Error(json?.error || 'Failed to save profile')
       }

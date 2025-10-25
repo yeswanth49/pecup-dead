@@ -3,13 +3,14 @@
 import { useSession, signIn, signOut } from 'next-auth/react'
 import { useEffect, useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Card } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ResourcesSection } from './_components/ResourcesSection'
 import { RemindersSection } from './_components/RemindersSection'
 import { RecentUpdatesSection } from './_components/RecentUpdatesSection'
 import { ExamsSection } from './_components/ExamsSection'
 import { SettingsSection } from './_components/SettingsSection'
 import { AdminsSection } from './_components/AdminsSection'
+import SimpleYearManager from './_components/SimpleYearManager'
 
 type UserContext = {
   role: 'student' | 'representative' | 'admin' | 'superadmin'
@@ -23,18 +24,6 @@ type UserContext = {
   }>
 }
 
-// Simple Card (replace with your UI lib if you have one)
-const Card = ({
-  children,
-  className,
-}: {
-  children: React.ReactNode
-  className?: string
-}) => (
-  <div className={`bg-card text-card-foreground border rounded-lg shadow-md p-6 ${className}`}>
-    {children}
-  </div>
-)
 
 export default function DeveloperDashboardPage() {
   const { data: session, status } = useSession()
@@ -88,13 +77,15 @@ export default function DeveloperDashboardPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4">
         <Card className="max-w-md text-center">
-          <h2 className="text-xl font-semibold mb-4">Please Sign In</h2>
-          <button
-            onClick={() => signIn('google')}
-            className="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors"
-          >
-            Sign In with Google
-          </button>
+          <CardContent>
+            <h2 className="text-xl font-semibold mb-4">Please Sign In</h2>
+            <button
+              onClick={() => signIn('google')}
+              className="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors"
+            >
+              Sign In with Google
+            </button>
+          </CardContent>
         </Card>
       </div>
     )
@@ -105,25 +96,27 @@ export default function DeveloperDashboardPage() {
     return (
       <div className="flex flex-col justify-center items-center min-h-screen text-center p-4">
         <Card className="max-w-md">
-          <h1 className="text-xl font-semibold text-destructive mb-4">
-            Access Denied
-          </h1>
-          <p className="mb-4">
-            Your account ({session.user?.email}) does not have the required permissions
-            to access the developer dashboard.
-          </p>
-          <p className="mb-6">You need to be assigned as a representative, admin, or superadmin.</p>
-        <button
-          onClick={() =>
-            signOut({
-              // When signOut completes, go to /login
-              callbackUrl: '/login',
-            })
-          }
-          className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md transition-colors"
-        >
-          Sign Out & Sign In Again
-        </button>
+          <CardContent>
+            <h1 className="text-xl font-semibold text-destructive mb-4">
+              Access Denied
+            </h1>
+            <p className="mb-4">
+              Your account ({session.user?.email}) does not have the required permissions
+              to access the developer dashboard.
+            </p>
+            <p className="mb-6">You need to be assigned as a representative, admin, or superadmin.</p>
+            <button
+              onClick={() =>
+                signOut({
+                  // When signOut completes, go to /login
+                  callbackUrl: '/login',
+                })
+              }
+              className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md transition-colors"
+            >
+              Sign Out & Sign In Again
+            </button>
+          </CardContent>
         </Card>
       </div>
     )
@@ -162,28 +155,31 @@ export default function DeveloperDashboardPage() {
           {isAdmin && <TabsTrigger value="admins">Admins</TabsTrigger>}
         </TabsList>
         <TabsContent value="resources">
-          <Card className="p-4"><ResourcesSection userContext={userContext} /></Card>
+          <Card><CardContent className="p-4"><ResourcesSection userContext={userContext} /></CardContent></Card>
         </TabsContent>
         <TabsContent value="archive">
-          <Card className="p-4"><ResourcesSection archivedOnly userContext={userContext} /></Card>
+          <Card><CardContent className="p-4"><ResourcesSection archivedOnly userContext={userContext} /></CardContent></Card>
         </TabsContent>
         <TabsContent value="reminders">
-          <Card className="p-4"><RemindersSection userContext={userContext} /></Card>
+          <Card><CardContent className="p-4"><RemindersSection userContext={userContext} /></CardContent></Card>
         </TabsContent>
         <TabsContent value="updates">
-          <Card className="p-4"><RecentUpdatesSection userContext={userContext} /></Card>
+          <Card><CardContent className="p-4"><RecentUpdatesSection userContext={userContext} /></CardContent></Card>
         </TabsContent>
         <TabsContent value="exams">
-          <Card className="p-4"><ExamsSection userContext={userContext} /></Card>
+          <Card><CardContent className="p-4"><ExamsSection userContext={userContext} /></CardContent></Card>
         </TabsContent>
         {isAdmin && (
           <TabsContent value="settings">
-            <Card className="p-4"><SettingsSection /></Card>
+            <Card><CardContent className="p-4"><SettingsSection /></CardContent></Card>
           </TabsContent>
         )}
         {isAdmin && (
           <TabsContent value="admins">
-            <Card className="p-4"><AdminsSection /></Card>
+            <Card><CardContent className="p-4">
+              <AdminsSection />
+              <SimpleYearManager />
+            </CardContent></Card>
           </TabsContent>
         )}
       </Tabs>

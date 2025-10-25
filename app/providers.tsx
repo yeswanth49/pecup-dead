@@ -3,6 +3,7 @@
 import { SessionProvider } from 'next-auth/react'
 import { ThemeProvider } from '@/components/theme-provider'
 import { ProfileProvider } from '@/lib/enhanced-profile-context'
+import { Toaster } from '@/components/ui/toaster'
 import CacheDebugger from '@/components/CacheDebugger'
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -17,6 +18,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         >
           {children}
           <CacheDebugger />
+          <Toaster />
         </ThemeProvider>
       </ProfileProvider>
     </SessionProvider>
