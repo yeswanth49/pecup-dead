@@ -5,6 +5,20 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
 
+// Helper to parse response safely
+async function parseResponse(res: Response): Promise<any> {
+  const contentType = res.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
+    try {
+      return await res.json();
+    } catch {
+      return await res.text();
+    }
+  } else {
+    return await res.text();
+  }
+}
+
 interface YearMappings {
   current_mappings: Record<string, number>;
 }
@@ -20,12 +34,11 @@ export default function SimpleYearManager() {
     setError(null);
     try {
       const res = await fetch('/api/admin/year-mappings');
+      const data = await parseResponse(res);
       if (!res.ok) {
-        const errorText = await res.text();
-        setError(`Failed to fetch mappings: ${res.status} ${res.statusText} - ${errorText}`);
+        setError(`Failed to fetch mappings: ${res.status} ${res.statusText} - ${typeof data === 'string' ? data : JSON.stringify(data)}`);
         return;
       }
-      const data = await res.json();
       setMappings(data);
     } catch (err) {
       setError('Network error or failed to parse response');
@@ -39,16 +52,16 @@ export default function SimpleYearManager() {
     setLoading(true);
     try {
       const res = await fetch('/api/admin/year-mappings', { method: 'POST' });
-      const data = await res.json();
+      const data = await parseResponse(res);
       if (res.ok) {
         toast({
           title: 'Success',
-          description: data.message || 'All students promoted successfully!',
+          description: (typeof data === 'object' && data?.message) || 'All students promoted successfully!',
         });
       } else {
         toast({
           title: 'Error',
-          description: data.error || 'Failed to promote students.',
+          description: (typeof data === 'object' && data?.error) || (typeof data === 'string' ? data : 'Failed to promote students.'),
           variant: 'destructive',
         });
       }
@@ -69,16 +82,16 @@ export default function SimpleYearManager() {
     setLoading(true);
     try {
       const res = await fetch('/api/admin/year-mappings', { method: 'PATCH' });
-      const data = await res.json();
+      const data = await parseResponse(res);
       if (res.ok) {
         toast({
           title: 'Success',
-          description: data.message || 'All students demoted successfully!',
+          description: (typeof data === 'object' && data?.message) || 'All students demoted successfully!',
         });
       } else {
         toast({
           title: 'Error',
-          description: data.error || 'Failed to demote students.',
+          description: (typeof data === 'object' && data?.error) || (typeof data === 'string' ? data : 'Failed to demote students.'),
           variant: 'destructive',
         });
       }

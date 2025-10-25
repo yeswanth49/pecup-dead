@@ -99,7 +99,7 @@ export class AcademicConfigManager {
    */
   async updateYearMappings(newMappings: Record<number, number>): Promise<void> {
     // Validation rules: newMappings must be a non-empty plain object,
-    // each key must be an integer 1-4 (academic year), each value an integer 1900-2100 (batch year).
+    // each key must be an integer 1900-2100 (batch year), each value an integer 1-4 (academic year).
     // Normalize string keys/values to numbers, reject duplicates, undefined values, or extra keys.
     if (!newMappings || typeof newMappings !== 'object' || Array.isArray(newMappings) || Object.keys(newMappings).length === 0) {
       throw new Error('newMappings must be a non-empty plain object');
@@ -110,25 +110,25 @@ export class AcademicConfigManager {
     const seenAcademicYears = new Set<number>();
 
     for (const [key, value] of Object.entries(newMappings)) {
-      const academicYear = parseInt(key);
-      if (isNaN(academicYear) || academicYear < 1 || academicYear > 4) {
-        throw new Error(`Invalid academic year: ${key}. Must be an integer between 1 and 4`);
-      }
-      if (seenAcademicYears.has(academicYear)) {
-        throw new Error(`Duplicate academic year: ${academicYear}`);
-      }
-      seenAcademicYears.add(academicYear);
-
-      const batchYear = Number(value);
-      if (isNaN(batchYear) || !isFinite(batchYear) || batchYear < 1900 || batchYear > 2100) {
-        throw new Error(`Invalid batch year: ${value}. Must be an integer between 1900 and 2100`);
+      const batchYear = parseInt(key);
+      if (isNaN(batchYear) || batchYear < 1900 || batchYear > 2100) {
+        throw new Error(`Invalid batch year: ${key}. Must be an integer between 1900 and 2100`);
       }
       if (seenBatchYears.has(batchYear)) {
         throw new Error(`Duplicate batch year: ${batchYear}`);
       }
       seenBatchYears.add(batchYear);
 
-      normalizedMappings[academicYear] = batchYear;
+      const academicYear = Number(value);
+      if (isNaN(academicYear) || !isFinite(academicYear) || academicYear < 1 || academicYear > 4) {
+        throw new Error(`Invalid academic year: ${value}. Must be an integer between 1 and 4`);
+      }
+      if (seenAcademicYears.has(academicYear)) {
+        throw new Error(`Duplicate academic year: ${academicYear}`);
+      }
+      seenAcademicYears.add(academicYear);
+
+      normalizedMappings[batchYear] = academicYear;
     }
 
     const supabase = getSupabaseAdmin();

@@ -57,17 +57,18 @@ export async function GET() {
     // Get student distribution
     const { data: students } = await supabase
       .from('profiles')
-      .select('year')
+      .select('year_id, years(batch_year)')
       .eq('role', 'student');
 
     const distribution: Record<number | string, number> = {};
     for (const student of students || []) {
+      const batchYear = student.years?.batch_year;
       let academicYear: number | string;
-      if (student.year !== null && student.year !== undefined && Number.isInteger(student.year)) {
-        academicYear = mappings[student.year] || 4;
+      if (batchYear !== null && batchYear !== undefined && Number.isInteger(batchYear)) {
+        academicYear = mappings[batchYear] || 4;
       } else {
         academicYear = 'unknown';
-        console.warn(`Invalid student.year: ${student.year} for student, using 'unknown' bucket`);
+        console.warn(`Missing batch_year for student, using 'unknown' bucket`);
       }
       distribution[academicYear] = (distribution[academicYear] || 0) + 1;
     }
@@ -180,19 +181,19 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Invalid mappings format' }, { status: 400 });
     }
 
-    // Validate each key-value pair
+    // Validate each key-value pair (keys should be academic years 1-4, values batch years 1900-2100)
     const requiredYears = new Set([1, 2, 3, 4]);
     const usedYears = new Set<number>();
 
     for (const [key, value] of Object.entries(mappings)) {
-      const year = parseInt(key);
-      if (!Number.isFinite(year) || year < 1900 || year > 2100) {
-        return NextResponse.json({ error: `Invalid key: ${key}. Must be an integer between 1900 and 2100.` }, { status: 400 });
+      const academicYear = parseInt(key);
+      if (!Number.isFinite(academicYear) || academicYear < 1 || academicYear > 4) {
+        return NextResponse.json({ error: `Invalid key: ${key}. Must be an integer between 1 and 4.` }, { status: 400 });
       }
-      if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 4) {
-        return NextResponse.json({ error: `Invalid value for ${key}: ${value}. Must be an integer between 1 and 4.` }, { status: 400 });
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 1900 || value > 2100) {
+        return NextResponse.json({ error: `Invalid value for ${key}: ${value}. Must be an integer between 1900 and 2100.` }, { status: 400 });
       }
-      usedYears.add(value);
+      usedYears.add(academicYear);
     }
 
     // Ensure all required academic years (1-4) are present
@@ -201,12 +202,20 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Mappings must include all academic years 1 through 4.' }, { status: 400 });
     }
 
-    await academicConfig.updateYearMappings(mappings);
+    // Transform mappings: swap keys and values to {batchYear: academicYear}
+    const transformedMappings: Record<number, number> = {};
+    for (const [key, value] of Object.entries(mappings)) {
+      const academicYear = parseInt(key);
+      const batchYear = value as number;
+      transformedMappings[batchYear] = academicYear;
+    }
+
+    await academicConfig.updateYearMappings(transformedMappings);
 
     return NextResponse.json({
       success: true,
       message: 'Year mappings updated successfully',
-      new_mappings: mappings
+      new_mappings: transformedMappings
     });
   } catch (error) {
     console.error('Error updating year mappings:', error);
