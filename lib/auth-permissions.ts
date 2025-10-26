@@ -1,8 +1,8 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { createSupabaseAdmin } from '@/lib/supabase'
-import { UserRole, UserPermissions } from '@/lib/types'
-import { UserContext, AdminContext, Representative, StudentWithRelations, RepresentativeWithRelations } from '@/lib/types/auth'
+import { UserRole, UserPermissions, StudentWithRelations } from '@/lib/types'
+import { UserContext, AdminContext, RepresentativeWithRelations } from '@/lib/types/auth'
 
 /**
  * Get the current user's context including their role and permissions
@@ -93,18 +93,18 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
   // Transform representatives data for frontend with safe property access
   const representativeAssignments = representatives.map(rep => {
     // Log warnings for missing relations
-    if (!rep.branches || rep.branches.length === 0) {
+    if (!rep.branch) {
       console.warn('Representative assignment warning: Missing branch relation for rep', rep.id);
     }
-    if (!rep.years || rep.years.length === 0) {
+    if (!rep.year) {
       console.warn('Representative assignment warning: Missing year relation for rep', rep.id);
     }
 
     return {
       branch_id: rep.branch_id,
       year_id: rep.year_id,
-      branch_code: rep.branches?.[0]?.code || 'Unknown',
-      admission_year: rep.years?.[0]?.batch_year || 0
+      branch_code: rep.branch?.code || 'Unknown',
+      admission_year: rep.year?.batch_year || 0
     };
   })
 
@@ -144,14 +144,14 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
   let userYear: number | undefined
   let userBranch: string | undefined
 
-  if (typedStudent?.year?.batch_year) {
-    userYear = await calculateYearLevel(typedStudent.year.batch_year)
+  if (typedStudent?.year?.[0]?.batch_year) {
+    userYear = await calculateYearLevel(typedStudent.year[0].batch_year)
   } else if (profileAcademicData?.year) {
     userYear = profileAcademicData.year
   }
 
-  if (typedStudent?.branch?.code) {
-    userBranch = typedStudent.branch.code
+  if (typedStudent?.branch?.[0]?.code) {
+    userBranch = typedStudent.branch[0].code
   } else if (profileAcademicData?.branch) {
     userBranch = profileAcademicData.branch
   }
@@ -243,14 +243,23 @@ export async function canManageResources(branchId: string, yearId: string): Prom
   const userContext = await getCurrentUserContext()
   if (!userContext) return false
 
-  // Admins can manage all resources
-  if (userContext.role === 'admin' || userContext.role === 'superadmin') {
+  // Yeshh can manage all resources
+  if (userContext.role === 'yeshh') {
     return true
+  }
+
+  // Admins: if they have assigned branch/year, restrict to those; else full access
+  if (userContext.role === 'admin') {
+    if (userContext.branchId && userContext.yearId) {
+      return branchId === userContext.branchId && yearId === userContext.yearId
+    } else {
+      return true
+    }
   }
 
   // Representatives can manage resources for their assigned branch/year
   if (userContext.role === 'representative') {
-    return userContext.representatives?.some(rep => 
+    return userContext.representatives?.some(rep =>
       rep.branch_id === branchId && rep.year_id === yearId && rep.active
     ) || false
   }
@@ -266,8 +275,8 @@ export async function canPromoteSemester(branchId: string, yearId: string): Prom
   const userContext = await getCurrentUserContext()
   if (!userContext) return false
 
-  // Admins can promote any semester
-  if (userContext.role === 'admin' || userContext.role === 'superadmin') {
+  // Yeshh can promote any semester
+  if (userContext.role === 'yeshh') {
     return true
   }
 
@@ -374,7 +383,7 @@ export async function getUserPermissions(userContext?: UserContext): Promise<Use
       }
 
     case 'admin':
-    case 'superadmin':
+    case 'yeshh':
       return {
         canRead: {
           resources: true,
@@ -397,7 +406,11 @@ export async function getUserPermissions(userContext?: UserContext): Promise<Use
           exams: true,
           profiles: true
         },
-        canPromoteSemester: true
+        canPromoteSemester: true,
+        scopeRestrictions: context.branchId && context.yearId ? {
+          branchIds: [context.branchId],
+          yearIds: [context.yearId]
+        } : undefined
       }
 
     default:
@@ -453,11 +466,16 @@ export async function requirePermission(
     throw new Error('Forbidden: Insufficient permissions')
   }
 
-  // Additional scope check for representatives
+  // Additional scope check for representatives and restricted admins
   if (userContext.role === 'representative' && branchId && yearId) {
-    const hasScope = userContext.representatives?.some(rep => 
+    const hasScope = userContext.representatives?.some(rep =>
       rep.branch_id === branchId && rep.year_id === yearId && rep.active
     )
+    if (!hasScope) {
+      throw new Error('Forbidden: Outside assigned scope')
+    }
+  } else if (userContext.role === 'admin' && branchId && yearId && userContext.branchId && userContext.yearId) {
+    const hasScope = branchId === userContext.branchId && yearId === userContext.yearId
     if (!hasScope) {
       throw new Error('Forbidden: Outside assigned scope')
     }
@@ -503,7 +521,7 @@ export function getResourceFilter(userContext: UserContext): {
       }
 
     case 'admin':
-    case 'superadmin':
+    case 'yeshh':
       // Admins see everything
       return {}
 

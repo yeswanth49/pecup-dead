@@ -342,10 +342,18 @@ function CreateResourceDialog({
     e.preventDefault()
     setSaving(true)
     setError(null)
+    console.log('[FRONTEND DEBUG CreateResourceDialog] Starting form submission', {
+      name, description, category, subject, unit, type,
+      year, branch, semester, filePresent: !!file,
+      defaultArchived, userContext: { role: userContext?.role, email: userContext?.email }
+    })
+
     try {
       if (!year || !branch) {
         throw new Error('Year and Branch are required for uploads')
       }
+
+      console.log('[FRONTEND DEBUG CreateResourceDialog] Form validation passed, preparing FormData')
       const form = new FormData()
       form.set('name', name)
       form.set('description', description)
@@ -361,12 +369,25 @@ function CreateResourceDialog({
       // Resolve and attach IDs when available; fail-fast with user-friendly errors on mapping failures
       setFieldErrors({})
       setResolving(true)
+      console.log('[FRONTEND DEBUG CreateResourceDialog] Starting ID resolution', {
+        year: Number(year), branch: String(branch), semester: Number(semester)
+      })
+
       try {
         const { getYearIdByBatchYear, getBranchIdByCode, getSemesterId } = await import('@/lib/lookup-mappers')
+        console.log('[FRONTEND DEBUG CreateResourceDialog] Lookup mappers imported successfully')
+
         const yearId = await getYearIdByBatchYear(Number(year))
         const branchId = await getBranchIdByCode(String(branch))
         let semesterId: string | null = null
-        if (yearId && semester) semesterId = await getSemesterId(yearId, Number(semester))
+        if (yearId && semester) {
+          semesterId = await getSemesterId(yearId, Number(semester))
+        }
+
+        console.log('[FRONTEND DEBUG CreateResourceDialog] ID resolution completed', {
+          yearId, branchId, semesterId,
+          inputValues: { year: Number(year), branch: String(branch), semester: Number(semester) }
+        })
 
         if (!yearId) throw new Error('Year mapping failed: selected batch not found')
         if (!branchId) throw new Error('Branch mapping failed: selected branch not found')
@@ -375,10 +396,11 @@ function CreateResourceDialog({
         form.set('year_id', yearId)
         form.set('branch_id', branchId)
         if (semesterId) form.set('semester_id', semesterId)
+
+        console.log('[FRONTEND DEBUG CreateResourceDialog] IDs added to form, form keys:', Array.from(form.keys()))
       } catch (err: any) {
         // Log for debugging and show user-friendly field hints
-        // eslint-disable-next-line no-console
-        console.debug('Lookup resolution failed in client:', err)
+        console.error('[FRONTEND DEBUG CreateResourceDialog] Lookup resolution failed in client:', err)
         const msg = err?.message || 'Failed to resolve lookup mappings'
         if (msg.includes('Year mapping failed')) setFieldErrors((f) => ({ ...f, year: 'Selected batch not found' }))
         if (msg.includes('Branch mapping failed')) setFieldErrors((f) => ({ ...f, branch: 'Selected branch not found' }))
@@ -387,17 +409,28 @@ function CreateResourceDialog({
       } finally {
         setResolving(false)
       }
+
       if (defaultArchived) form.set('archived', 'true')
       if (file) form.set('file', file)
 
+      console.log('[FRONTEND DEBUG CreateResourceDialog] Initiating fetch request to /api/admin/resources')
       const res = await fetch('/api/admin/resources', { method: 'POST', body: form })
+      console.log('[FRONTEND DEBUG CreateResourceDialog] Fetch request completed, response status:', res.status)
+
       const json = await res.json()
+      console.log('[FRONTEND DEBUG CreateResourceDialog] Response JSON received:', { status: res.ok, json })
+
       if (!res.ok) throw new Error(json?.error || 'Failed to create')
+
+      console.log('[FRONTEND DEBUG CreateResourceDialog] Resource created successfully, response data:', json)
       setOpen(false)
       onCreated()
+
       // reset
-      setName(''); setDescription(''); setCategory('notes'); setSubject(''); setUnit(1); setType(''); setYear(defaultYear ?? ''); setSemester(''); setBranch(defaultBranch ?? ''); setFile(null)
+      setName(''); setDescription(''); setCategory('notes'); setSubject(''); setUnit(1); setType(''); setYear(defaultAssignment?.admission_year ?? ''); setSemester(''); setBranch(defaultAssignment?.branch_code ?? ''); setFile(null)
+      console.log('[FRONTEND DEBUG CreateResourceDialog] Form reset completed, dialog will close')
     } catch (e: any) {
+      console.error('[FRONTEND DEBUG CreateResourceDialog] Error during submission:', e)
       setError(e?.message || 'Failed to create')
     } finally {
       setSaving(false)

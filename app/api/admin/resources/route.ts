@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     }
 
     // Only allow admins and representatives to access this admin endpoint
-    if (!userContext.role || !['admin', 'yeshh', 'representative', 'superadmin'].includes(userContext.role)) {
+    if (!userContext.role || !['admin', 'yeshh', 'representative'].includes(userContext.role)) {
       console.log(`[API DEBUG AdminResources GET] Forbidden: role '${userContext.role}' not in allowed list`);
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -89,8 +89,11 @@ export async function GET(request: Request) {
       if (assignedYearIds.length > 0) {
         query = query.in('year_id', assignedYearIds)
       }
+    } else if (userContext.role === 'admin' && userContext.branchId && userContext.yearId) {
+      // Restricted admins can only see resources for their assigned branch/year
+      query = query.eq('branch_id', userContext.branchId).eq('year_id', userContext.yearId)
     }
-    // Admins see everything, no additional filtering needed
+    // Yeshh and unrestricted admins see everything
   }
 
   const { data, error, count } = await query.range(from, to)
@@ -103,13 +106,36 @@ export async function GET(request: Request) {
 }
 
 async function uploadToDrive(fileBuffer: Buffer, fileName: string, mime: string, description?: string) {
+  console.log(`[API DEBUG uploadToDrive] Starting Google Drive upload:`, {
+    fileName,
+    mime,
+    bufferSize: fileBuffer.length,
+    description: !!description
+  });
+
   const settings = await getSettings()
   const driveFolderId = settings?.drive_folder_id || process.env.GOOGLE_DRIVE_FOLDER_ID
-  if (!driveFolderId) throw new Error('Drive folder id not configured')
+  console.log(`[API DEBUG uploadToDrive] Drive configuration:`, {
+    driveFolderId: driveFolderId ? 'configured' : 'missing',
+    settingsSource: settings?.drive_folder_id ? 'settings' : 'env'
+  });
+
+  if (!driveFolderId) {
+    console.error(`[API DEBUG uploadToDrive] Drive folder ID not configured`);
+    throw new Error('Drive folder id not configured')
+  }
+
   // Support base64 JSON (e.g. on Vercel) or local key file
   const rawB64 = process.env.GOOGLE_APPLICATION_CREDENTIALS_B64
   const keyFile = process.env.GOOGLE_APPLICATION_CREDENTIALS
   let auth: any
+
+  console.log(`[API DEBUG uploadToDrive] Auth configuration:`, {
+    hasBase64: !!rawB64,
+    hasKeyFile: !!keyFile,
+    authMethod: rawB64 ? 'base64' : keyFile ? 'keyFile' : 'none'
+  });
+
   if (rawB64) {
     // Decode and parse service account JSON
     const raw = Buffer.from(rawB64, 'base64').toString('utf8')
@@ -120,29 +146,89 @@ async function uploadToDrive(fileBuffer: Buffer, fileName: string, mime: string,
     // Load from file path
     auth = new google.auth.GoogleAuth({ keyFilename: keyFile, scopes: ['https://www.googleapis.com/auth/drive'] })
   } else {
+    console.error(`[API DEBUG uploadToDrive] No Google credentials configured`);
     throw new Error('Google Drive configuration error: no credentials provided')
   }
+
   const drive = google.drive({ version: 'v3', auth })
   const fileReadable = Readable.from(fileBuffer)
+
+  console.log(`[API DEBUG uploadToDrive] Creating Drive file with metadata:`, {
+    name: fileName,
+    parents: [driveFolderId],
+    description: description || 'none'
+  });
+
   const { data } = await drive.files.create({
     requestBody: { name: fileName, parents: [driveFolderId], description },
     media: { mimeType: mime || 'application/pdf', body: fileReadable },
     fields: 'id,webViewLink',
   })
-  if (!data.id) throw new Error('Drive upload failed')
+
+  console.log(`[API DEBUG uploadToDrive] Drive file created:`, {
+    id: data.id,
+    webViewLink: data.webViewLink,
+    hasId: !!data.id
+  });
+
+  if (!data.id) {
+    console.error(`[API DEBUG uploadToDrive] Drive upload failed - no file ID returned`);
+    throw new Error('Drive upload failed')
+  }
+
+  console.log(`[API DEBUG uploadToDrive] Setting public permissions for file: ${data.id}`);
   await drive.permissions.create({ fileId: data.id, requestBody: { role: 'reader', type: 'anyone' } })
+
   const url = data.webViewLink ?? `https://drive.google.com/file/d/${data.id}/view?usp=sharing`
+  console.log(`[API DEBUG uploadToDrive] Upload completed successfully:`, { url });
+
   return { url }
 }
 
 async function uploadToStorage(fileBuffer: Buffer, fileName: string, mime?: string) {
+  console.log(`[API DEBUG uploadToStorage] Starting Supabase Storage upload:`, {
+    fileName,
+    mime,
+    bufferSize: fileBuffer.length,
+    bufferSizeFormatted: `${(fileBuffer.length / 1024 / 1024).toFixed(2)} MB`
+  });
+
   const settings = await getSettings()
   const bucket = settings?.storage_bucket || 'resources'
+  console.log(`[API DEBUG uploadToStorage] Storage configuration:`, {
+    bucket,
+    settingsSource: settings?.storage_bucket ? 'settings' : 'default'
+  });
+
   const supabase = createSupabaseAdmin()
   const uploadPath = `${Date.now()}-${fileName}`
-  const { error } = await supabase.storage.from(bucket).upload(uploadPath, fileBuffer, { contentType: mime || undefined, duplex: 'half' as any })
-  if (error) throw error
+  console.log(`[API DEBUG uploadToStorage] Generated upload path:`, { uploadPath });
+
+  const { error } = await supabase.storage.from(bucket).upload(uploadPath, fileBuffer, {
+    contentType: mime || undefined,
+    duplex: 'half' as any
+  })
+
+  if (error) {
+    console.error(`[API DEBUG uploadToStorage] Upload failed:`, {
+      error,
+      errorMessage: error.message,
+      uploadPath,
+      bucket,
+      mime
+    });
+    throw error
+  }
+
+  console.log(`[API DEBUG uploadToStorage] File uploaded successfully to storage path:`, uploadPath);
+
   const { data } = supabase.storage.from(bucket).getPublicUrl(uploadPath)
+  console.log(`[API DEBUG uploadToStorage] Public URL generated:`, {
+    publicUrl: data.publicUrl,
+    bucket,
+    uploadPath
+  });
+
   return { url: data.publicUrl }
 }
 
@@ -166,9 +252,10 @@ export async function POST(request: Request) {
   const supabase = createSupabaseAdmin();
   const contentType = request.headers.get('content-type') || '';
 
+  let payload: any = {};
+  let file: File | null = null;
+
   try {
-    let payload: any = {};
-    let file: File | null = null;
     // Track resolved ids for insertion
     let branchId: string | null = null;
     let yearId: string | null = null;
@@ -215,31 +302,46 @@ export async function POST(request: Request) {
     }
     console.log(`${REQ_DEBUG_PREFIX} Validated unit: ${unit}`);
 
-    // Enforce scope for representatives early to avoid uploading files when the request will be rejected
-    if (userContext.role === 'representative') {
-      console.log(`${REQ_DEBUG_PREFIX} User is a representative. Checking resource management permissions.`);
-      // If branch/year not provided, infer from their assigned representative records
+    // Enforce scope for representatives and restricted admins
+    let unrestricted = payload.unrestricted === true || payload.unrestricted === 'true';
+
+    if (userContext.role === 'representative' || (userContext.role === 'admin' && !unrestricted)) {
+      if (userContext.role === 'representative') {
+        console.log(`${REQ_DEBUG_PREFIX} User is a representative. Checking resource management permissions.`);
+      } else {
+        console.log(`${REQ_DEBUG_PREFIX} User is an admin with restricted access. Checking resource management permissions.`);
+      }
+      // If branch/year not provided, infer from their assigned records
       if (!branchId || !yearId) {
-        const firstAssignment = (userContext.representatives && userContext.representatives[0]) || null;
-        if (firstAssignment) {
-          branchId = firstAssignment.branch_id || branchId;
-          yearId = firstAssignment.year_id || yearId;
-          console.log(`${REQ_DEBUG_PREFIX} Inferred branchId: ${branchId}, yearId: ${yearId} for representative.`);
+        if (userContext.role === 'representative') {
+          const firstAssignment = (userContext.representatives && userContext.representatives[0]) || null;
+          if (firstAssignment) {
+            branchId = firstAssignment.branch_id || branchId;
+            yearId = firstAssignment.year_id || yearId;
+            console.log(`${REQ_DEBUG_PREFIX} Inferred branchId: ${branchId}, yearId: ${yearId} for representative.`);
+          }
+        } else if (userContext.role === 'admin') {
+          branchId = userContext.branchId || branchId;
+          yearId = userContext.yearId || yearId;
+          console.log(`${REQ_DEBUG_PREFIX} Inferred branchId: ${branchId}, yearId: ${yearId} for admin.`);
         }
       }
       if (!branchId || !yearId) {
-        console.error(`${REQ_DEBUG_PREFIX} Branch and year not specified for representative.`);
-        return NextResponse.json({ error: 'Branch and year must be specified for representatives' }, { status: 400 });
+        const roleName = userContext.role === 'representative' ? 'representatives' : 'admins';
+        console.error(`${REQ_DEBUG_PREFIX} Branch and year not specified for ${roleName}.`);
+        return NextResponse.json({ error: `Branch and year must be specified for ${roleName}` }, { status: 400 });
       }
-      console.log(`${REQ_DEBUG_PREFIX} Checking permissions for representative. userContext: ${JSON.stringify({ role: userContext.role, representatives: userContext.representatives?.map(r => ({ branch_id: r.branch_id, year_id: r.year_id, active: r.active })) })}`);
+      console.log(`${REQ_DEBUG_PREFIX} Checking permissions for ${userContext.role}. userContext: ${JSON.stringify({ role: userContext.role, branchId: userContext.branchId, yearId: userContext.yearId, representatives: userContext.representatives?.map(r => ({ branch_id: r.branch_id, year_id: r.year_id, active: r.active })) })}`);
       console.log(`${REQ_DEBUG_PREFIX} Target branchId: ${branchId}, yearId: ${yearId}`);
       const canManage = await canManageResources(branchId, yearId);
       console.log(`${REQ_DEBUG_PREFIX} canManage result: ${canManage}`);
       if (!canManage) {
-        console.error(`${REQ_DEBUG_PREFIX} Representative forbidden from managing resources for branchId: ${branchId}, yearId: ${yearId}.`);
+        console.error(`${REQ_DEBUG_PREFIX} ${userContext.role} forbidden from managing resources for branchId: ${branchId}, yearId: ${yearId}.`);
         return NextResponse.json({ error: 'Forbidden: Cannot manage resources for this branch/year' }, { status: 403 });
       }
-      console.log(`${REQ_DEBUG_PREFIX} Representative authorized to manage resources for branchId: ${branchId}, yearId: ${yearId}.`);
+      console.log(`${REQ_DEBUG_PREFIX} ${userContext.role} authorized to manage resources for branchId: ${branchId}, yearId: ${yearId}.`);
+    } else if (userContext.role === 'admin' && unrestricted) {
+      console.log(`${REQ_DEBUG_PREFIX} Admin with unrestricted access. Skipping scope checks.`);
     }
 
     let url: string | undefined;
@@ -247,46 +349,100 @@ export async function POST(request: Request) {
     let detectedMime: string | null = null;
 
     if (file) {
-      console.log(`${REQ_DEBUG_PREFIX} File detected for upload.`);
+      console.log(`${REQ_DEBUG_PREFIX} File upload process started.`);
       const originalName = (file as any).name as string;
       const clientMime = (file as any).type as string | undefined;
       const size = (file as any).size as number | undefined;
-      console.log(`${REQ_DEBUG_PREFIX} File details: name='${originalName}', clientMime='${clientMime}', size=${size} bytes.`);
+      console.log(`${REQ_DEBUG_PREFIX} File details extracted:`, {
+        name: originalName,
+        clientMime,
+        size,
+        sizeFormatted: size ? `${(size / 1024 / 1024).toFixed(2)} MB` : 'unknown'
+      });
 
       if (typeof size === 'number' && size > MAX_UPLOAD_BYTES) {
-        console.error(`${REQ_DEBUG_PREFIX} File too large: ${size} bytes > ${MAX_UPLOAD_BYTES} bytes.`);
+        console.error(`${REQ_DEBUG_PREFIX} File size validation failed:`, {
+          size,
+          maxSize: MAX_UPLOAD_BYTES,
+          sizeFormatted: `${(size / 1024 / 1024).toFixed(2)} MB`,
+          maxSizeFormatted: `${(MAX_UPLOAD_BYTES / 1024 / 1024).toFixed(2)} MB`
+        });
         return NextResponse.json({ error: 'File too large' }, { status: 413 });
       }
+
+      console.log(`${REQ_DEBUG_PREFIX} Converting file to buffer for validation.`);
       const buffer = Buffer.from(await file.arrayBuffer());
+      console.log(`${REQ_DEBUG_PREFIX} File buffer created, size:`, buffer.length);
+
       const validation = validateFile(buffer, originalName, clientMime);
+      console.log(`${REQ_DEBUG_PREFIX} File validation result:`, {
+        ok: validation.ok,
+        reason: validation.reason,
+        detectedMime: validation.detectedMime
+      });
+
       if (!validation.ok) {
-        console.error(`${REQ_DEBUG_PREFIX} File validation failed:`, validation.reason);
+        console.error(`${REQ_DEBUG_PREFIX} File validation failed, rejecting upload.`);
         return NextResponse.json({ error: 'Unsupported file type', reason: validation.reason }, { status: 415 });
       }
-      console.log(`${REQ_DEBUG_PREFIX} File validation successful. Detected MIME: ${validation.detectedMime}.`);
+
       const effectiveMime = (validation.detectedMime || clientMime || '').toLowerCase();
       detectedMime = effectiveMime;
       is_pdf = effectiveMime === 'application/pdf' || originalName.toLowerCase().endsWith('.pdf');
-      console.log(`${REQ_DEBUG_PREFIX} Effective MIME: ${effectiveMime}, Is PDF: ${is_pdf}.`);
+      console.log(`${REQ_DEBUG_PREFIX} MIME type determination:`, {
+        effectiveMime,
+        is_pdf,
+        detectedMime: validation.detectedMime,
+        clientMime
+      });
 
       const settings = await getSettings();
+      console.log(`${REQ_DEBUG_PREFIX} Upload destination decision:`, {
+        is_pdf,
+        pdf_to_drive: settings?.pdf_to_drive,
+        destination: (is_pdf && settings?.pdf_to_drive) ? 'Google Drive' : 'Supabase Storage'
+      });
+
       if (is_pdf && settings?.pdf_to_drive) {
-        console.log(`${REQ_DEBUG_PREFIX} Uploading PDF to Google Drive.`);
-        const uploaded = await uploadToDrive(buffer, originalName, effectiveMime, payload.description || undefined);
-        url = uploaded.url;
-        console.log(`${REQ_DEBUG_PREFIX} Google Drive upload successful. URL: ${url}`);
+        console.log(`${REQ_DEBUG_PREFIX} Starting Google Drive upload process.`);
+        try {
+          const uploaded = await uploadToDrive(buffer, originalName, effectiveMime, payload.description || undefined);
+          url = uploaded.url;
+          console.log(`${REQ_DEBUG_PREFIX} Google Drive upload completed successfully:`, {
+            url,
+            fileName: originalName,
+            mime: effectiveMime,
+            description: payload.description
+          });
+        } catch (uploadError) {
+          console.error(`${REQ_DEBUG_PREFIX} Google Drive upload failed:`, uploadError);
+          throw uploadError;
+        }
       } else {
-        console.log(`${REQ_DEBUG_PREFIX} Uploading to Supabase Storage.`);
-        const uploaded = await uploadToStorage(buffer, originalName, effectiveMime);
-        url = uploaded.url;
-        console.log(`${REQ_DEBUG_PREFIX} Supabase Storage upload successful. URL: ${url}`);
+        console.log(`${REQ_DEBUG_PREFIX} Starting Supabase Storage upload process.`);
+        try {
+          const uploaded = await uploadToStorage(buffer, originalName, effectiveMime);
+          url = uploaded.url;
+          console.log(`${REQ_DEBUG_PREFIX} Supabase Storage upload completed successfully:`, {
+            url,
+            fileName: originalName,
+            mime: effectiveMime
+          });
+        } catch (uploadError) {
+          console.error(`${REQ_DEBUG_PREFIX} Supabase Storage upload failed:`, uploadError);
+          throw uploadError;
+        }
       }
     } else if (payload.url) {
       url = String(payload.url);
       is_pdf = url.toLowerCase().includes('drive.google.com') || url.toLowerCase().endsWith('.pdf');
-      console.log(`${REQ_DEBUG_PREFIX} URL provided: ${url}, Is PDF: ${is_pdf}.`);
+      console.log(`${REQ_DEBUG_PREFIX} External URL provided, skipping upload:`, {
+        url,
+        is_pdf,
+        urlType: url.toLowerCase().includes('drive.google.com') ? 'Google Drive' : 'Other'
+      });
     } else {
-      console.error(`${REQ_DEBUG_PREFIX} Neither file nor URL provided.`);
+      console.error(`${REQ_DEBUG_PREFIX} No file or URL provided for resource creation.`);
       return NextResponse.json({ error: 'Either file or url is required' }, { status: 400 });
     }
 
@@ -307,25 +463,67 @@ export async function POST(request: Request) {
     console.log(`${REQ_DEBUG_PREFIX} Initial insertPayload:`, insertPayload);
 
     // Resolve and attach id fields and audit metadata
+    console.log(`${REQ_DEBUG_PREFIX} Starting ID resolution process`, {
+      initialIds: { branchId, yearId, semesterId },
+      payloadValues: { branch: payload.branch, year: payload.year, semester: payload.semester }
+    })
+
     if (!branchId && payload.branch) {
       console.log(`${REQ_DEBUG_PREFIX} Resolving branchId for branch: ${payload.branch}.`);
-      const { data: branchData } = await supabase
+      const { data: branchData, error: branchError } = await supabase
         .from('branches')
         .select('id')
         .eq('code', payload.branch)
         .single();
+      if (branchError) {
+        console.error(`${REQ_DEBUG_PREFIX} Branch resolution query failed:`, branchError);
+      }
       branchId = branchData?.id || branchId;
-      console.log(`${REQ_DEBUG_PREFIX} Resolved branchId: ${branchId}.`);
+      console.log(`${REQ_DEBUG_PREFIX} Branch resolution completed`, {
+        input: payload.branch,
+        resolvedId: branchId,
+        queryResult: branchData,
+        error: branchError
+      });
     }
     if (!yearId && payload.year) {
       console.log(`${REQ_DEBUG_PREFIX} Resolving yearId for year: ${payload.year}.`);
-      const { data: yearData } = await supabase
+      const { data: yearData, error: yearError } = await supabase
         .from('years')
         .select('id')
         .eq('batch_year', payload.year)
         .single();
+      if (yearError) {
+        console.error(`${REQ_DEBUG_PREFIX} Year resolution query failed:`, yearError);
+      }
       yearId = yearData?.id || yearId;
-      console.log(`${REQ_DEBUG_PREFIX} Resolved yearId: ${yearId}.`);
+      console.log(`${REQ_DEBUG_PREFIX} Year resolution completed`, {
+        input: payload.year,
+        resolvedId: yearId,
+        queryResult: yearData,
+        error: yearError
+      });
+    }
+
+    // Log semester resolution if needed
+    if (!semesterId && payload.semester && yearId) {
+      console.log(`${REQ_DEBUG_PREFIX} Resolving semesterId for semester: ${payload.semester} in yearId: ${yearId}.`);
+      const { data: semesterData, error: semesterError } = await supabase
+        .from('semesters')
+        .select('id')
+        .eq('year_id', yearId)
+        .eq('semester_number', payload.semester)
+        .single();
+      if (semesterError) {
+        console.error(`${REQ_DEBUG_PREFIX} Semester resolution query failed:`, semesterError);
+      }
+      semesterId = semesterData?.id || semesterId;
+      console.log(`${REQ_DEBUG_PREFIX} Semester resolution completed`, {
+        input: { yearId, semester: payload.semester },
+        resolvedId: semesterId,
+        queryResult: semesterData,
+        error: semesterError
+      });
     }
 
     insertPayload['branch_id'] = branchId;
@@ -361,19 +559,40 @@ export async function POST(request: Request) {
     insertPayload['drive_link'] = url && url.toLowerCase().includes('drive.google.com') ? url : null;
 
     // Debug: print resolved user and payload to help diagnose uuid insertion errors
-    console.debug(`${REQ_DEBUG_PREFIX} Creating resource - userContext:`, { id: (userContext as any)?.id, email: userContext?.email, role: userContext?.role });
-    console.debug(`${REQ_DEBUG_PREFIX} Creating resource - insertPayload preview:`, {
-      branch_id: insertPayload['branch_id'],
-      year_id: insertPayload['year_id'],
-      uploader_id: insertPayload['uploader_id'],
-      created_by: insertPayload['created_by']
+    console.log(`${REQ_DEBUG_PREFIX} Preparing database insertion:`, {
+      userContext: { id: (userContext as any)?.id, email: userContext?.email, role: userContext?.role },
+      finalResolvedIds: {
+        branch_id: insertPayload['branch_id'],
+        year_id: insertPayload['year_id'],
+        semester_id: insertPayload['semester_id'],
+        uploader_id: insertPayload['uploader_id'],
+        created_by: insertPayload['created_by']
+      },
+      insertPayloadKeys: Object.keys(insertPayload),
+      insertPayloadSize: JSON.stringify(insertPayload).length
     });
+
+    console.log(`${REQ_DEBUG_PREFIX} Executing database insert operation.`);
     const { data, error } = await supabase.from('resources').insert(insertPayload).select('id').single();
+
     if (error) {
-      console.error(`${REQ_DEBUG_PREFIX} Database insertion error:`, error);
+      console.error(`${REQ_DEBUG_PREFIX} Database insertion failed:`, {
+        error,
+        errorMessage: error.message,
+        errorDetails: error.details,
+        errorHint: error.hint,
+        insertPayload: insertPayload
+      });
       throw error;
     }
-    console.log(`${REQ_DEBUG_PREFIX} Database insertion successful. New resource ID: ${data.id}.`);
+
+    console.log(`${REQ_DEBUG_PREFIX} Database insertion completed successfully:`, {
+      newResourceId: data.id,
+      insertedRecord: data,
+      url: insertPayload.url,
+      is_pdf: insertPayload.is_pdf,
+      file_type: insertPayload.file_type
+    });
     
     // Log the audit with proper role handling
     const auditRole = userContext.role === 'representative' ? 'admin' : userContext.role as 'admin' | 'yeshh';
@@ -390,8 +609,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ id: data.id, ...insertPayload });
   } catch (err: any) {
     // Log error to server console for debugging
-    console.error(`${REQ_DEBUG_PREFIX} Create resource error:`, err);
+    console.error(`${REQ_DEBUG_PREFIX} Create resource error caught:`, {
+      error: err,
+      errorMessage: err?.message,
+      errorStack: err?.stack,
+      errorName: err?.name,
+      userContext: userContext ? {
+        email: userContext.email,
+        role: userContext.role,
+        representatives: userContext.representatives
+      } : null,
+      payload: contentType.includes('multipart/form-data') ?
+        'FormData (keys: ' + (payload && Object.keys(payload).join(', ')) + ')' :
+        payload,
+      timestamp: new Date().toISOString()
+    });
+
     const auditRole = userContext?.role === 'representative' ? 'admin' : userContext?.role as 'admin' | 'yeshh' || 'admin';
+    console.log(`${REQ_DEBUG_PREFIX} Creating audit log for failed resource creation:`, {
+      actor_email: userContext?.email || 'unknown',
+      actor_role: auditRole,
+      entity_id: 'unknown',
+      success: false,
+      message: err?.message
+    });
+
     await logAudit({
       actor_email: userContext?.email || 'unknown',
       actor_role: auditRole,
@@ -400,10 +642,21 @@ export async function POST(request: Request) {
       success: false,
       message: err?.message
     });
+
     // In development, return error message to client to aid debugging; keep generic in production
     if (process.env.NODE_ENV === 'development') {
+      console.log(`${REQ_DEBUG_PREFIX} Returning detailed error response for development:`, {
+        error: err?.message || String(err),
+        status: 500,
+        nodeEnv: process.env.NODE_ENV
+      });
       return NextResponse.json({ error: 'Failed to create resource', reason: err?.message || String(err) }, { status: 500 });
     }
+
+    console.log(`${REQ_DEBUG_PREFIX} Returning generic error response for production:`, {
+      status: 500,
+      nodeEnv: process.env.NODE_ENV
+    });
     return NextResponse.json({ error: 'Failed to create resource' }, { status: 500 });
   }
 }
