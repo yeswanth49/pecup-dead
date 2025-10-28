@@ -182,6 +182,42 @@ export class AcademicConfigManager {
     await this.updateYearMappings(newMappings);
   }
 
+  /**
+   * Get program configuration settings
+   */
+  async getConfig(): Promise<{ programLength: number }> {
+    const supabase = getSupabaseAdmin();
+
+    const { data, error } = await supabase
+      .from('academic_config')
+      .select('config_value')
+      .eq('config_key', 'program_settings')
+      .maybeSingle();
+
+    if (error || !data?.config_value) {
+      console.warn('[academic-config] Using default program settings');
+      return { programLength: 4 };
+    } else {
+      const config = data.config_value as any;
+      const programLength = config.programLength || 4;
+      return { programLength };
+    }
+  }
+
+  /**
+   * Convert academic year level to batch year
+   */
+  async academicYearToBatchYear(academicYearLevel: number): Promise<number> {
+    const currentYear = new Date().getFullYear();
+
+    if (academicYearLevel < 1 || academicYearLevel > 4) {
+      throw new Error('Invalid academic year level');
+    }
+
+    // Simple calculation: academic year 1 = current year, 2 = current year - 1, etc.
+    return currentYear - academicYearLevel + 1;
+  }
+
   clearCache(): void {
     this.yearMappings = null;
     this.cacheExpiry = 0;
