@@ -73,15 +73,6 @@ export function Sidebar() {
 
   return (
     <>
-      <Button
-        variant="outline"
-        size="icon"
-        className="fixed top-6 left-6 z-50"
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        {isOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-      </Button>
-
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-30"
