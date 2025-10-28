@@ -5,6 +5,7 @@ import "./globals.css"
 import { Sidebar } from "@/components/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Providers } from "./providers" // ✅ Import Providers
+import WhatsAppJoinPopup from "@/components/WhatsAppJoinPopup"
 import { BetaWarning } from "@/components/BetaWarning"
 import { Analytics } from "@vercel/analytics/react"
 import { SpeedInsights } from "@vercel/speed-insights/next"
@@ -32,6 +33,7 @@ export default function RootLayout({
             <main className="flex-1 pt-10 md:pt-14 px-6 md:px-8 pb-6 md:pb-8">{children}</main>
           </div>
           <BetaWarning />
+          <WhatsAppJoinPopup />
         </Providers>
         <Analytics/>
         <SpeedInsights />
