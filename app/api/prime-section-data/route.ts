@@ -23,6 +23,7 @@ interface Resource {
     description: string;
     date: string;
     type: string;
+    category: string;
     url: string;
     subject?: string;
 }
@@ -31,6 +32,7 @@ interface GroupedResourceItem {
     id: string;
     title: string;
     url: string;
+    unitNumber: number;
 }
 
 interface GroupedResources {
@@ -146,25 +148,47 @@ export async function GET(request: Request) {
                 console.log(`API Prime: Test query subjects found:`, [...new Set(testData.map(r => r.subject))]);
             }
 
-            // Try flexible filtering - some resources might use year_id/branch_id instead of year/branch
+            // Resolve year_id and branch_id from yearParam and branchParam
+            let yearId: string | null = null;
+            let branchId: string | null = null;
+
+            if (yearParam) {
+                const yearNum = parseInt(yearParam, 10);
+                const { data: yearData } = await supabaseAdmin
+                    .from('years')
+                    .select('id')
+                    .eq('batch_year', yearNum)
+                    .maybeSingle();
+                yearId = yearData?.id || null;
+                console.log(`API Prime: Resolved year ${yearNum} to year_id: ${yearId}`);
+            }
+
+            if (branchParam) {
+                const { data: branchData } = await supabaseAdmin
+                    .from('branches')
+                    .select('id')
+                    .eq('code', branchParam)
+                    .maybeSingle();
+                branchId = branchData?.id || null;
+                console.log(`API Prime: Resolved branch ${branchParam} to branch_id: ${branchId}`);
+            }
+
+            // Query resources with proper UUID filters
             let resourceQuery = supabaseAdmin
               .from('resources')
-              .select('*')
+              .select('id, name, description, date, type, category, url, subject')
               .is('deleted_at', null)
               .in('subject', uniqueUpcomingSubjects)
               .order('date', { ascending: false });
 
-            // Apply filters - match either year/year_id or branch/branch_id fields
-            if (yearParam) {
-                // Match either year or year_id field
-                const yearNum = parseInt(yearParam, 10);
-                resourceQuery = resourceQuery.or(`year.eq.${yearNum},year_id.eq.${yearNum}`);
-                console.log(`API Prime: Applying year filter: year.eq.${yearNum},year_id.eq.${yearNum}`);
+            // Apply UUID-based filters for year_id and branch_id
+            if (yearId) {
+                resourceQuery = resourceQuery.eq('year_id', yearId);
+                console.log(`API Prime: Applying year_id filter: ${yearId}`);
             }
-            if (branchParam) {
-                // Match either branch or branch_id field
-                resourceQuery = resourceQuery.or(`branch.eq.${branchParam},branch_id.eq.${branchParam}`);
-                console.log(`API Prime: Applying branch filter: branch.eq.${branchParam},branch_id.eq.${branchParam}`);
+            if (branchId) {
+                resourceQuery = resourceQuery.eq('branch_id', branchId);
+                console.log(`API Prime: Applying branch_id filter: ${branchId}`);
             }
 
             console.log(`API Prime: Executing resource query with filters...`);
@@ -183,6 +207,7 @@ export async function GET(request: Request) {
                     description: resource.description || '',
                     date: resource.date || '',
                     type: resource.type || '',
+                    category: resource.category || '',
                     url: resource.url || '',
                     subject: resource.subject || '' // Add subject field
                 }));
@@ -191,7 +216,7 @@ export async function GET(request: Request) {
         }
 
         console.log(`API Prime: Found ${relevantResources.length} relevant resources for subjects: ${uniqueUpcomingSubjects.join(', ')}`);
-        console.log(`API Prime: Resource details:`, relevantResources.map(r => ({ name: r.name, subject: r.subject, type: r.type })));
+        console.log(`API Prime: Resource details:`, relevantResources.map(r => ({ name: r.name, subject: r.subject, type: r.type, category: r.category })));
 
         // Group resources by type
         const groupedResources: GroupedResources = {
@@ -217,31 +242,61 @@ export async function GET(request: Request) {
                 }
             }
 
+            // Capitalize subject names for better display
+            subject = subject.toUpperCase();
+
             const resourceType = (resource.type || '').toLowerCase();
-            console.log(`API Prime: Processing resource "${resource.name}" with type "${resourceType}" for subject "${subject}"`);
+            const resourceCategory = (resource.category || '').toLowerCase();
+            console.log(`API Prime: Processing resource "${resource.name}" with type "${resourceType}" category "${resourceCategory}" for subject "${subject}"`);
+
+            // Extract unit number from title for sorting
+            const title = resource.name || '';
+            const unitMatch = title.match(/unit\s+(\d+)/i);
+            const assignmentMatch = title.match(/assignment\s+(\d+)/i);
+            const unitNumber = unitMatch ? parseInt(unitMatch[1], 10) :
+                           assignmentMatch ? parseInt(assignmentMatch[1], 10) : 999;
 
             // Create the correctly formatted item for frontend
-            const item: GroupedResourceItem = {
+            const item: GroupedResourceItem & { unitNumber: number } = {
                 id: String(resource.id),
-                title: resource.name || '',
-                url: resource.url || ''
+                title: title,
+                url: resource.url || '',
+                unitNumber: unitNumber
             };
 
+            // Determine grouping based on type first, then category if type is empty
+            let groupType: keyof GroupedResources | null = null;
+
             if (resourceType.includes('note')) {
-                if (!groupedResources.notes[subject]) groupedResources.notes[subject] = [];
-                groupedResources.notes[subject].push(item);
+                groupType = 'notes';
             } else if (resourceType.includes('assignment')) {
-                if (!groupedResources.assignments[subject]) groupedResources.assignments[subject] = [];
-                groupedResources.assignments[subject].push(item);
+                groupType = 'assignments';
             } else if (resourceType.includes('paper') || resourceType.includes('exam')) {
-                if (!groupedResources.papers[subject]) groupedResources.papers[subject] = [];
-                groupedResources.papers[subject].push(item);
+                groupType = 'papers';
+            } else if (resourceCategory === 'assignments') {
+                groupType = 'assignments';
+            } else if (resourceCategory === 'papers' || resourceCategory === 'exam_papers') {
+                groupType = 'papers';
+            } else if (resourceCategory === 'notes') {
+                groupType = 'notes';
             } else {
                 // Default to notes for unknown types
-                if (!groupedResources.notes[subject]) groupedResources.notes[subject] = [];
-                groupedResources.notes[subject].push(item);
+                groupType = 'notes';
+            }
+
+            if (groupType) {
+                if (!groupedResources[groupType][subject]) groupedResources[groupType][subject] = [];
+                groupedResources[groupType][subject].push(item);
             }
         });
+
+        // Sort each subject group by unit number
+        Object.values(groupedResources.notes).forEach(subjectResources =>
+            subjectResources.sort((a, b) => a.unitNumber - b.unitNumber));
+        Object.values(groupedResources.assignments).forEach(subjectResources =>
+            subjectResources.sort((a, b) => a.unitNumber - b.unitNumber));
+        Object.values(groupedResources.papers).forEach(subjectResources =>
+            subjectResources.sort((a, b) => a.unitNumber - b.unitNumber));
 
         console.log(`API Prime: Grouped resources:`, {
             notes: Object.keys(groupedResources.notes).length,
