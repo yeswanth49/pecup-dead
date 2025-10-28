@@ -131,9 +131,7 @@ export default function ContactPage() {
           </CardContent>
         </Card>
       </div>
-      <div className="flex justify-center mt-6">
-        <WhatsAppJoinPopup />
-      </div>
+      {/* Removed duplicate WhatsAppJoinPopup instance - using global one from layout.tsx */}
       <ChatBubble href="https://chat.pecup.in" />
     </div>
   );

@@ -17,16 +17,31 @@ export default function WhatsAppJoinPopup() {
   const [visitCount, setVisitCount] = useLocalStorage<number>("whatsapp-popup-visits", 0)
   const [showPopup, setShowPopup] = useState(false)
   const hasInitialized = useRef(false)
+  const [skipPopup, setSkipPopup] = useLocalStorage<boolean>("whatsapp_skip_popup", false)
+  const [lastIncrementPath, setLastIncrementPath] = useState<string>("")
 
   useEffect(() => {
     if (hasInitialized.current) return
     hasInitialized.current = true
 
-    setVisitCount(prev => {
-      const newCount = prev + 1;
-      if (newCount <= 10) setShowPopup(true);
-      return newCount;
-    });
+    // Check if user has permanently dismissed the popup
+    if (skipPopup) {
+      return;
+    }
+
+    // Get current path for tracking page navigation
+    const currentPath = window.location.pathname;
+
+    // Only increment if this is a different page or first visit
+    if (lastIncrementPath === "" || lastIncrementPath !== currentPath) {
+      setLastIncrementPath(currentPath);
+
+      setVisitCount(prev => {
+        const newCount = prev + 1;
+        if (newCount <= 10 && !skipPopup) setShowPopup(true);
+        return newCount;
+      });
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleJoin = () => {
@@ -38,6 +53,11 @@ export default function WhatsAppJoinPopup() {
     setShowPopup(false)
   }
 
+  const handleDontShowAgain = () => {
+    setSkipPopup(true);
+    setShowPopup(false);
+  }
+
   return (
     <Dialog open={showPopup} onOpenChange={setShowPopup}>
       <DialogContent className="sm:max-w-[425px]">
@@ -47,13 +67,18 @@ export default function WhatsAppJoinPopup() {
             Connect with fellow students, get updates, and access exclusive resources.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={handleClose}>
-            Maybe Later
+        <div className="flex justify-between gap-3">
+          <Button variant="ghost" onClick={handleDontShowAgain} className="text-xs">
+            Don't show again
           </Button>
-          <Button onClick={handleJoin}>
-            Join Group
-          </Button>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={handleClose}>
+              Maybe Later
+            </Button>
+            <Button onClick={handleJoin}>
+              Join Group
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
