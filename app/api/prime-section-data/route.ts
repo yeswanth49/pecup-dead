@@ -23,13 +23,12 @@ interface Resource {
     date: string;
     type: string;
     url: string;
+    subject?: string;
 }
 
 interface GroupedResourceItem {
-    name: string;
-    description: string;
-    date: string;
-    type: string;
+    id: string;
+    title: string;
     url: string;
 }
 
@@ -125,17 +124,50 @@ export async function GET(request: Request) {
 
         // Fetch resources for the upcoming exam subjects
         let relevantResources: Resource[] = [];
-        
+
         if (uniqueUpcomingSubjects.length > 0) {
+            console.log(`API Prime: Querying resources with filters:`, {
+                subjects: uniqueUpcomingSubjects,
+                year: yearParam,
+                branch: branchParam
+            });
+
+            // First try without year/branch filtering to see if resources exist
+            const testQuery = supabaseAdmin
+                .from('resources')
+                .select('subject')
+                .in('subject', uniqueUpcomingSubjects)
+                .is('deleted_at', null);
+
+            const { data: testData, error: testError } = await testQuery;
+            console.log(`API Prime: Test query (no year/branch filter) found ${(testData || []).length} resources with error:`, testError);
+            if (testData) {
+                console.log(`API Prime: Test query subjects found:`, [...new Set(testData.map(r => r.subject))]);
+            }
+
+            // Try flexible filtering - some resources might use year_id/branch_id instead of year/branch
             let resourceQuery = supabaseAdmin
               .from('resources')
               .select('*')
               .is('deleted_at', null)
               .in('subject', uniqueUpcomingSubjects)
               .order('date', { ascending: false });
-            if (yearParam) resourceQuery = resourceQuery.eq('year', parseInt(yearParam, 10))
-            if (branchParam) resourceQuery = resourceQuery.eq('branch', branchParam)
+
+            // Apply filters only if the resource actually has these fields set (not null)
+            // This avoids filtering out resources that don't have year/branch specified
+            if (yearParam) {
+                // Try both numeric year and year_id
+                resourceQuery = resourceQuery.or(`year.eq.${parseInt(yearParam, 10)},year_id.not.is.null`);
+            }
+            if (branchParam) {
+                // Try both string branch and branch_id
+                resourceQuery = resourceQuery.or(`branch.eq.${branchParam},branch_id.not.is.null`);
+            }
+
+            console.log(`API Prime: Executing query...`);
             const { data: resourceData, error: resourceError } = await resourceQuery
+
+            console.log(`API Prime: Query result - data length: ${(resourceData || []).length}, error:`, resourceError);
 
             if (resourceError) {
                 console.error('API Error: Failed to fetch resources:', resourceError);
@@ -143,16 +175,20 @@ export async function GET(request: Request) {
                 relevantResources = [];
             } else {
                 relevantResources = (resourceData || []).map(resource => ({
+                    id: resource.id || '',
                     name: resource.name || '',
                     description: resource.description || '',
                     date: resource.date || '',
                     type: resource.type || '',
-                    url: resource.url || ''
+                    url: resource.url || '',
+                    subject: resource.subject || '' // Add subject field
                 }));
+                console.log(`API Prime: Mapped ${relevantResources.length} resources`);
             }
         }
 
         console.log(`API Prime: Found ${relevantResources.length} relevant resources for subjects: ${uniqueUpcomingSubjects.join(', ')}`);
+        console.log(`API Prime: Resource details:`, relevantResources.map(r => ({ name: r.name, subject: r.subject, type: r.type })));
 
         // Group resources by type
         const groupedResources: GroupedResources = {
@@ -162,26 +198,52 @@ export async function GET(request: Request) {
         };
 
         relevantResources.forEach(resource => {
-            const subject = uniqueUpcomingSubjects.find(subj => 
-                resource.name.toLowerCase().includes(subj.toLowerCase()) ||
-                resource.description.toLowerCase().includes(subj.toLowerCase())
-            ) || 'General';
+            // Use the resource's subject field directly, or try to match with exam subjects
+            let subject = resource.subject || 'General';
 
-            const resourceType = resource.type.toLowerCase();
+            // If resource.subject is not in our exam subjects, try fuzzy matching
+            if (!uniqueUpcomingSubjects.includes(subject)) {
+                const matchedSubject = uniqueUpcomingSubjects.find(examSubj =>
+                    subject.toLowerCase().includes(examSubj.toLowerCase()) ||
+                    examSubj.toLowerCase().includes(subject.toLowerCase()) ||
+                    resource.name.toLowerCase().includes(examSubj.toLowerCase()) ||
+                    resource.description.toLowerCase().includes(examSubj.toLowerCase())
+                );
+                if (matchedSubject) {
+                    subject = matchedSubject;
+                }
+            }
+
+            const resourceType = (resource.type || '').toLowerCase();
+            console.log(`API Prime: Processing resource "${resource.name}" with type "${resourceType}" for subject "${subject}"`);
+
+            // Create the correctly formatted item for frontend
+            const item: GroupedResourceItem = {
+                id: String(Math.random()),
+                title: resource.name || '',
+                url: resource.url || ''
+            };
+
             if (resourceType.includes('note')) {
                 if (!groupedResources.notes[subject]) groupedResources.notes[subject] = [];
-                groupedResources.notes[subject].push(resource);
+                groupedResources.notes[subject].push(item);
             } else if (resourceType.includes('assignment')) {
                 if (!groupedResources.assignments[subject]) groupedResources.assignments[subject] = [];
-                groupedResources.assignments[subject].push(resource);
+                groupedResources.assignments[subject].push(item);
             } else if (resourceType.includes('paper') || resourceType.includes('exam')) {
                 if (!groupedResources.papers[subject]) groupedResources.papers[subject] = [];
-                groupedResources.papers[subject].push(resource);
+                groupedResources.papers[subject].push(item);
             } else {
                 // Default to notes for unknown types
                 if (!groupedResources.notes[subject]) groupedResources.notes[subject] = [];
-                groupedResources.notes[subject].push(resource);
+                groupedResources.notes[subject].push(item);
             }
+        });
+
+        console.log(`API Prime: Grouped resources:`, {
+            notes: Object.keys(groupedResources.notes).length,
+            assignments: Object.keys(groupedResources.assignments).length,
+            papers: Object.keys(groupedResources.papers).length
         });
 
         const responseData: PrimeSectionData = {
