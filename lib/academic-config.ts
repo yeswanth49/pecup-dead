@@ -227,24 +227,26 @@ export class AcademicConfigManager {
   }
 
   /**
-   * Convert academic year level to batch year
-   */
+    * Convert academic year level to batch year
+    */
   async academicYearToBatchYear(academicYearLevel: number): Promise<number> {
-    if (academicYearLevel < 1 || academicYearLevel > 4) {
-      throw new Error('Invalid academic year level');
+    const { programLength } = await this.getConfig();
+    if (academicYearLevel < 1 || academicYearLevel > programLength) {
+      throw new Error(`Invalid academic year level: must be between 1 and ${programLength}`);
     }
 
     const mappings = await this.getYearMappings();
 
-    // Inverse lookup: find the batch year key whose mapped academic year equals the input
-    for (const [batchYear, academicYear] of Object.entries(mappings)) {
-      if (academicYear === academicYearLevel) {
-        return parseInt(batchYear);
-      }
+    // Inverse lookup: collect all matching batch years, select the highest (most recent)
+    const matchingBatchYears = Object.entries(mappings)
+      .filter(([_, academicYear]) => academicYear === academicYearLevel)
+      .map(([batchYear, _]) => Number(batchYear));
+
+    if (matchingBatchYears.length === 0) {
+      throw new Error(`No mapping exists for academic year level ${academicYearLevel}`);
     }
 
-    // If no mapping exists for the requested academic year, throw a clear error
-    throw new Error(`No mapping exists for academic year level ${academicYearLevel}`);
+    return Math.max(...matchingBatchYears);
   }
 
   clearCache(): void {
