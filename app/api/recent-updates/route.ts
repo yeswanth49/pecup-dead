@@ -79,16 +79,47 @@ export async function GET(request: Request) {
 
         console.log(`API Route: Found ${updates?.length || 0} recent updates`);
 
+        // Hard-coded recent updates
+        const staticUpdates: RecentUpdate[] = [
+            {
+                id: 'static-1',
+                title: 'Syllabus and Timetables were updated',
+                date: '2025-10-01',
+                description: 'Welcome to the new academic year with updated resources and features.'
+            },
+            {
+              id: 'static-2',
+              title: 'New Academic Year Started',
+              date: '2025-10-01',
+              description: 'Welcome to the new academic year with updated resources and features.'
+            },
+            {
+                id: 'static-3',
+                title: 'Performance Improvements',
+                date: '2025-09-15',
+                description: 'Enhanced loading speeds and better user experience across the platform.'
+            },
+            {
+                id: 'static-4',
+                title: 'Bug Fixes and Updates',
+                date: '2025-09-01',
+                description: 'Resolved various issues and added minor enhancements.'
+            }
+        ];
+
         // Transform the data to match the expected format
-        const recentUpdates: RecentUpdate[] = (updates || []).map(update => ({
+        const dbUpdates: RecentUpdate[] = (updates || []).map(update => ({
             id: update.id,
             title: update.title || 'No Title',
             date: update.date || '',
             description: update.description || undefined
         }));
 
-        console.log(`API Route: Returning ${recentUpdates.length} recent updates`);
-        return NextResponse.json(recentUpdates);
+        // Combine static updates (first) with database updates
+        const allUpdates = [...staticUpdates, ...dbUpdates];
+
+        console.log(`API Route: Returning ${allUpdates.length} recent updates (${staticUpdates.length} static, ${dbUpdates.length} from DB)`);
+        return NextResponse.json(allUpdates);
 
     } catch (error: any) {
         console.error("API Error during Supabase query:", error);
