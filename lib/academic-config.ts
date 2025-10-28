@@ -230,9 +230,12 @@ export class AcademicConfigManager {
     * Convert academic year level to batch year
     */
   async academicYearToBatchYear(academicYearLevel: number): Promise<number> {
+    if (!Number.isInteger(academicYearLevel)) {
+      throw new Error(`academicYearLevel must be an integer, received: ${academicYearLevel}`);
+    }
     const { programLength } = await this.getConfig();
     if (academicYearLevel < 1 || academicYearLevel > programLength) {
-      throw new Error(`Invalid academic year level: must be between 1 and ${programLength}`);
+      throw new Error(`Invalid academic year level: must be an integer between 1 and ${programLength}`);
     }
 
     const mappings = await this.getYearMappings();

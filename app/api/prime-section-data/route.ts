@@ -18,6 +18,7 @@ interface Exam {
 }
 
 interface Resource {
+    id?: string;
     name: string;
     description: string;
     date: string;
@@ -153,18 +154,20 @@ export async function GET(request: Request) {
               .in('subject', uniqueUpcomingSubjects)
               .order('date', { ascending: false });
 
-            // Apply filters only if the resource actually has these fields set (not null)
-            // This avoids filtering out resources that don't have year/branch specified
+            // Apply filters - match either year/year_id or branch/branch_id fields
             if (yearParam) {
-                // Try both numeric year and year_id
-                resourceQuery = resourceQuery.or(`year.eq.${parseInt(yearParam, 10)},year_id.not.is.null`);
+                // Match either year or year_id field
+                const yearNum = parseInt(yearParam, 10);
+                resourceQuery = resourceQuery.or(`year.eq.${yearNum},year_id.eq.${yearNum}`);
+                console.log(`API Prime: Applying year filter: year.eq.${yearNum},year_id.eq.${yearNum}`);
             }
             if (branchParam) {
-                // Try both string branch and branch_id
-                resourceQuery = resourceQuery.or(`branch.eq.${branchParam},branch_id.not.is.null`);
+                // Match either branch or branch_id field
+                resourceQuery = resourceQuery.or(`branch.eq.${branchParam},branch_id.eq.${branchParam}`);
+                console.log(`API Prime: Applying branch filter: branch.eq.${branchParam},branch_id.eq.${branchParam}`);
             }
 
-            console.log(`API Prime: Executing query...`);
+            console.log(`API Prime: Executing resource query with filters...`);
             const { data: resourceData, error: resourceError } = await resourceQuery
 
             console.log(`API Prime: Query result - data length: ${(resourceData || []).length}, error:`, resourceError);
@@ -219,7 +222,7 @@ export async function GET(request: Request) {
 
             // Create the correctly formatted item for frontend
             const item: GroupedResourceItem = {
-                id: String(Math.random()),
+                id: String(resource.id),
                 title: resource.name || '',
                 url: resource.url || ''
             };

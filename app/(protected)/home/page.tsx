@@ -91,6 +91,8 @@ export default function HomePage() {
   }, [])
 
   useEffect(() => {
+    let isMounted = true
+
     if (sessionStatus === 'authenticated') {
       const fetchUpdates = async () => {
         setIsLoadingUpdates(true)
@@ -100,12 +102,12 @@ export default function HomePage() {
           if (!response.ok) throw new Error(`Updates fetch failed: ${response.status}`)
           const data = await response.json()
           if (!Array.isArray(data)) throw new Error('Invalid updates data format.')
-          setUpdates(data)
+          if (isMounted) setUpdates(data)
         } catch (error: any) {
           console.error('Error fetching recent updates:', error)
-          setUpdatesError(error.message || 'Error.')
+          if (isMounted) setUpdatesError(error.message || 'Error.')
         } finally {
-          setIsLoadingUpdates(false)
+          if (isMounted) setIsLoadingUpdates(false)
         }
       }
 
@@ -123,20 +125,24 @@ export default function HomePage() {
           if (typeof data !== 'object' || data === null || !('data' in data) || !('triggeringSubjects' in data) || !Array.isArray((data as any).triggeringSubjects)) {
             throw new Error('Invalid prime section data format received from API.')
           }
-          setPrimeData(data)
+          if (isMounted) setPrimeData(data)
         } catch (error: any) {
           console.error('Error fetching prime section data:', error)
-          setPrimeError(error.message || 'An error occurred loading prime section data.')
+          if (isMounted) setPrimeError(error.message || 'An error occurred loading prime section data.')
         } finally {
-          setIsLoadingPrime(false)
+          if (isMounted) setIsLoadingPrime(false)
         }
       }
 
       fetchUpdates()
       fetchPrimeSectionData()
     } else if (sessionStatus === 'unauthenticated') {
-      setIsLoadingUpdates(false)
-      setIsLoadingPrime(false)
+      if (isMounted) setIsLoadingUpdates(false)
+      if (isMounted) setIsLoadingPrime(false)
+    }
+
+    return () => {
+      isMounted = false
     }
   }, [sessionStatus])
 
