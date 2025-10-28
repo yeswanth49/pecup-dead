@@ -42,7 +42,7 @@ export function Header() {
 
   return (
     <div className="flex flex-col gap-1">
-      <h1 className="text-2xl md:text-3xl pt-2 md:pt-4 font-bold">
+      <h1 className="text-2xl md:text-3xl font-bold">
         Welcome, {showNameSkeleton ? (
           <span className="inline-flex align-middle"><Skeleton className="h-6 md:h-7 w-24 inline-block align-middle" /></span>
         ) : (
