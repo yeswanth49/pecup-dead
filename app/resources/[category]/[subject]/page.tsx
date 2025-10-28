@@ -205,68 +205,23 @@ export default function SubjectPage({
     setExpandedUnits(newExpanded)
   }
 
-  // Handle secure file access
-  const handleSecureFileAccess = async (resource: Resource, action: 'view' | 'download') => {
-    if (!resource.id) {
-      if (!resource.url) {
-        console.error('Resource has neither id nor url')
-        return
-      }
-      if (action === 'download') {
-        const link = document.createElement('a')
-        link.href = resource.url || resource.drive_link
-        link.download = resource.name || resource.title
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-      } else {
-        window.open(resource.url || resource.drive_link, '_blank', 'noopener,noreferrer')
-      }
+  // Handle file access directly
+  const handleFileAccess = (resource: Resource, action: 'view' | 'download') => {
+    const url = resource.url || resource.drive_link
+    if (!url) {
+      console.error('Resource has no URL')
       return
     }
 
-    setLoadingFile(resource.id)
-
-    try {
-       if (process.env.NODE_ENV !== 'production') {
-         console.log(`[DEBUG] Fetching secure URL for resource ${resource.id}`)
-       }
-       const response = await fetch(`/api/resources/${encodeURIComponent(resource.id)}/secure-url`)
-       if (process.env.NODE_ENV !== 'production') {
-         console.log(`[DEBUG] Secure URL response status: ${response.status}`)
-       }
-       if (!response.ok) {
-         let msg = 'Failed to get secure URL'
-         try {
-           const err = await response.json()
-           if (err?.error) msg = err.error
-         } catch {}
-         throw new Error(msg)
-       }
-       const { secureUrl } = await response.json()
-       if (process.env.NODE_ENV !== 'production') {
-         console.log(`[DEBUG] Secure URL generated for resource ${resource.id}`)
-       }
-
-      if (action === 'download') {
-        const link = document.createElement('a')
-        link.href = secureUrl
-        link.download = resource.name || resource.title || 'resource'
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-      } else {
-        window.open(secureUrl, '_blank', 'noopener,noreferrer')
-      }
-    } catch (error: unknown) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.error('[DEBUG] Failed to access secure file:', {
-          message: error instanceof Error ? error.message : String(error),
-          errorType: typeof error
-        })
-      }
-    } finally {
-      setLoadingFile(null)
+    if (action === 'download') {
+      const link = document.createElement('a')
+      link.href = url
+      link.download = resource.name || resource.title || 'resource'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer')
     }
   }
 
@@ -592,28 +547,18 @@ export default function SubjectPage({
                                     variant="outline"
                                     size="sm"
                                     className="text-xs"
-                                    onClick={() => handleSecureFileAccess(resource, 'download')}
-                                    disabled={loadingFile === resource.id}
+                                    onClick={() => handleFileAccess(resource, 'download')}
                                   >
-                                    {loadingFile === resource.id ? (
-                                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                                    ) : (
-                                      <Download className="mr-1 h-3 w-3" />
-                                    )}
+                                    <Download className="mr-1 h-3 w-3" />
                                     Download
                                   </Button>
                                   <Button
                                     variant="outline"
                                     size="sm"
                                     className="text-xs"
-                                    onClick={() => handleSecureFileAccess(resource, 'view')}
-                                    disabled={loadingFile === resource.id}
+                                    onClick={() => handleFileAccess(resource, 'view')}
                                   >
-                                    {loadingFile === resource.id ? (
-                                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                                    ) : (
-                                      <ExternalLink className="mr-1 h-3 w-3" />
-                                    )}
+                                    <ExternalLink className="mr-1 h-3 w-3" />
                                     View
                                   </Button>
                                 </>
@@ -659,28 +604,18 @@ export default function SubjectPage({
                                 variant="outline"
                                 size="sm"
                                 className="text-xs"
-                                onClick={() => handleSecureFileAccess(resource, 'download')}
-                                disabled={loadingFile === resource.id}
+                                onClick={() => handleFileAccess(resource, 'download')}
                               >
-                                {loadingFile === resource.id ? (
-                                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                                ) : (
-                                  <Download className="mr-1 h-3 w-3" />
-                                )}
+                                <Download className="mr-1 h-3 w-3" />
                                 Download
                               </Button>
                               <Button
                                 variant="outline"
                                 size="sm"
                                 className="text-xs"
-                                onClick={() => handleSecureFileAccess(resource, 'view')}
-                                disabled={loadingFile === resource.id}
+                                onClick={() => handleFileAccess(resource, 'view')}
                               >
-                                {loadingFile === resource.id ? (
-                                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                                ) : (
-                                  <ExternalLink className="mr-1 h-3 w-3" />
-                                )}
+                                <ExternalLink className="mr-1 h-3 w-3" />
                                 View
                               </Button>
                             </>
