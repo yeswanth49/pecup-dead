@@ -3,7 +3,6 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { Sidebar } from "@/components/sidebar"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { Providers } from "./providers" // ✅ Import Providers
 import WhatsAppJoinPopup from "@/components/WhatsAppJoinPopup"
 import { BetaWarning } from "@/components/BetaWarning"
@@ -29,7 +28,6 @@ export default function RootLayout({
         <Providers> {/* ✅ Wrap with Providers */}
           <div className="flex min-h-screen">
             <Sidebar />
-            <ThemeToggle />
             <main className="flex-1 pt-10 md:pt-14 px-6 md:px-8 pb-6 md:pb-8">{children}</main>
           </div>
           <BetaWarning />
