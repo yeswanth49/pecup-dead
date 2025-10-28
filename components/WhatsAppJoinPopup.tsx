@@ -22,19 +22,12 @@ export default function WhatsAppJoinPopup() {
     if (hasInitialized.current) return
     hasInitialized.current = true
 
-    console.log('[WhatsAppJoinPopup] useEffect running, current visitCount:', visitCount)
-    const newCount = visitCount + 1
-    console.log('[WhatsAppJoinPopup] Setting new visitCount to:', newCount)
-    setVisitCount(newCount)
-
-    // Show popup for first 10 visits
-    if (newCount <= 10) {
-      console.log('[WhatsAppJoinPopup] Showing popup for visit count:', newCount)
-      setShowPopup(true)
-    } else {
-      console.log('[WhatsAppJoinPopup] Not showing popup, visit count:', newCount)
-    }
-  }, []) // Empty dependency array - only run once on mount
+    setVisitCount(prev => {
+      const newCount = prev + 1;
+      if (newCount <= 10) setShowPopup(true);
+      return newCount;
+    });
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleJoin = () => {
     window.open("https://chat.whatsapp.com/CRA9Iy7WWKT3yPc1homLyC", "_blank")
