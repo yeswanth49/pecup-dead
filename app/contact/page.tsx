@@ -23,8 +23,8 @@ export default function ContactPage() {
               <IceCreamCone className="mt-1 h-5 w-5 text-primary" />
               <div>
                 <h3 className="font-medium">Yeswanth Madasu.</h3>
-                <h3 className="text-muted-foreground h-10">CSE-B 2nd Year</h3>
-                <p className="text-sm text-muted-foreground"><a href="https://google.com">website</a></p>
+                <h3 className="text-muted-foreground h-10">CSE-B 3rd Year</h3>
+                <p className="text-sm text-muted-foreground"><a href="https://yesh.pecup.in">website</a></p>
                 <p className="text-sm text-muted-foreground"><a href="https://x.com">X</a></p>
                 <p className="text-sm text-muted-foreground"><a href="https://google.com">Github</a></p>
                 <p className="text-sm text-muted-foreground"><a href="https://google.com">Linkedin</a></p>
@@ -34,7 +34,7 @@ export default function ContactPage() {
               <SquareUserRound className="mt-1 h-5 w-5 text-primary" />
               <div>
                 <h3 className="font-medium">Venkatakumar G</h3>
-                <h3 className="text-muted-foreground h-10">CSE-B 2nd Year</h3>
+                <h3 className="text-muted-foreground h-10">CSE-B 3rd Year</h3>
                 <p className="text-sm text-muted-foreground"><a href="https://google.com">Linkedin</a></p>
               </div>
             </div>
@@ -42,7 +42,7 @@ export default function ContactPage() {
               <SquareUserRound className="mt-1 h-5 w-5 text-primary" />
               <div>
                 <h3 className="font-medium">KaavyaSri B</h3>
-                <h3 className="text-muted-foreground h-10">CSE-B 2nd Year</h3>
+                <h3 className="text-muted-foreground h-10">CSE-B 3rd Year</h3>
                 <p className="text-sm text-muted-foreground"><a href="https://google.com">Linkedin</a></p>
               </div>
             </div>
@@ -82,7 +82,7 @@ export default function ContactPage() {
               <div>
                 <h3 className="font-medium">Resource Request, Admin</h3>
                 <p className="text-sm text-muted-foreground">VenkataKumar G</p>
-                <p className="text-sm text-muted-foreground">CSE-B 2nd Year</p>
+                <p className="text-sm text-muted-foreground">CSE-B 3rd Year</p>
               </div>
             </div>
           </CardContent>
