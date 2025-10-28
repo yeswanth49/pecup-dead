@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useProfile } from '@/lib/enhanced-profile-context'
 import type { ReactElement } from 'react'
 import { useToast } from '@/components/ui/use-toast'
+import { RefreshCw, Loader2 } from 'lucide-react'
 
 export function RefreshButton(): ReactElement {
 	const { forceRefresh, loading } = useProfile()
@@ -27,9 +28,20 @@ export function RefreshButton(): ReactElement {
 			aria-label={loading ? 'Refreshing data' : 'Refresh data'}
 			aria-busy={loading || undefined}
 			variant="ghost"
-			className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
+			size="sm"
+			className="text-primary hover:text-primary/80 hover:bg-transparent"
 		>
-			{loading ? 'Refreshing...' : '🔄 Refresh Data'}
+			{loading ? (
+				<>
+					<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+					Refreshing...
+				</>
+			) : (
+				<>
+					<RefreshCw className="mr-2 h-4 w-4" />
+					Refresh Data
+				</>
+			)}
 		</Button>
 	)
 }
