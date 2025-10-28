@@ -16,6 +16,8 @@ export class AcademicConfigManager {
   private static instance: AcademicConfigManager | null = null;
   private yearMappings: Record<number, number> | null = null;
   private cacheExpiry: number = 0;
+  private _cachedProgramConfig: { programLength: number } | null = null;
+  private _cachedProgramConfigExpiry: number = 0;
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   static getInstance(): AcademicConfigManager {
@@ -186,6 +188,12 @@ export class AcademicConfigManager {
    * Get program configuration settings
    */
   async getConfig(): Promise<{ programLength: number }> {
+    const now = Date.now();
+
+    if (this._cachedProgramConfig && now < this._cachedProgramConfigExpiry) {
+      return this._cachedProgramConfig;
+    }
+
     const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
@@ -196,31 +204,54 @@ export class AcademicConfigManager {
 
     if (error || !data?.config_value) {
       console.warn('[academic-config] Using default program settings');
-      return { programLength: 4 };
+      this._cachedProgramConfig = { programLength: 4 };
     } else {
-      const config = data.config_value as any;
-      const programLength = config.programLength || 4;
-      return { programLength };
+      // Validate that data?.config_value is an object and that config_value.programLength is a finite positive number
+      if (typeof data.config_value !== 'object' || Array.isArray(data.config_value) || data.config_value === null) {
+        console.warn('[academic-config] Invalid config_value structure, falling back to programLength = 4');
+        this._cachedProgramConfig = { programLength: 4 };
+      } else {
+        const config = data.config_value as any;
+        const programLength = config.programLength;
+        if (typeof programLength !== 'number' || !isFinite(programLength) || programLength <= 0) {
+          console.warn('[academic-config] Invalid programLength, falling back to programLength = 4');
+          this._cachedProgramConfig = { programLength: 4 };
+        } else {
+          this._cachedProgramConfig = { programLength };
+        }
+      }
     }
+
+    this._cachedProgramConfigExpiry = now + this.CACHE_DURATION;
+    return this._cachedProgramConfig;
   }
 
   /**
    * Convert academic year level to batch year
    */
   async academicYearToBatchYear(academicYearLevel: number): Promise<number> {
-    const currentYear = new Date().getFullYear();
-
     if (academicYearLevel < 1 || academicYearLevel > 4) {
       throw new Error('Invalid academic year level');
     }
 
-    // Simple calculation: academic year 1 = current year, 2 = current year - 1, etc.
-    return currentYear - academicYearLevel + 1;
+    const mappings = await this.getYearMappings();
+
+    // Inverse lookup: find the batch year key whose mapped academic year equals the input
+    for (const [batchYear, academicYear] of Object.entries(mappings)) {
+      if (academicYear === academicYearLevel) {
+        return parseInt(batchYear);
+      }
+    }
+
+    // If no mapping exists for the requested academic year, throw a clear error
+    throw new Error(`No mapping exists for academic year level ${academicYearLevel}`);
   }
 
   clearCache(): void {
     this.yearMappings = null;
     this.cacheExpiry = 0;
+    this._cachedProgramConfig = null;
+    this._cachedProgramConfigExpiry = 0;
   }
 }
 
