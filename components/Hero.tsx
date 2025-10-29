@@ -1,16 +1,35 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 export default function Hero() {
+  const [texts, setTexts] = useState<string[]>([])
+
   useEffect(() => {
-    const texts = [
-      "New, way to access PEC.UP : starBOT",
-      "Ready for Mid-2?",
-      "Bored with studies? Not anymore!",
-      "resources that are actually useful",
-      "Made for students, by students!"
-    ]
+    // Fetch hero texts from the database
+    fetch('/api/hero')
+      .then(response => response.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setTexts(data)
+        }
+      })
+      .catch(error => {
+        console.error('Failed to fetch hero texts:', error)
+        // Fallback to default texts if API fails
+        setTexts([
+          "New, way to access PEC.UP : starBOT",
+          "Ready for Mid-2?",
+          "Bored with studies? Not anymore!",
+          "resources that are actually useful",
+          "Made for students, by students!"
+        ])
+      })
+  }, [])
+
+  useEffect(() => {
+    if (texts.length === 0) return
+
     let count = 0
     let index = 0
     let currentText = ''
@@ -37,7 +56,7 @@ export default function Hero() {
     }
 
     type()
-  }, [])
+  }, [texts])
 
   return (
     <section id="hero">

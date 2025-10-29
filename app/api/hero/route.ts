@@ -1,0 +1,45 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getSupabaseAdmin } from '@/lib/supabase'
+
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = getSupabaseAdmin()
+
+    // Fetch active hero texts ordered by priority
+    // Filter out expired texts (time_limit is null or in the future)
+    const { data: texts, error } = await supabase
+      .from('hero_texts')
+      .select('text, priority, time_limit')
+      .or('time_limit.is.null,time_limit.gt.' + new Date().toISOString())
+      .order('priority', { ascending: true })
+
+    if (error) {
+      console.error('Error fetching hero texts:', error)
+      // Return fallback texts for now since table might not exist yet
+      const fallbackTexts = [
+        "New, way to access PEC.UP : starBOT",
+        "Ready for Mid-2?",
+        "Bored with studies? Not anymore!",
+        "resources that are actually useful",
+        "Made for students, by students!"
+      ]
+      return NextResponse.json(fallbackTexts)
+    }
+
+    // Extract just the text values for the component
+    const heroTexts = texts?.map(item => item.text) || []
+
+    return NextResponse.json(heroTexts)
+  } catch (error) {
+    console.error('Unexpected error:', error)
+    // Return fallback texts on any error
+    const fallbackTexts = [
+      "New, way to access PEC.UP : starBOT",
+      "Ready for Mid-2?",
+      "Bored with studies? Not anymore!",
+      "resources that are actually useful",
+      "Made for students, by students!"
+    ]
+    return NextResponse.json(fallbackTexts)
+  }
+}
