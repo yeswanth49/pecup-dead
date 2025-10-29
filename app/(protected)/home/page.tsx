@@ -12,7 +12,6 @@ import Link from 'next/link'
 import { BookOpen, Bell, Archive, Phone, AlertCircle, Loader2, Settings, Users, CalendarDays, Clock, Star, ExternalLink, FileText, Edit, FileQuestion } from 'lucide-react'
 import { useProfile, ProfileContextType, EnhancedProfileDynamicData } from '@/lib/enhanced-profile-context'
 import { useSession } from 'next-auth/react'
-import { getRoleDisplay } from '@/lib/role-utils'
 
 type Exam = {
   subject: string
@@ -157,6 +156,20 @@ export default function HomePage() {
     )
   }
 
+  const getRoleDisplay = (role: string) => {
+    switch (role) {
+      case 'student':
+        return <Badge variant="secondary">Student</Badge>
+      case 'representative':
+        return <Badge variant="default">Representative</Badge>
+      case 'admin':
+        return <Badge variant="destructive">Admin</Badge>
+      case 'yeshh':
+        return <Badge variant="destructive">Yeshh</Badge>
+      default:
+        return <Badge variant="outline">{role}</Badge>
+    }
+  }
 
   const getNavigationCards = () => {
     const cards = []
