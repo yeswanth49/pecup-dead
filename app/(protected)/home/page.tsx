@@ -270,7 +270,7 @@ export default function HomePage() {
         <div className="flex items-center justify-between">
           <div>
             <Breadcrumb items={[
-              { label: "Home", isCurrentPage: true }
+              { label: "♡", isCurrentPage: true }
             ]} />
           </div>
           <div className="flex items-center gap-4">
