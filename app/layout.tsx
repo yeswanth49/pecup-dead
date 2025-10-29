@@ -33,7 +33,7 @@ export default function RootLayout({
             <main className="flex-1 pt-0 md:pt-2 px-6 md:px-8 pb-6 md:pb-8">{children}</main>
           </div>
           <BetaWarning />
-          {/* <WhatsAppJoinPopup /> */}
+          <WhatsAppJoinPopup />
         </Providers>
         <Analytics/>
         <SpeedInsights />
