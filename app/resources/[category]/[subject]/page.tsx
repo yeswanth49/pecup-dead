@@ -93,28 +93,13 @@ export default function SubjectPage({
   const { subjects, profile } = useProfile()
 
   const [usersCount, setUsersCount] = useState<number>(0)
-  const [isLoadingUsersCount, setIsLoadingUsersCount] = useState(true)
+  const { dynamicData } = useProfile()
 
   useEffect(() => {
-    let mounted = true
-    const fetchUsersCount = async () => {
-      setIsLoadingUsersCount(true)
-      try {
-        const response = await fetch('/api/users-count')
-        if (response.ok) {
-          const data = await response.json()
-          if (mounted) setUsersCount(data.totalUsers)
-        }
-      } catch {
-        // silent
-      } finally {
-        if (mounted) setIsLoadingUsersCount(false)
-      }
+    if (dynamicData?.usersCount) {
+      setUsersCount(dynamicData.usersCount)
     }
-    fetchUsersCount()
-    const interval = setInterval(fetchUsersCount, 30000)
-    return () => { mounted = false; clearInterval(interval) }
-  }, [])
+  }, [dynamicData?.usersCount])
 
   const getRoleDisplay = (role: string) => {
     switch (role) {
@@ -418,11 +403,7 @@ export default function SubjectPage({
               <Users className="h-3 w-3 text-primary" />
               <div className="flex items-center gap-1">
                 <span className="font-medium text-sm">
-                  {isLoadingUsersCount ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    usersCount.toLocaleString()
-                  )}
+                  {usersCount.toLocaleString()}
                 </span>
                 <span className="text-xs text-muted-foreground">users</span>
               </div>
