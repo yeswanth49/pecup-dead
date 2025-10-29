@@ -231,22 +231,28 @@ export default function SubjectPage({
   }
 
   // Handle file access directly
-  const handleFileAccess = (resource: Resource, action: 'view' | 'download') => {
+  const handleFileAccess = async (resource: Resource, action: 'view' | 'download') => {
     const url = resource.url || resource.drive_link
     if (!url) {
       console.error('Resource has no URL')
       return
     }
 
-    if (action === 'download') {
-      const link = document.createElement('a')
-      link.href = url
-      link.download = resource.name || resource.title || 'resource'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    } else {
-      window.open(url, '_blank', 'noopener,noreferrer')
+    setLoadingFile(resource.id)
+
+    try {
+      if (action === 'download') {
+        const link = document.createElement('a')
+        link.href = url
+        link.download = resource.name || resource.title || 'resource'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer')
+      }
+    } finally {
+      setLoadingFile(null)
     }
   }
 
@@ -591,18 +597,28 @@ export default function SubjectPage({
                                     size="sm"
                                     className="text-xs"
                                     onClick={() => handleFileAccess(resource, 'download')}
+                                    disabled={loadingFile === resource.id}
                                   >
-                                    <Download className="mr-1 h-3 w-3" />
-                                    Download
+                                    {loadingFile === resource.id ? (
+                                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <Download className="mr-1 h-3 w-3" />
+                                    )}
+                                    {loadingFile === resource.id ? 'Downloading...' : 'Download'}
                                   </Button>
                                   <Button
                                     variant="outline"
                                     size="sm"
                                     className="text-xs"
                                     onClick={() => handleFileAccess(resource, 'view')}
+                                    disabled={loadingFile === resource.id}
                                   >
-                                    <ExternalLink className="mr-1 h-3 w-3" />
-                                    View
+                                    {loadingFile === resource.id ? (
+                                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <ExternalLink className="mr-1 h-3 w-3" />
+                                    )}
+                                    {loadingFile === resource.id ? 'Opening...' : 'View'}
                                   </Button>
                                 </>
                               )}
