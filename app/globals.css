@@ -101,13 +101,13 @@
 }
 
 .hero-content h1 span:hover, .hero-content p .pickup:hover {
-  color: #ff5733;
+  color: hsl(var(--primary));
   cursor: default;
 }
 
 .btn-project {
-  background-color: #ff5733;
-  color: white;
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
   padding: 10px 20px;
   text-decoration: none;
   border-radius: 5px;
@@ -120,7 +120,7 @@
 
 @keyframes blink {
   from, to { border-color: transparent; }
-  50% { border-color: black; }
+  50% { border-color: hsl(var(--foreground)); }
 }
 
 .text-container {
@@ -136,9 +136,9 @@
   font-size: 24px;
   font-weight: bold;
   justify-content: center;
-  color: black;
+  color: hsl(var(--foreground));
   display: inline-block;
-  border-right: 2px solid;
+  border-right: 2px solid hsl(var(--foreground));
   overflow: hidden;
   white-space: normal;
 }
@@ -155,7 +155,7 @@
 }
 
 .pickup {
-  color: #ff5733;
+  color: hsl(var(--primary));
   font-size: 2rem;
 }
 
