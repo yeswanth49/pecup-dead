@@ -1,13 +1,19 @@
 import WhatsAppJoinPopup from '@/components/WhatsAppJoinPopup'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import ChatBubble from '@/components/ChatBubble'
+import { Breadcrumb } from '@/components/Breadcrumb'
 import { Mail, Phone, Sparkle, Clock, MessageCircle, IceCreamCone, SquareUserRound } from "lucide-react";
 
 export default function ContactPage() {
   return (
     <div className="container mx-auto px-4 space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-3xl pt-10 font-bold tracking-tight">Contact</h1>
+      <Breadcrumb items={[
+        { label: "Home", href: "/" },
+        { label: "Contact", isCurrentPage: true }
+      ]} />
+
+      <div className="space-y-2 pt-10">
+        <h1 className="text-3xl font-bold tracking-tight">Contact</h1>
         <p className="text-muted-foreground">Contact Section for admin details, Request Resources, starBOT</p>
       </div>
 

@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Header } from '@/components/Header'
+import { Breadcrumb } from '@/components/Breadcrumb'
 import ChatBubble from '@/components/ChatBubble'
+import Hero from '@/components/Hero'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
@@ -262,11 +264,14 @@ export default function HomePage() {
   return (
     <div className="space-y-4 p-4 md:p-6 lg:p-8">
       <Header />
+      
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-muted-foreground">Your central location for all educational resources and information</p>
+            <Breadcrumb items={[
+              { label: "♡", isCurrentPage: true }
+            ]} />
           </div>
           <div className="flex items-center gap-4">
             {profile?.role && getRoleDisplay(profile.role)}
@@ -285,6 +290,7 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+        <Hero />
 
         {(profile?.role === 'admin' || profile?.role === 'yeshh') && (
           <Card className="p-4">

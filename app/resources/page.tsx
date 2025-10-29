@@ -3,12 +3,29 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import { Header } from '@/components/Header'
+import { Breadcrumb } from '@/components/Breadcrumb'
 import ChatBubble from '@/components/ChatBubble'
 import { FileText, BookOpen, FileCheck, Database, Users, Loader2 } from "lucide-react"
+import { Badge } from '@/components/ui/badge'
 
 import { useEffect, useMemo, useState, useState as useStateClient } from 'react'
 import { useProfile } from '@/lib/enhanced-profile-context'
 import { useEffect as useEffectClient } from 'react'
+
+const getRoleDisplay = (role: string) => {
+  switch (role) {
+    case 'student':
+      return <Badge variant="secondary">Student</Badge>
+    case 'representative':
+      return <Badge variant="default">Representative</Badge>
+    case 'admin':
+      return <Badge variant="destructive">Admin</Badge>
+    case 'yeshh':
+      return <Badge variant="destructive">Yeshh</Badge>
+    default:
+      return <Badge variant="outline">{role}</Badge>
+  }
+}
 
 function LiveUsersCount() {
   const [count, setCount] = useStateClient<number | null>(null)
@@ -106,14 +123,27 @@ export default function ResourcesPage() {
   ]
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-      <Header/>
-        <div className="flex items-start justify-between pt-2">
-          <h1 className="text-3xl font-bold tracking-tight">Resources</h1>
-          <LiveUsersCount />
+    <div className="space-y-4 p-4 md:p-6 lg:p-8">
+      <Header />
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <Breadcrumb items={[
+              { label: "Home", href: "/" },
+              { label: "Resources", isCurrentPage: true }
+            ]} />
+          </div>
+          <div className="flex items-center gap-4">
+            {profile?.role && getRoleDisplay(profile.role)}
+            <LiveUsersCount />
+          </div>
         </div>
-        <p className="text-muted-foreground">Access all educational materials organized by category</p>
+
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold tracking-tight text-center">Resources</h1>
+          <p className="text-muted-foreground text-center">Access all resource materials organized by category</p>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

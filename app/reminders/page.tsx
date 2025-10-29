@@ -10,7 +10,9 @@ import {
   CardContent,
 } from '@/components/ui/card'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Header } from '@/components/Header'
+import { Breadcrumb } from '@/components/Breadcrumb'
 import ChatBubble from '@/components/ChatBubble'
 import {
   Loader2,
@@ -18,7 +20,9 @@ import {
   AlertCircle,
   Clock,
   Activity,
+  Users,
 } from 'lucide-react'
+import { useProfile } from '@/lib/enhanced-profile-context'
 
 interface Reminder {
   title: string
@@ -43,9 +47,48 @@ function getIcon(iconType?: string) {
 }
 
 export default function RemindersPage() {
+  const { profile } = useProfile()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reminders, setReminders] = useState<Reminder[]>([])
+  const [usersCount, setUsersCount] = useState<number>(0)
+  const [isLoadingUsersCount, setIsLoadingUsersCount] = useState(true)
+
+  useEffect(() => {
+    let mounted = true
+    const fetchUsersCount = async () => {
+      setIsLoadingUsersCount(true)
+      try {
+        const response = await fetch('/api/users-count')
+        if (response.ok) {
+          const data = await response.json()
+          if (mounted) setUsersCount(data.totalUsers)
+        }
+      } catch {
+        // silent
+      } finally {
+        if (mounted) setIsLoadingUsersCount(false)
+      }
+    }
+    fetchUsersCount()
+    const interval = setInterval(fetchUsersCount, 30000)
+    return () => { mounted = false; clearInterval(interval) }
+  }, [])
+
+  const getRoleDisplay = (role: string) => {
+    switch (role) {
+      case 'student':
+        return <Badge variant="secondary">Student</Badge>
+      case 'representative':
+        return <Badge variant="default">Representative</Badge>
+      case 'admin':
+        return <Badge variant="destructive">Admin</Badge>
+      case 'yeshh':
+        return <Badge variant="destructive">Yeshh</Badge>
+      default:
+        return <Badge variant="outline">{role}</Badge>
+    }
+  }
 
   useEffect(() => {
     async function fetchReminders() {
@@ -85,13 +128,41 @@ export default function RemindersPage() {
 
   // ACTUAL PAGE
   return (
-    <div className="space-y-6 p-4 md:p-6 lg:p-8">
-      <div className="space-y-2">
-        <Header/>
-        <h1 className="text-3xl pt-10 font-bold tracking-tight">Reminders</h1>
-        <p className="text-muted-foreground">
-          Important deadlines and announcements
-        </p>
+    <div className="space-y-4 p-4 md:p-6 lg:p-8">
+      <Header />
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <Breadcrumb items={[
+              { label: "Home", href: "/" },
+              { label: "Reminders", isCurrentPage: true }
+            ]} />
+          </div>
+          <div className="flex items-center gap-4">
+            {profile?.role && getRoleDisplay(profile.role)}
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-muted/50 rounded-md">
+              <Users className="h-3 w-3 text-primary" />
+              <div className="flex items-center gap-1">
+                <span className="font-medium text-sm">
+                  {isLoadingUsersCount ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    usersCount.toLocaleString()
+                  )}
+                </span>
+                <span className="text-xs text-muted-foreground">users</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold tracking-tight text-center">Reminders</h1>
+          <p className="text-muted-foreground text-center">
+            Important deadlines and announcements
+          </p>
+        </div>
       </div>
 
       {error && (
