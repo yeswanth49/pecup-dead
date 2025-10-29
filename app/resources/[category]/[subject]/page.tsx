@@ -97,10 +97,11 @@ export default function SubjectPage({
 
   useEffect(() => {
     let mounted = true
+    const abortController = new AbortController()
     const fetchUsersCount = async () => {
       setIsLoadingUsersCount(true)
       try {
-        const response = await fetch('/api/users-count')
+        const response = await fetch('/api/users-count', { signal: abortController.signal })
         if (response.ok) {
           const data = await response.json()
           if (mounted) setUsersCount(data.totalUsers)
@@ -113,7 +114,11 @@ export default function SubjectPage({
     }
     fetchUsersCount()
     const interval = setInterval(fetchUsersCount, 30000)
-    return () => { mounted = false; clearInterval(interval) }
+    return () => { 
+      mounted = false
+      clearInterval(interval)
+      abortController.abort()
+    }
   }, [])
 
   const getRoleDisplay = (role: string) => {
