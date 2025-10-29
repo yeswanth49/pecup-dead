@@ -131,15 +131,13 @@ export default function RemindersPage() {
     <div className="space-y-4 p-4 md:p-6 lg:p-8">
       <Header />
 
-      <Breadcrumb items={[
-        { label: "Home", href: "/" },
-        { label: "Reminders", isCurrentPage: true }
-      ]} />
-
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-muted-foreground">Necessary Reminders were displayed here, respective branch.</p>
+            <Breadcrumb items={[
+              { label: "Home", href: "/" },
+              { label: "Reminders", isCurrentPage: true }
+            ]} />
           </div>
           <div className="flex items-center gap-4">
             {profile?.role && getRoleDisplay(profile.role)}
@@ -160,8 +158,8 @@ export default function RemindersPage() {
         </div>
 
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">Reminders</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-3xl font-bold tracking-tight text-center">Reminders</h1>
+          <p className="text-muted-foreground text-center">
             Important deadlines and announcements
           </p>
         </div>

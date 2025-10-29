@@ -141,8 +141,8 @@ export default function ResourcesPage() {
         </div>
 
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">Resources</h1>
-          <p className="text-muted-foreground">Access all resource materials organized by category</p>
+          <h1 className="text-3xl font-bold tracking-tight text-center">Resources</h1>
+          <p className="text-muted-foreground text-center">Access all resource materials organized by category</p>
         </div>
       </div>
 

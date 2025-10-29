@@ -70,12 +70,14 @@ export default function ArchivePage() {
         { label: "Archive", isCurrentPage: true }
       ]} />
 
-      <div className="space-y-2 pt-10">
+      <div className="space-y-2">
         <div className="flex items-start justify-between">
-          <h1 className="text-3xl font-bold tracking-tight">Archive</h1>
+          <div className="flex flex-col items-center flex-1">
+            <h1 className="text-3xl font-bold tracking-tight text-center">Archive</h1>
+            <p className="text-muted-foreground text-center">Access previous semester materials and resources</p>
+          </div>
           <span className="text-sm text-muted-foreground">{year !== 'all' ? `${year} Year` : 'All Years'}{semester !== 'all' ? `, ${semester} Sem` : ''}</span>
         </div>
-        <p className="text-muted-foreground">Access previous semester materials and resources</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -433,10 +433,10 @@ export default function SubjectPage({
 
       <div className="space-y-6">
         <div className="space-y-2">
-          <div className="flex items-start">
-            <h1 className="text-3xl font-bold tracking-tight">{subjectName} {categoryTitle}</h1>
+          <div className="flex items-start justify-center">
+            <h1 className="text-3xl font-bold tracking-tight text-center">{subjectName} {categoryTitle}</h1>
           </div>
-          <p className="text-muted-foreground">Access all {subjectName} {categoryTitle} with quick filters and smart dropdowns</p>
+          <p className="text-muted-foreground text-center">Access all {subjectName} {categoryTitle} with quick filters and smart dropdowns</p>
         </div>
       </div>
 

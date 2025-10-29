@@ -118,10 +118,10 @@ export default function CategoryPage({ params, searchParams }: {
 
       <div className="space-y-6">
         <div className="space-y-2">
-          <div className="flex items-start">
-            <h1 className="text-3xl font-bold tracking-tight">{categoryData.title}</h1>
+          <div className="flex items-start justify-center">
+            <h1 className="text-3xl font-bold tracking-tight text-center">{categoryData.title}</h1>
           </div>
-          <p className="text-muted-foreground">{categoryData.description}</p>
+          <p className="text-muted-foreground text-center">{categoryData.description}</p>
         </div>
 
         <ResourcesFiltersClient category={category} categoryData={categoryData} />
