@@ -7,6 +7,7 @@ import { Breadcrumb } from '@/components/Breadcrumb'
 import ChatBubble from '@/components/ChatBubble'
 import { FileText, BookOpen, FileCheck, Database, Users, Loader2 } from "lucide-react"
 import { Badge } from '@/components/ui/badge'
+import Loader from '@/components/Loader'
 
 import { useEffect, useMemo, useState, useState as useStateClient } from 'react'
 import { useProfile } from '@/lib/enhanced-profile-context'
@@ -55,7 +56,7 @@ function LiveUsersCount() {
       <Users className="h-3 w-3 text-primary" />
       <div className="flex items-center gap-1">
         <span className="font-medium text-sm">
-          {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : (count ?? 0).toLocaleString()}
+          {isLoading ? <Loader /> : (count ?? 0).toLocaleString()}
         </span>
         <span className="text-xs text-muted-foreground">users</span>
       </div>

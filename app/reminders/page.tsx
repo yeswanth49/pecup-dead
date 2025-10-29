@@ -23,6 +23,7 @@ import {
   Users,
 } from 'lucide-react'
 import { useProfile } from '@/lib/enhanced-profile-context'
+import Loader from '@/components/Loader'
 
 interface Reminder {
   title: string
@@ -121,7 +122,7 @@ export default function RemindersPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader />
       </div>
     )
   }

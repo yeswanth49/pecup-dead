@@ -12,6 +12,7 @@ import Link from 'next/link'
 import { BookOpen, Bell, Archive, Phone, AlertCircle, Loader2, Settings, Users, CalendarDays, Clock, Star, ExternalLink, FileText, Edit, FileQuestion } from 'lucide-react'
 import { useProfile, ProfileContextType, EnhancedProfileDynamicData } from '@/lib/enhanced-profile-context'
 import { useSession } from 'next-auth/react'
+import Loader from '@/components/Loader'
 
 type Exam = {
   subject: string
@@ -148,10 +149,10 @@ export default function HomePage() {
     }
   }, [sessionStatus])
 
-  if (sessionStatus === 'loading') {
+  if (sessionStatus === 'loading' || loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <Loader />
       </div>
     )
   }
