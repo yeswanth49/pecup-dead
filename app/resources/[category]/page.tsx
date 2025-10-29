@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { useProfile } from '@/lib/enhanced-profile-context'
 import { notFound } from 'next/navigation'
 import ResourcesFiltersClient from './ResourcesFiltersClient'
+import { getRoleDisplay } from '@/lib/role-utils'
 
 const resourceData = {
   notes: {
@@ -59,20 +60,6 @@ export default function CategoryPage({ params, searchParams }: {
     return () => { mounted = false; clearInterval(interval) }
   }, [])
 
-  const getRoleDisplay = (role: string) => {
-    switch (role) {
-      case 'student':
-        return <Badge variant="secondary">Student</Badge>
-      case 'representative':
-        return <Badge variant="default">Representative</Badge>
-      case 'admin':
-        return <Badge variant="destructive">Admin</Badge>
-      case 'yeshh':
-        return <Badge variant="destructive">Yeshh</Badge>
-      default:
-        return <Badge variant="outline">{role}</Badge>
-    }
-  }
 
   const { category } = params
   const resolvedSearchParams = searchParams

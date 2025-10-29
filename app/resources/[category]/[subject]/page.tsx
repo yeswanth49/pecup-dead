@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { getResourceTypeForCategory } from '@/lib/resource-utils'
 import { useProfile, type Subject } from '@/lib/enhanced-profile-context'
 import { getSubjectDisplayByCode } from '@/lib/subject-display'
+import { getRoleDisplay } from '@/lib/role-utils'
 import { ResourcesCache } from '@/lib/simple-cache'
 import { Resource } from '@/lib/types'
 
@@ -121,20 +122,6 @@ export default function SubjectPage({
     }
   }, [])
 
-  const getRoleDisplay = (role: string) => {
-    switch (role) {
-      case 'student':
-        return <Badge variant="secondary">Student</Badge>
-      case 'representative':
-        return <Badge variant="default">Representative</Badge>
-      case 'admin':
-        return <Badge variant="destructive">Admin</Badge>
-      case 'yeshh':
-        return <Badge variant="destructive">Yeshh</Badge>
-      default:
-        return <Badge variant="outline">{role}</Badge>
-    }
-  }
 
   // Local state for resources and UI
   const [resources, setResources] = useState<Resource[]>([])

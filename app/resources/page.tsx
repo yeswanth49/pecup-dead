@@ -11,21 +11,8 @@ import { Badge } from '@/components/ui/badge'
 import { useEffect, useMemo, useState, useState as useStateClient } from 'react'
 import { useProfile } from '@/lib/enhanced-profile-context'
 import { useEffect as useEffectClient } from 'react'
+import { getRoleDisplay } from '@/lib/role-utils'
 
-const getRoleDisplay = (role: string) => {
-  switch (role) {
-    case 'student':
-      return <Badge variant="secondary">Student</Badge>
-    case 'representative':
-      return <Badge variant="default">Representative</Badge>
-    case 'admin':
-      return <Badge variant="destructive">Admin</Badge>
-    case 'yeshh':
-      return <Badge variant="destructive">Yeshh</Badge>
-    default:
-      return <Badge variant="outline">{role}</Badge>
-  }
-}
 
 function LiveUsersCount() {
   const [count, setCount] = useStateClient<number | null>(null)
