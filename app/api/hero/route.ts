@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function GET(request: NextRequest) {
+  const fallbackTexts = [
+    "New, way to access PEC.UP : starBOT",
+    "Ready for Mid-2?",
+    "Bored with studies? Not anymore!",
+    "resources that are actually useful",
+    "Made for students, by students!"
+  ]
+
   try {
     const supabase = getSupabaseAdmin()
 
@@ -15,31 +23,17 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Error fetching hero texts:', error)
-      // Return fallback texts for now since table might not exist yet
-      const fallbackTexts = [
-        "New, way to access PEC.UP : starBOT",
-        "Ready for Mid-2?",
-        "Bored with studies? Not anymore!",
-        "resources that are actually useful",
-        "Made for students, by students!"
-      ]
+      // Return fallback texts (table might not exist yet)
       return NextResponse.json(fallbackTexts)
     }
 
-    // Extract just the text values for the component
-    const heroTexts = texts?.map(item => item.text) || []
+    // Extract just the text values for the component, or fallback if empty
+    const heroTexts = texts?.map(item => item.text) || fallbackTexts
 
     return NextResponse.json(heroTexts)
   } catch (error) {
     console.error('Unexpected error:', error)
     // Return fallback texts on any error
-    const fallbackTexts = [
-      "New, way to access PEC.UP : starBOT",
-      "Ready for Mid-2?",
-      "Bored with studies? Not anymore!",
-      "resources that are actually useful",
-      "Made for students, by students!"
-    ]
     return NextResponse.json(fallbackTexts)
   }
 }
