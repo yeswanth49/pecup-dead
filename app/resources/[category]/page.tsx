@@ -86,6 +86,14 @@ export default function CategoryPage({ params, searchParams }: {
     <div className="space-y-4 p-4 md:p-6 lg:p-8">
       <Header />
 
+      <nav className="flex items-center pt-2 gap-2 text-sm text-muted-foreground" aria-label="Breadcrumb">
+        <Link href="/" className="hover:text-foreground">Home</Link>
+        <ChevronRight className="h-4 w-4" />
+        <Link href="/resources" className="hover:text-foreground">Resources</Link>
+        <ChevronRight className="h-4 w-4" />
+        <span aria-current="page">{categoryData.title}</span>
+      </nav>
+
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -112,13 +120,6 @@ export default function CategoryPage({ params, searchParams }: {
 
       <div className="space-y-6">
         <div className="space-y-2">
-          <nav className="flex items-center pt-2 gap-2 text-sm text-muted-foreground" aria-label="Breadcrumb">
-            <Link href="/" className="hover:text-foreground">Home</Link>
-            <ChevronRight className="h-4 w-4" />
-            <Link href="/resources" className="hover:text-foreground">Resources</Link>
-            <ChevronRight className="h-4 w-4" />
-            <span aria-current="page">{categoryData.title}</span>
-          </nav>
           <div className="flex items-start">
             <h1 className="text-3xl font-bold tracking-tight">{categoryData.title}</h1>
           </div>

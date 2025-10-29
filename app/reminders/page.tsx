@@ -12,6 +12,7 @@ import {
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Header } from '@/components/Header'
+import { Breadcrumb } from '@/components/Breadcrumb'
 import ChatBubble from '@/components/ChatBubble'
 import {
   Loader2,
@@ -129,6 +130,11 @@ export default function RemindersPage() {
   return (
     <div className="space-y-4 p-4 md:p-6 lg:p-8">
       <Header />
+
+      <Breadcrumb items={[
+        { label: "Home", href: "/" },
+        { label: "Reminders", isCurrentPage: true }
+      ]} />
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">

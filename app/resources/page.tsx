@@ -3,6 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import { Header } from '@/components/Header'
+import { Breadcrumb } from '@/components/Breadcrumb'
 import ChatBubble from '@/components/ChatBubble'
 import { FileText, BookOpen, FileCheck, Database, Users, Loader2 } from "lucide-react"
 import { Badge } from '@/components/ui/badge'
@@ -124,6 +125,11 @@ export default function ResourcesPage() {
   return (
     <div className="space-y-4 p-4 md:p-6 lg:p-8">
       <Header />
+
+      <Breadcrumb items={[
+        { label: "Home", href: "/" },
+        { label: "Resources", isCurrentPage: true }
+      ]} />
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">

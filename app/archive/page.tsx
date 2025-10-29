@@ -3,6 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import { Header } from '@/components/Header'
+import { Breadcrumb } from '@/components/Breadcrumb'
 import ChatBubble from '@/components/ChatBubble'
 import { FileText, BookOpen, FileCheck, Database, ChevronRight } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -63,9 +64,14 @@ export default function ArchivePage() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
       <Header/>
-        <div className="flex items-start justify-between pt-10">
+      <Breadcrumb items={[
+        { label: "Home", href: "/" },
+        { label: "Archive", isCurrentPage: true }
+      ]} />
+
+      <div className="space-y-2 pt-10">
+        <div className="flex items-start justify-between">
           <h1 className="text-3xl font-bold tracking-tight">Archive</h1>
           <span className="text-sm text-muted-foreground">{year !== 'all' ? `${year} Year` : 'All Years'}{semester !== 'all' ? `, ${semester} Sem` : ''}</span>
         </div>

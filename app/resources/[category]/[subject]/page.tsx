@@ -11,6 +11,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Header } from '@/components/Header'
 import ChatBubble from '@/components/ChatBubble'
+import { Breadcrumb } from '@/components/Breadcrumb'
 import { ChevronRight, FileText, ChevronDown, Download, ExternalLink, Loader2, AlertCircle, Search, ArrowUpDown, Filter, RefreshCw, Users } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -401,6 +402,13 @@ export default function SubjectPage({
     <div className="space-y-4 p-4 md:p-6 lg:p-8">
       <Header />
 
+      <Breadcrumb items={[
+        { label: "Home", href: "/" },
+        { label: "Resources", href: "/resources" },
+        { label: categoryTitle, href: `/resources/${category}` },
+        { label: subjectName, isCurrentPage: true }
+      ]} />
+
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -427,16 +435,6 @@ export default function SubjectPage({
 
       <div className="space-y-6">
         <div className="space-y-2">
-          <nav className="flex items-center pt-2 gap-2 text-sm text-muted-foreground" aria-label="Breadcrumb">
-            <Link href="/" className="hover:text-foreground">Home</Link>
-            <ChevronRight className="h-4 w-4" />
-            <Link href="/resources" className="hover:text-foreground">Resources</Link>
-            <ChevronRight className="h-4 w-4" />
-            <Link href={`/resources/${category}`} className="hover:text-foreground">{categoryTitle}</Link>
-            <ChevronRight className="h-4 w-4" />
-            <span aria-current="page">{subjectName}</span>
-          </nav>
-
           <div className="flex items-start">
             <h1 className="text-3xl font-bold tracking-tight">{subjectName} {categoryTitle}</h1>
           </div>

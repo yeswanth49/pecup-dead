@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Header } from '@/components/Header'
+import { Breadcrumb } from '@/components/Breadcrumb'
 import ChatBubble from '@/components/ChatBubble'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -266,6 +267,9 @@ export default function HomePage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
+            <Breadcrumb items={[
+              { label: "Home", isCurrentPage: true }
+            ]} />
             <p className="text-muted-foreground">Resources and Information managed by students, for students.</p>
           </div>
           <div className="flex items-center gap-4">
