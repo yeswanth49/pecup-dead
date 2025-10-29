@@ -17,7 +17,7 @@ export default function ArchivePage() {
       name: "Notes",
       description: "Archived lecture notes and study materials",
       icon: FileText,
-      path: "/archive/coming-soon", 
+      path: "/archive/coming-soon",
       color: "bg-primary/10",
       iconColor: "text-primary",
     },
@@ -25,7 +25,7 @@ export default function ArchivePage() {
       name: "Assignments",
       description: "Archived homework and practice problems",
       icon: BookOpen,
-      path: "/archive/coming-soon", 
+      path: "/archive/coming-soon",
       color: "bg-primary/10",
       iconColor: "text-primary",
     },
@@ -33,7 +33,7 @@ export default function ArchivePage() {
       name: "Papers",
       description: "Archived research papers and publications",
       icon: FileCheck,
-      path: "/archive/coming-soon", 
+      path: "/archive/coming-soon",
       color: "bg-primary/10",
       iconColor: "text-primary",
     },
@@ -41,7 +41,7 @@ export default function ArchivePage() {
       name: "Records",
       description: "Archived academic records and transcripts",
       icon: Database,
-      path: "/archive/coming-soon", 
+      path: "/archive/coming-soon",
       color: "bg-primary/10",
       iconColor: "text-primary",
     },
@@ -50,27 +50,29 @@ export default function ArchivePage() {
   const semesters = [
     {
       name: "Year 1 Sem 1 R23",
-      path: "/archive/coming-soon", 
+      path: "/archive/coming-soon",
     },
     {
       name: "Year 1 Sem 2 R23",
-      path: "/archive/coming-soon", 
+      path: "/archive/coming-soon",
     },
     {
       name: "Year 2 Sem 1 R23",
-      path: "/archive/coming-soon", 
+      path: "/archive/coming-soon",
     },
   ];
 
   return (
-    <div className="space-y-6">
-      <Header/>
-      <Breadcrumb items={[
-        { label: "Home", href: "/" },
-        { label: "Archive", isCurrentPage: true }
-      ]} />
+    <div className="space-y-4 p-4 md:p-6 lg:p-8">
+      <Header />
 
-      <div className="space-y-2">
+      <div className="space-y-4">
+        <Breadcrumb items={[
+          { label: "Home", href: "/" },
+          { label: "Archive", isCurrentPage: true }
+        ]} />
+
+        <div className="space-y-2">
         <div className="flex items-start justify-between">
           <div className="flex flex-col items-center flex-1">
             <h1 className="text-3xl font-bold tracking-tight text-center">Archive</h1>
