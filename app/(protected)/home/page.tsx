@@ -266,7 +266,7 @@ export default function HomePage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-muted-foreground">Your central location for all educational resources and information</p>
+            <p className="text-muted-foreground">Resources and Information managed by students, for students.</p>
           </div>
           <div className="flex items-center gap-4">
             {profile?.role && getRoleDisplay(profile.role)}

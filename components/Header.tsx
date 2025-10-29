@@ -6,6 +6,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ProfileCache, ProfileDisplayCache } from '@/lib/simple-cache'
 
 export function Header() {
+  // Debug logging
+  console.log('[DEBUG] Header component rendering on page:', typeof window !== 'undefined' ? window.location.pathname : 'SSR')
+
   const { data: session, status } = useSession()
   const { profile, loading: profileLoading } = useProfile()
 

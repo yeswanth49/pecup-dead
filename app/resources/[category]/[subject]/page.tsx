@@ -11,7 +11,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Header } from '@/components/Header'
 import ChatBubble from '@/components/ChatBubble'
-import { ChevronRight, FileText, ChevronDown, Download, ExternalLink, Loader2, AlertCircle, Search, ArrowUpDown, Filter, RefreshCw } from "lucide-react"
+import { ChevronRight, FileText, ChevronDown, Download, ExternalLink, Loader2, AlertCircle, Search, ArrowUpDown, Filter, RefreshCw, Users } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getResourceTypeForCategory } from '@/lib/resource-utils'
@@ -89,7 +89,46 @@ export default function SubjectPage({
   searchParams: { [key: string]: string | string[] | undefined }
 }) {
   const { category } = params
-  const { subjects } = useProfile()
+  const { subjects, profile } = useProfile()
+
+  const [usersCount, setUsersCount] = useState<number>(0)
+  const [isLoadingUsersCount, setIsLoadingUsersCount] = useState(true)
+
+  useEffect(() => {
+    let mounted = true
+    const fetchUsersCount = async () => {
+      setIsLoadingUsersCount(true)
+      try {
+        const response = await fetch('/api/users-count')
+        if (response.ok) {
+          const data = await response.json()
+          if (mounted) setUsersCount(data.totalUsers)
+        }
+      } catch {
+        // silent
+      } finally {
+        if (mounted) setIsLoadingUsersCount(false)
+      }
+    }
+    fetchUsersCount()
+    const interval = setInterval(fetchUsersCount, 30000)
+    return () => { mounted = false; clearInterval(interval) }
+  }, [])
+
+  const getRoleDisplay = (role: string) => {
+    switch (role) {
+      case 'student':
+        return <Badge variant="secondary">Student</Badge>
+      case 'representative':
+        return <Badge variant="default">Representative</Badge>
+      case 'admin':
+        return <Badge variant="destructive">Admin</Badge>
+      case 'yeshh':
+        return <Badge variant="destructive">Yeshh</Badge>
+      default:
+        return <Badge variant="outline">{role}</Badge>
+    }
+  }
 
   // Local state for resources and UI
   const [resources, setResources] = useState<Resource[]>([])
@@ -359,23 +398,50 @@ export default function SubjectPage({
   const resultCount = visibleResources.length
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <Header/>
-        <nav className="flex items-center pt-2 gap-2 text-sm text-muted-foreground" aria-label="Breadcrumb">
-          <Link href="/" className="hover:text-foreground">Home</Link>
-          <ChevronRight className="h-4 w-4" />
-          <Link href="/resources" className="hover:text-foreground">Resources</Link>
-          <ChevronRight className="h-4 w-4" />
-          <Link href={`/resources/${category}`} className="hover:text-foreground">{categoryTitle}</Link>
-          <ChevronRight className="h-4 w-4" />
-          <span aria-current="page">{subjectName}</span>
-        </nav>
+    <div className="space-y-4 p-4 md:p-6 lg:p-8">
+      <Header />
 
-        <div className="flex items-start">
-          <h1 className="text-3xl font-bold tracking-tight">{subjectName} {categoryTitle}</h1>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-muted-foreground">Resources and Information managed by students, for students.</p>
+          </div>
+          <div className="flex items-center gap-4">
+            {profile?.role && getRoleDisplay(profile.role)}
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-muted/50 rounded-md">
+              <Users className="h-3 w-3 text-primary" />
+              <div className="flex items-center gap-1">
+                <span className="font-medium text-sm">
+                  {isLoadingUsersCount ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    usersCount.toLocaleString()
+                  )}
+                </span>
+                <span className="text-xs text-muted-foreground">users</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <p className="text-muted-foreground">Access all {subjectName} {categoryTitle} with quick filters and smart dropdowns</p>
+      </div>
+
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <nav className="flex items-center pt-2 gap-2 text-sm text-muted-foreground" aria-label="Breadcrumb">
+            <Link href="/" className="hover:text-foreground">Home</Link>
+            <ChevronRight className="h-4 w-4" />
+            <Link href="/resources" className="hover:text-foreground">Resources</Link>
+            <ChevronRight className="h-4 w-4" />
+            <Link href={`/resources/${category}`} className="hover:text-foreground">{categoryTitle}</Link>
+            <ChevronRight className="h-4 w-4" />
+            <span aria-current="page">{subjectName}</span>
+          </nav>
+
+          <div className="flex items-start">
+            <h1 className="text-3xl font-bold tracking-tight">{subjectName} {categoryTitle}</h1>
+          </div>
+          <p className="text-muted-foreground">Access all {subjectName} {categoryTitle} with quick filters and smart dropdowns</p>
+        </div>
       </div>
 
       <Card>
