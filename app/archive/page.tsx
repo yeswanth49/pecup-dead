@@ -73,7 +73,7 @@ export default function ArchivePage() {
         ]} />
 
         <div className="space-y-2">
-        <div className="flex items-start justify-between">
+          <div className="flex items-start justify-between">
           <div className="flex flex-col items-center flex-1">
             <h1 className="text-3xl font-bold tracking-tight text-center">Archive</h1>
             <p className="text-muted-foreground text-center">Access previous semester materials and resources</p>
