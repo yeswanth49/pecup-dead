@@ -64,7 +64,7 @@ export default function Hero() {
         <div className="animated-text">
           <h1 id="typing-heading"></h1>
         </div>
-        <a href="https://chat.pecup.in" className="btn-project">starBOT!</a>
+        <a href="https://chat.whatsapp.com/CRA9Iy7WWKT3yPc1homLyC" className="btn-project">Whatsapp</a>
         <p className="centered-text">
           pickup by <span className="pickup">PEC.UP</span>
         </p>

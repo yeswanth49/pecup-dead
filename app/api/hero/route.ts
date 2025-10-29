@@ -3,11 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function GET(request: NextRequest) {
   const fallbackTexts = [
-    "New, way to access PEC.UP : starBOT",
-    "Ready for Mid-2?",
-    "Bored with studies? Not anymore!",
-    "resources that are actually useful",
-    "Made for students, by students!"
+    "for any errors, report them in Whatsapp Group"
   ]
 
   try {

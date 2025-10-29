@@ -41,11 +41,17 @@ INSERT INTO public.hero_texts (text, priority, time_limit) VALUES
   ('Bored with studies? Not anymore!', 3, NULL),
   ('resources that are actually useful', 4, NULL),
   ('Made for students, by students!', 5, NULL);
+  -- Example time-limited texts (commented out - uncomment to test)
+  -- ('2-hour special message!', 0, now() + interval '2 hours'),
+  -- ('Daily reminder', 0, now() + interval '1 day'),
+  -- ('Weekly announcement', 0, now() + interval '1 week'),
+  -- ('Until December 15th 2025', 0, '2025-12-15 00:00:00+05:30');
 
 -- 5) RLS configuration
 ALTER TABLE public.hero_texts ENABLE ROW LEVEL SECURITY;
 
 -- Allow authenticated users to read (for client-side fetching)
+DROP POLICY IF EXISTS read_hero_texts ON public.hero_texts;
 CREATE POLICY read_hero_texts
   ON public.hero_texts
   FOR SELECT
