@@ -270,7 +270,6 @@ export default function HomePage() {
             <Breadcrumb items={[
               { label: "Home", isCurrentPage: true }
             ]} />
-            <p className="text-muted-foreground">Resources and Information managed by students, for students.</p>
           </div>
           <div className="flex items-center gap-4">
             {profile?.role && getRoleDisplay(profile.role)}

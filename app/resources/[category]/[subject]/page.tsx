@@ -402,17 +402,15 @@ export default function SubjectPage({
     <div className="space-y-4 p-4 md:p-6 lg:p-8">
       <Header />
 
-      <Breadcrumb items={[
-        { label: "Home", href: "/" },
-        { label: "Resources", href: "/resources" },
-        { label: categoryTitle, href: `/resources/${category}` },
-        { label: subjectName, isCurrentPage: true }
-      ]} />
-
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-muted-foreground">Resources and Information managed by students, for students.</p>
+            <Breadcrumb items={[
+              { label: "Home", href: "/" },
+              { label: "Resources", href: "/resources" },
+              { label: categoryTitle, href: `/resources/${category}` },
+              { label: subjectName, isCurrentPage: true }
+            ]} />
           </div>
           <div className="flex items-center gap-4">
             {profile?.role && getRoleDisplay(profile.role)}
