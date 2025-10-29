@@ -133,7 +133,7 @@ export default function HomePage() {
     }
   }, [sessionStatus])
 
-  if (sessionStatus === 'loading' || loading) {
+  if (sessionStatus === 'loading' || loading || isLoadingPrime) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <Loader />

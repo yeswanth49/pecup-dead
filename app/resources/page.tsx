@@ -45,7 +45,7 @@ function LiveUsersCount() {
 }
 
 export default function ResourcesPage() {
-  const { profile } = useProfile()
+  const { profile, loading } = useProfile()
   const [year, setYear] = useState<number | 'all'>('all')
   const [semester, setSemester] = useState<number | 'all'>('all')
   const [branch, setBranch] = useState<string | ''>('')
@@ -58,6 +58,14 @@ export default function ResourcesPage() {
       if (!branch && profile.branch) setBranch(profile.branch)
     }
   }, [profile, year, semester, branch])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader />
+      </div>
+    )
+  }
 
   const query = useMemo(() => {
     const p = new URLSearchParams()
