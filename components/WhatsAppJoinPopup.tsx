@@ -24,8 +24,9 @@ export default function WhatsAppJoinPopup() {
     if (hasInitialized.current) return
     hasInitialized.current = true
 
-    // Check if user has permanently dismissed the popup
-    if (skipPopup) {
+    // Check if user has permanently dismissed the popup - check localStorage directly
+    const storedSkipValue = localStorage.getItem('whatsapp_skip_popup');
+    if (storedSkipValue !== null && JSON.parse(storedSkipValue) === true) {
       return;
     }
 
@@ -38,7 +39,8 @@ export default function WhatsAppJoinPopup() {
 
       setVisitCount(prev => {
         const newCount = prev + 1;
-        if (newCount <= 10 && !skipPopup) setShowPopup(true);
+        const shouldSkip = localStorage.getItem('whatsapp_skip_popup') === JSON.stringify(true);
+        if (newCount <= 10 && !shouldSkip) setShowPopup(true);
         return newCount;
       });
     }
@@ -54,7 +56,10 @@ export default function WhatsAppJoinPopup() {
   }
 
   const handleDontShowAgain = () => {
+    // Ensure the value is set to true in localStorage
     setSkipPopup(true);
+    // Also directly set it to ensure it persists
+    localStorage.setItem('whatsapp_skip_popup', JSON.stringify(true));
     setShowPopup(false);
   }
 

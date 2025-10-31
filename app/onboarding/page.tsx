@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import Loader from '@/components/Loader'
 
 type BranchType = 'CSE' | 'AIML' | 'DS' | 'AI' | 'ECE' | 'EEE' | 'MEC' | 'CE'
 const BRANCHES: BranchType[] = ['CSE', 'AIML', 'DS', 'AI', 'ECE', 'EEE', 'MEC', 'CE']
@@ -83,7 +84,13 @@ export default function OnboardingPage() {
     }
   }
 
-  if (status === 'loading') return null
+  if (status === 'loading' || isSubmitting) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader />
+      </div>
+    )
+  }
 
   return (
     <div className="mx-auto max-w-xl">

@@ -1,14 +1,16 @@
 'use client'
 import { signIn, useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { LogIn, Shield } from "lucide-react"
+import { LogIn, Shield, Loader2 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import Loader from '@/components/Loader'
 
 export default function LoginPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const [isSigningIn, setIsSigningIn] = useState(false)
 
   // If already signed in, send them to the home (or dashboard)
   useEffect(() => {
@@ -16,6 +18,19 @@ export default function LoginPage() {
       router.push('/')
     }
   }, [status, router])
+
+  const handleSignIn = () => {
+    setIsSigningIn(true)
+    signIn("google")
+  }
+
+  if (status === 'loading' || isSigningIn) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background p-4">
+        <Loader />
+      </div>
+    )
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4">
@@ -40,10 +55,18 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent>
             <Button
-              onClick={() => signIn("google")}
+              onClick={handleSignIn}
+              disabled={isSigningIn}
               className="w-full h-10 bg-primary text-primary-foreground hover:bg-primary/90 font-medium transition-colors"
             >
-              Continue with Google
+              {isSigningIn ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                'Continue with Google'
+              )}
             </Button>
           </CardContent>
         </Card>

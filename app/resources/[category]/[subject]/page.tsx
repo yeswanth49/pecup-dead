@@ -93,28 +93,13 @@ export default function SubjectPage({
   const { subjects, profile } = useProfile()
 
   const [usersCount, setUsersCount] = useState<number>(0)
-  const [isLoadingUsersCount, setIsLoadingUsersCount] = useState(true)
+  const { dynamicData } = useProfile()
 
   useEffect(() => {
-    let mounted = true
-    const fetchUsersCount = async () => {
-      setIsLoadingUsersCount(true)
-      try {
-        const response = await fetch('/api/users-count')
-        if (response.ok) {
-          const data = await response.json()
-          if (mounted) setUsersCount(data.totalUsers)
-        }
-      } catch {
-        // silent
-      } finally {
-        if (mounted) setIsLoadingUsersCount(false)
-      }
+    if (dynamicData?.usersCount) {
+      setUsersCount(dynamicData.usersCount)
     }
-    fetchUsersCount()
-    const interval = setInterval(fetchUsersCount, 30000)
-    return () => { mounted = false; clearInterval(interval) }
-  }, [])
+  }, [dynamicData?.usersCount])
 
   const getRoleDisplay = (role: string) => {
     switch (role) {
@@ -246,22 +231,28 @@ export default function SubjectPage({
   }
 
   // Handle file access directly
-  const handleFileAccess = (resource: Resource, action: 'view' | 'download') => {
+  const handleFileAccess = async (resource: Resource, action: 'view' | 'download') => {
     const url = resource.url || resource.drive_link
     if (!url) {
       console.error('Resource has no URL')
       return
     }
 
-    if (action === 'download') {
-      const link = document.createElement('a')
-      link.href = url
-      link.download = resource.name || resource.title || 'resource'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    } else {
-      window.open(url, '_blank', 'noopener,noreferrer')
+    setLoadingFile(resource.id)
+
+    try {
+      if (action === 'download') {
+        const link = document.createElement('a')
+        link.href = url
+        link.download = resource.name || resource.title || 'resource'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer')
+      }
+    } finally {
+      setLoadingFile(null)
     }
   }
 
@@ -418,11 +409,7 @@ export default function SubjectPage({
               <Users className="h-3 w-3 text-primary" />
               <div className="flex items-center gap-1">
                 <span className="font-medium text-sm">
-                  {isLoadingUsersCount ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    usersCount.toLocaleString()
-                  )}
+                  {usersCount.toLocaleString()}
                 </span>
                 <span className="text-xs text-muted-foreground">users</span>
               </div>
@@ -610,18 +597,28 @@ export default function SubjectPage({
                                     size="sm"
                                     className="text-xs"
                                     onClick={() => handleFileAccess(resource, 'download')}
+                                    disabled={loadingFile === resource.id}
                                   >
-                                    <Download className="mr-1 h-3 w-3" />
-                                    Download
+                                    {loadingFile === resource.id ? (
+                                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <Download className="mr-1 h-3 w-3" />
+                                    )}
+                                    {loadingFile === resource.id ? 'Downloading...' : 'Download'}
                                   </Button>
                                   <Button
                                     variant="outline"
                                     size="sm"
                                     className="text-xs"
                                     onClick={() => handleFileAccess(resource, 'view')}
+                                    disabled={loadingFile === resource.id}
                                   >
-                                    <ExternalLink className="mr-1 h-3 w-3" />
-                                    View
+                                    {loadingFile === resource.id ? (
+                                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <ExternalLink className="mr-1 h-3 w-3" />
+                                    )}
+                                    {loadingFile === resource.id ? 'Opening...' : 'View'}
                                   </Button>
                                 </>
                               )}

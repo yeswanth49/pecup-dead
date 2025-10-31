@@ -21,6 +21,7 @@ export interface EnhancedProfileDynamicData {
 	upcomingExams?: Array<{ subject: string; exam_date: string; branch: string; year: string }>
 	upcomingReminders?: Array<{ id: string; title?: string; due_date?: string; completed?: boolean }>
 	resourcesCount?: number
+	usersCount?: number
 	lastSyncedAt?: string
 	[key: string]: unknown
 }

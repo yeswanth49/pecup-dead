@@ -12,6 +12,7 @@ import Link from 'next/link'
 import { BookOpen, Bell, Archive, Phone, AlertCircle, Loader2, Settings, Users, CalendarDays, Clock, Star, ExternalLink, FileText, Edit, FileQuestion } from 'lucide-react'
 import { useProfile, ProfileContextType, EnhancedProfileDynamicData } from '@/lib/enhanced-profile-context'
 import { useSession } from 'next-auth/react'
+import Loader from '@/components/Loader'
 
 type Exam = {
   subject: string
@@ -61,7 +62,6 @@ export default function HomePage() {
   const { status: sessionStatus } = useSession()
 
   const [usersCount, setUsersCount] = useState<number>(0)
-  const [isLoadingUsersCount, setIsLoadingUsersCount] = useState(true)
 
   const [updates, setUpdates] = useState<RecentUpdate[]>([])
   const [isLoadingUpdates, setIsLoadingUpdates] = useState(true)
@@ -72,25 +72,10 @@ export default function HomePage() {
   const [primeError, setPrimeError] = useState<string | null>(null)
 
   useEffect(() => {
-    let mounted = true
-    const fetchUsersCount = async () => {
-      setIsLoadingUsersCount(true)
-      try {
-        const response = await fetch('/api/users-count')
-        if (response.ok) {
-          const data = await response.json()
-          if (mounted) setUsersCount(data.totalUsers)
-        }
-      } catch {
-        // silent
-      } finally {
-        if (mounted) setIsLoadingUsersCount(false)
-      }
+    if (dynamicData?.usersCount) {
+      setUsersCount(dynamicData.usersCount)
     }
-    fetchUsersCount()
-    const interval = setInterval(fetchUsersCount, 30000)
-    return () => { mounted = false; clearInterval(interval) }
-  }, [])
+  }, [dynamicData?.usersCount])
 
   useEffect(() => {
     let isMounted = true
@@ -148,10 +133,10 @@ export default function HomePage() {
     }
   }, [sessionStatus])
 
-  if (sessionStatus === 'loading') {
+  if (sessionStatus === 'loading' || loading || isLoadingPrime) {
     return (
       <div className="flex justify-center items-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <Loader />
       </div>
     )
   }
@@ -279,11 +264,7 @@ export default function HomePage() {
               <Users className="h-3 w-3 text-primary" />
               <div className="flex items-center gap-1">
                 <span className="font-medium text-sm">
-                  {isLoadingUsersCount ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    usersCount.toLocaleString()
-                  )}
+                  {usersCount.toLocaleString()}
                 </span>
                 <span className="text-xs text-muted-foreground">users</span>
               </div>

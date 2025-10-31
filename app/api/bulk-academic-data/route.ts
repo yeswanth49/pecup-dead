@@ -178,6 +178,11 @@ export async function GET() {
       const startDateStr = start.toISOString().slice(0, 10)
       const endDateStr = end.toISOString().slice(0, 10)
 
+      // Get users count
+      const { count: usersCount } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+
       // recent_updates: filter by context when available; else return latest
       let recentUpdatesQuery = supabase
         .from('recent_updates')
@@ -217,7 +222,7 @@ export async function GET() {
       ])
 
       t.dynamicMs = Date.now() - secStart
-      return { recentUpdates, upcomingExams, upcomingReminders }
+      return { recentUpdates, upcomingExams, upcomingReminders, usersCount }
     })()
 
     // Resources data
@@ -260,7 +265,7 @@ export async function GET() {
     t.subjectsMs = (subjectsResult as any)?._meta?.durationMs ?? t.subjectsMs
 
     const [branches, years, semesters] = staticResults
-    const { recentUpdates, upcomingExams, upcomingReminders } = dynamicResults
+    const { recentUpdates, upcomingExams, upcomingReminders, usersCount } = dynamicResults
 
     const responseBody = {
       profile: {
@@ -283,7 +288,8 @@ export async function GET() {
       dynamic: {
         recentUpdates: recentUpdates?.data || [],
         upcomingExams: upcomingExams?.data || [],
-        upcomingReminders: upcomingReminders?.data || []
+        upcomingReminders: upcomingReminders?.data || [],
+        usersCount: usersCount || 0
       },
       resources: resourcesResult || {},
       contextWarnings,

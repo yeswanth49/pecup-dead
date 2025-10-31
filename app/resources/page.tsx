@@ -7,6 +7,7 @@ import { Breadcrumb } from '@/components/Breadcrumb'
 import ChatBubble from '@/components/ChatBubble'
 import { FileText, BookOpen, FileCheck, Database, Users, Loader2 } from "lucide-react"
 import { Badge } from '@/components/ui/badge'
+import Loader from '@/components/Loader'
 
 import { useEffect, useMemo, useState, useState as useStateClient } from 'react'
 import { useProfile } from '@/lib/enhanced-profile-context'
@@ -28,34 +29,14 @@ const getRoleDisplay = (role: string) => {
 }
 
 function LiveUsersCount() {
-  const [count, setCount] = useStateClient<number | null>(null)
-  const [isLoading, setIsLoading] = useStateClient(true)
-
-  useEffectClient(() => {
-    let mounted = true
-    async function fetchCount() {
-      try {
-        const res = await fetch('/api/users-count')
-        if (!res.ok) return
-        const data = await res.json()
-        if (mounted) setCount(data.totalUsers)
-      } catch (e) {
-        // ignore
-      } finally {
-        if (mounted) setIsLoading(false)
-      }
-    }
-    fetchCount()
-    const i = setInterval(fetchCount, 30000)
-    return () => { mounted = false; clearInterval(i) }
-  }, [])
+  const { dynamicData } = useProfile()
 
   return (
     <div className="flex items-center gap-1.5 px-2 py-1 bg-muted/50 rounded-md">
       <Users className="h-3 w-3 text-primary" />
       <div className="flex items-center gap-1">
         <span className="font-medium text-sm">
-          {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : (count ?? 0).toLocaleString()}
+          {(dynamicData?.usersCount ?? 0).toLocaleString()}
         </span>
         <span className="text-xs text-muted-foreground">users</span>
       </div>
@@ -64,7 +45,7 @@ function LiveUsersCount() {
 }
 
 export default function ResourcesPage() {
-  const { profile } = useProfile()
+  const { profile, loading } = useProfile()
   const [year, setYear] = useState<number | 'all'>('all')
   const [semester, setSemester] = useState<number | 'all'>('all')
   const [branch, setBranch] = useState<string | ''>('')
@@ -77,6 +58,14 @@ export default function ResourcesPage() {
       if (!branch && profile.branch) setBranch(profile.branch)
     }
   }, [profile, year, semester, branch])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader />
+      </div>
+    )
+  }
 
   const query = useMemo(() => {
     const p = new URLSearchParams()
