@@ -111,26 +111,6 @@ export function Sidebar() {
             </nav>
           </ScrollArea>
 
-          {session && (
-            <div className="p-4 border-t space-y-2">
-              <Button
-                variant="ghost"
-                className="w-full flex justify-start gap-2 text-sm"
-                onClick={handleResetProfile}
-              >
-                <RotateCcw className="h-4 w-4" />
-                Reset Year & Branch
-              </Button>
-              <Button
-                variant="ghost"
-                className="w-full flex justify-start gap-2 text-sm"
-                onClick={() => signOut()}
-              >
-                <LogOut className="h-4 w-4" />
-                Logout
-              </Button>
-            </div>
-          )}
 
           <div className="p-4 text-xs text-muted-foreground">
             © 2025 Yeswanth Madasu
