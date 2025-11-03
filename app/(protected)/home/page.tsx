@@ -498,11 +498,7 @@ export default function HomePage() {
                 {updates.map((update) => (
                   <div key={update.id} className="border-l-4 border-primary pl-4 transition-colors hover:bg-muted/50 py-1">
                     <h3 className="font-medium">
-                      {update.id === 'static-0' ? (
-                        <>PEC-UP Whatsapp Group <a href="https://chat.whatsapp.com/CRA9Iy7WWKT3yPc1homLyC" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Link</a></>
-                      ) : (
-                        update.title
-                      )}
+                      {update.title}
                     </h3>
                     <p className="text-sm text-muted-foreground">{update.date}</p>
                     {update.description && <p className="text-sm text-muted-foreground mt-1">{update.description}</p>}
@@ -520,5 +516,3 @@ export default function HomePage() {
     </div>
   )
 }
-
-

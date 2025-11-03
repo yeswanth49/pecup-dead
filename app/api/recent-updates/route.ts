@@ -83,28 +83,16 @@ export async function GET(request: Request) {
         const staticUpdates: RecentUpdate[] = [
             {
                 id: 'static-0',
-                title: 'PEC-UP Whatsapp Group Link',
-                date: '28 October 2025',
-                description: 'PEC-UP Whatsapp group has been created by admins, to manage resources well and uptodate'
-            },
-            {
-                id: 'static-1',
-                title: 'Syllabus and Timetables were updated',
-                date: '01 October 2025',
-                description: 'Welcome to the new academic year with updated resources and features.'
-            },
-            {
-                id: 'static-3',
-                title: 'Performance Improvements',
-                date: '15 September 2025',
-                description: 'Enhanced loading speeds and better user experience across the platform.'
-            },
-            {
-                id: 'static-4',
-                title: 'Bug Fixes and Updates',
-                date: '01 September 2025',
-                description: 'Resolved various issues and added minor enhancements.'
+                title: 'Recent Updates Sectionsss',
+                date: '03 November 2025',
+                description: 'Recent Updates Section lists the recent updates to the resource hub, for the current year and branch'
             }
+            // {
+            //     id: 'static-1',
+            //     title: 'Syllabus and Timetables were updated',
+            //     date: '01 October 2025',
+            //     description: 'Welcome to the new academic year with updated resources and features.'
+            // },
         ];
 
         // Transform the data to match the expected format
