@@ -75,7 +75,7 @@ function makeSupabaseMock() {
             in: () => builder,
             then: (resolve: any) => {
               if (state.select && state.select.includes('regulation')) {
-                return resolve({ data: [{ regulation: 2020 }], error: null })
+                return resolve({ data: [{ regulation: '2020' }], error: null })
               }
               return resolve({ data: offerings as any, error: null })
             },
@@ -175,5 +175,3 @@ describe('bulk-academic-data GET', () => {
     expect(body.error?.code).toBe('INTERNAL_ERROR')
   })
 })
-
-

@@ -91,9 +91,9 @@ export class AcademicConfigManager {
       return mappings[batchYear];
     }
 
-    // Fallback: if batchYear is in the future, return 1 (freshman), otherwise 4 (graduated)
+    // Fallback: if batchYear is in the future or current year, return 1 (freshman), otherwise 4 (graduated)
     const currentYear = new Date().getFullYear();
-    return batchYear > currentYear ? 1 : 4;
+    return batchYear >= currentYear ? 1 : 4;
   }
 
   /**
