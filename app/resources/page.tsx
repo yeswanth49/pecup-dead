@@ -175,11 +175,11 @@ export default function ResourcesPage() {
               <span><a href="https://drive.google.com/file/d/1Noyor92EgQMpHARdUedBSy6GfOrMje24/view?usp=sharing">Mid-2 Timetable</a></span>
               <span className="ml-auto text-xs text-muted-foreground">28 October 2025</span>
             </li>
-            {/* <li className="flex items-center gap-2 rounded-md p-2 hover:bg-muted transition-all duration-200">
+            <li className="flex items-center gap-2 rounded-md p-2 hover:bg-muted transition-all duration-200">
               <FileCheck className="h-4 w-4 text-primary" />
-              <span><a href="https://drive.google.com/file/d/1X6AQVCnm3ieDnLKZ5fwrZUVk4wRo2Qn_/view">Sem Timetable</a></span>
-              <span className="ml-auto text-xs text-muted-foreground">16 April 2025</span>
-            </li> */}
+              <span><a href="https://drive.google.com/file/d/1wA2lhhJPucAxWxcRkeaj_meWTVJaHGai/view?usp=sharing">Sem Timetable</a></span>
+              <span className="ml-auto text-xs text-muted-foreground">10 November 2025</span>
+            </li>
           </ul>
         </CardContent>
       </Card>
@@ -187,4 +187,3 @@ export default function ResourcesPage() {
     </div>
   )
 }
-
