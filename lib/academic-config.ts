@@ -12,6 +12,19 @@ const DEFAULT_YEAR_MAPPINGS: Record<number, number> = {
   2021: 4,  // Graduated but still in system
 };
 
+/**
+ * Common subjects configuration: subject -> year -> allowed branches
+ * Uncomment entries as you add more resources
+ */
+const COMMON_SUBJECTS_CONFIG: Record<string, Record<number, string[]>> = {
+  'CN': {  // Computer Networks
+    3: ['CSE', 'AIML', 'AI', 'DS']  // 3rd year, these branches can access CSE/AIML files
+  },
+  'OS': {  // Operating Systems
+    3: ['AIML', 'AI']  // 3rd year, these branches can access each other's files
+  },
+};
+
 export class AcademicConfigManager {
   private static instance: AcademicConfigManager | null = null;
   private yearMappings: Record<number, number> | null = null;
@@ -250,6 +263,29 @@ export class AcademicConfigManager {
     }
 
     return Math.max(...matchingBatchYears);
+  }
+
+  /**
+   * Check if a subject is common for a specific branch and year combination
+   */
+  isCommonSubject(subjectCode: string, academicYear: number, userBranch: string): boolean {
+    const subjectConfig = COMMON_SUBJECTS_CONFIG[subjectCode.toUpperCase()];
+    if (!subjectConfig) return false;
+
+    const allowedBranches = subjectConfig[academicYear];
+    if (!allowedBranches) return false;
+
+    return allowedBranches.includes(userBranch.toUpperCase());
+  }
+
+  /**
+   * Get all branches that can access resources for a common subject
+   */
+  getCommonSubjectBranches(subjectCode: string, academicYear: number): string[] {
+    const subjectConfig = COMMON_SUBJECTS_CONFIG[subjectCode.toUpperCase()];
+    if (!subjectConfig) return [];
+
+    return subjectConfig[academicYear] || [];
   }
 
   clearCache(): void {

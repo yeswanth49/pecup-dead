@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { Resource, ResourceFilters } from '@/lib/types';
+import { academicConfig } from '@/lib/academic-config';
 
 export async function GET(request: Request) {
   console.log(`\nAPI Route: Received request at ${new Date().toISOString()}`);
@@ -159,10 +160,54 @@ export async function GET(request: Request) {
      query = query.eq('unit', unitNumber);
    }
 
-    // Apply filters based on new schema
+    // Get user's branch and year info for common subject checking
+    let userBranchCode = '';
+    let userAcademicYear = 1;
+
     if (branch_id) {
-       query = query.eq('branch_id', branch_id);
+      const { data: branchData } = await supabaseAdmin
+        .from('branches')
+        .select('code')
+        .eq('id', branch_id)
+        .maybeSingle();
+      userBranchCode = branchData?.code || '';
     }
+
+    if (year_id) {
+      const { data: yearData } = await supabaseAdmin
+        .from('years')
+        .select('batch_year')
+        .eq('id', year_id)
+        .maybeSingle();
+      if (yearData?.batch_year) {
+        userAcademicYear = await academicConfig.calculateAcademicYear(yearData.batch_year);
+      }
+    }
+
+    // Check if this is a common subject for the user's branch/year
+    const isCommonSubject = academicConfig.isCommonSubject(subject.toUpperCase(), userAcademicYear, userBranchCode);
+
+    // Apply filters based on new schema
+    if (isCommonSubject) {
+      // For common subjects, allow access to resources from all allowed branches
+      const allowedBranches = academicConfig.getCommonSubjectBranches(subject.toUpperCase(), userAcademicYear);
+      if (allowedBranches.length > 0) {
+        // Get branch IDs for allowed branches
+        const { data: allowedBranchData } = await supabaseAdmin
+          .from('branches')
+          .select('id')
+          .in('code', allowedBranches);
+
+        const allowedBranchIds = allowedBranchData?.map(b => b.id) || [];
+        if (allowedBranchIds.length > 0) {
+          query = query.in('branch_id', allowedBranchIds);
+        }
+      }
+    } else if (branch_id) {
+      // For regular subjects, only show user's branch resources
+      query = query.eq('branch_id', branch_id);
+    }
+
     if (year_id) {
        query = query.eq('year_id', year_id);
     }
