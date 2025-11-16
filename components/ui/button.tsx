@@ -1,8 +1,38 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
-
 import { cn } from "@/lib/utils"
+import confetti from "canvas-confetti"
+
+export function triggerSideCannons() {
+  const end = Date.now() + 3 * 1000 // 3 seconds
+  const colors = ["#a786ff", "#fd8bbc", "#eca184", "#f8deb1"]
+
+  const frame = () => {
+    if (Date.now() > end) return
+
+    confetti({
+      particleCount: 2,
+      angle: 60,
+      spread: 55,
+      startVelocity: 60,
+      origin: { x: 0, y: 0.5 },
+      colors: colors,
+    })
+    confetti({
+      particleCount: 2,
+      angle: 120,
+      spread: 55,
+      startVelocity: 60,
+      origin: { x: 1, y: 0.5 },
+      colors: colors,
+    })
+
+    requestAnimationFrame(frame)
+  }
+
+  frame()
+}
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
@@ -45,4 +75,3 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 Button.displayName = "Button"
 
 export { Button, buttonVariants }
-

@@ -13,6 +13,7 @@ import { BookOpen, Bell, Archive, Phone, AlertCircle, Loader2, Settings, Users, 
 import { useProfile, ProfileContextType, EnhancedProfileDynamicData } from '@/lib/enhanced-profile-context'
 import { useSession } from 'next-auth/react'
 import Loader from '@/components/Loader'
+import { triggerSideCannons } from '@/components/ui/button'
 
 type Exam = {
   subject: string
@@ -76,6 +77,16 @@ export default function HomePage() {
       setUsersCount(dynamicData.usersCount)
     }
   }, [dynamicData?.usersCount])
+
+  // Confetti effect when user count reaches 300 - triggers every page load after loading is complete
+  useEffect(() => {
+    if (sessionStatus !== 'loading' && !loading && !isLoadingPrime && usersCount >= 300) {
+      // Small delay to ensure the page is fully rendered
+      setTimeout(() => {
+        triggerSideCannons()
+      }, 500)
+    }
+  }, [sessionStatus, loading, isLoadingPrime, usersCount])
 
   useEffect(() => {
     let isMounted = true
