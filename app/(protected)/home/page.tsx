@@ -81,10 +81,15 @@ export default function HomePage() {
   // Confetti effect when user count reaches 300 - triggers every page load after loading is complete
   useEffect(() => {
     if (sessionStatus !== 'loading' && !loading && !isLoadingPrime && usersCount >= 300) {
-      // Small delay to ensure the page is fully rendered
-      setTimeout(() => {
-        triggerSideCannons()
-      }, 500)
+      const hasSeenConfetti = localStorage.getItem('confetti_seen_300')
+
+      if (!hasSeenConfetti) {
+        // Small delay to ensure the page is fully rendered
+        setTimeout(() => {
+          triggerSideCannons()
+          localStorage.setItem('confetti_seen_300', 'true')
+        }, 500)
+      }
     }
   }, [sessionStatus, loading, isLoadingPrime, usersCount])
 
@@ -226,7 +231,7 @@ export default function HomePage() {
             </CardHeader>
             <CardContent>
               <CardDescription>
-                {profile.role === 'representative' 
+                {profile.role === 'representative'
                   ? 'Manage resources and promote semesters'
                   : 'Admin dashboard for system management'
                 }
@@ -260,7 +265,7 @@ export default function HomePage() {
   return (
     <div className="space-y-4 p-4 md:p-6 lg:p-8">
       <Header />
-      
+
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
