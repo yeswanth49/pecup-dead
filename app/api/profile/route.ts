@@ -36,7 +36,7 @@ interface ProfilePayload {
 
 function validatePayload(body: any): { ok: true; data: ProfilePayload } | { ok: false; error: string } {
   const { name, branch_id, year_id, academic_year_level, semester_id, roll_number, section } = body;
-  
+
   if (!name || typeof name !== 'string') {
     return { ok: false, error: 'Name is required and must be a string' };
   }
@@ -49,12 +49,12 @@ function validatePayload(body: any): { ok: true; data: ProfilePayload } | { ok: 
   if (!roll_number || typeof roll_number !== 'string') {
     return { ok: false, error: 'Roll number is required and must be a string' };
   }
-  
+
   // Must have either year_id OR academic_year_level
   if (!year_id && !academic_year_level) {
     return { ok: false, error: 'Either year_id or academic_year_level is required' };
   }
-  
+
   return { ok: true, data: { name, branch_id, year_id, academic_year_level, semester_id, roll_number, section } };
 }
 
@@ -166,7 +166,7 @@ export async function POST(request: Request) {
   if (payload.year_id) {
     // Option 1: year_id provided directly
     yearId = payload.year_id;
-    
+
     const { data: yearData, error: yearError } = await supabase
       .from('years')
       .select('batch_year')
@@ -175,9 +175,9 @@ export async function POST(request: Request) {
 
     if (yearError) {
       console.error('Year fetch error:', yearError);
-      return NextResponse.json({ 
-        error: 'Database error during year fetch', 
-        details: yearError.message 
+      return NextResponse.json({
+        error: 'Database error during year fetch',
+        details: yearError.message
       }, { status: 500 });
     }
 
@@ -190,10 +190,10 @@ export async function POST(request: Request) {
   } else if (payload.academic_year_level) {
     // Option 2: User selected academic year level (1-4)
     const academicYearLevel = payload.academic_year_level;
-    
+
     if (academicYearLevel < 1 || academicYearLevel > 4) {
-      return NextResponse.json({ 
-        error: 'Invalid academic year level (must be 1-4)' 
+      return NextResponse.json({
+        error: 'Invalid academic year level (must be 1-4)'
       }, { status: 400 });
     }
 
@@ -224,9 +224,9 @@ export async function POST(request: Request) {
 
       if (createError || !newYear) {
         console.error('Failed to create year record:', createError);
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: 'Failed to create year record',
-          details: createError?.message 
+          details: createError?.message
         }, { status: 500 });
       }
       yearId = newYear.id;
@@ -234,8 +234,8 @@ export async function POST(request: Request) {
 
     console.log(`DEBUG: Created/found year record - batch_year: ${batchYear}, year_id: ${yearId}`);
   } else {
-    return NextResponse.json({ 
-      error: 'Either year_id or academic_year_level must be provided' 
+    return NextResponse.json({
+      error: 'Either year_id or academic_year_level must be provided'
     }, { status: 400 });
   }
 
@@ -314,12 +314,26 @@ export async function POST(request: Request) {
 
     const isUniqueViolation = 'code' in error && typeof error.code === 'string' && error.code === '23505';
     const message = isUniqueViolation ? 'Roll number or email already exists' : 'Database error';
-    
+
     return NextResponse.json({
       error: message,
       details: error.message,
       code: error.code
     }, { status: 400 });
+  }
+
+  // Trigger welcome email
+  try {
+    const { error: funcError } = await supabase.functions.invoke('send-welcome-email', {
+      body: { email, name: payload.name },
+    });
+    if (funcError) {
+      console.error('Failed to trigger welcome email:', funcError);
+    } else {
+      console.log('Welcome email triggered successfully for:', email);
+    }
+  } catch (err) {
+    console.error('Error invoking welcome email function:', err);
   }
 
   // Calculate current academic year for response
