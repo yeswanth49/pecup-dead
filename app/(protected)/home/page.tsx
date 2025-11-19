@@ -58,6 +58,8 @@ interface PrimeDataResponse {
   triggeringSubjects: string[]
 }
 
+const SHOW_ACTUAL_USER_COUNT = true;
+
 export default function HomePage() {
   const { profile, dynamicData, loading, error } = useProfile()
   const { status: sessionStatus } = useSession()
@@ -280,7 +282,7 @@ export default function HomePage() {
               <Users className="h-3 w-3 text-primary" />
               <div className="flex items-center gap-1">
                 <span className="font-medium text-sm">
-                  {usersCount.toLocaleString()}
+                  {SHOW_ACTUAL_USER_COUNT ? usersCount.toLocaleString() : "300+"}
                 </span>
                 <span className="text-xs text-muted-foreground">users</span>
               </div>
