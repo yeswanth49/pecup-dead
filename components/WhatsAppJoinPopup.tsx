@@ -30,6 +30,12 @@ export default function WhatsAppJoinPopup() {
       return;
     }
 
+    // Check if user has snoozed the popup
+    const snoozeUntil = localStorage.getItem('whatsapp_popup_snooze');
+    if (snoozeUntil && parseInt(snoozeUntil) > Date.now()) {
+      return;
+    }
+
     // Get current path for tracking page navigation
     const currentPath = window.location.pathname;
 
@@ -39,12 +45,25 @@ export default function WhatsAppJoinPopup() {
 
       setVisitCount(prev => {
         const newCount = prev + 1;
-        const shouldSkip = localStorage.getItem('whatsapp_skip_popup') === JSON.stringify(true);
-        if (newCount <= 10 && !shouldSkip) setShowPopup(true);
         return newCount;
       });
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (visitCount > 0 && visitCount <= 10) {
+      const shouldSkip = localStorage.getItem('whatsapp_skip_popup') === JSON.stringify(true);
+      const snoozeUntil = localStorage.getItem('whatsapp_popup_snooze');
+      const isSnoozed = snoozeUntil && parseInt(snoozeUntil) > Date.now();
+
+      if (!shouldSkip && !isSnoozed) {
+        const timer = setTimeout(() => {
+          setShowPopup(true);
+        }, 10000); // 10 seconds delay
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [visitCount]);
 
   const handleJoin = () => {
     window.open("https://chat.whatsapp.com/CRA9Iy7WWKT3yPc1homLyC", "_blank")
@@ -52,6 +71,9 @@ export default function WhatsAppJoinPopup() {
   }
 
   const handleClose = () => {
+    // Snooze for 24 hours
+    const snoozeDuration = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    localStorage.setItem('whatsapp_popup_snooze', (Date.now() + snoozeDuration).toString());
     setShowPopup(false)
   }
 

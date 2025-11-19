@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 export function useLocalStorage<T>(key: string, initialValue: T) {
   const [state, setState] = useState<T>(initialValue);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     try {
@@ -27,11 +28,15 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
         console.error(`[useLocalStorage] Error parsing localStorage for "${key}":`, error);
       }
       // ignore
+    } finally {
+      setLoaded(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
   useEffect(() => {
+    if (!loaded) return;
+
     try {
       if (process.env.NODE_ENV !== 'production') {
         console.log(`[useLocalStorage] Saving to localStorage key "${key}":`, state);
@@ -46,7 +51,7 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
       }
       // ignore
     }
-  }, [key, state]);
+  }, [key, state, loaded]);
 
   return [state, setState] as const;
 }
