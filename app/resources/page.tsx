@@ -50,6 +50,17 @@ export default function ResourcesPage() {
   const [semester, setSemester] = useState<number | 'all'>('all')
   const [branch, setBranch] = useState<string | ''>('')
 
+  // Move useMemo BEFORE the conditional return to maintain hook order
+  const query = useMemo(() => {
+    const p = new URLSearchParams()
+    // Ensure we pass batch_year (e.g., 2024) not an index
+    if (year !== 'all') p.set('year', String(year))
+    if (semester !== 'all') p.set('semester', String(semester))
+    if (branch) p.set('branch', branch)
+    const s = p.toString()
+    return s ? `?${s}` : ''
+  }, [year, semester, branch])
+
   useEffect(() => {
     // Use cached profile data instead of fetching
     if (profile) {
@@ -66,16 +77,6 @@ export default function ResourcesPage() {
       </div>
     )
   }
-
-  const query = useMemo(() => {
-    const p = new URLSearchParams()
-    // Ensure we pass batch_year (e.g., 2024) not an index
-    if (year !== 'all') p.set('year', String(year))
-    if (semester !== 'all') p.set('semester', String(semester))
-    if (branch) p.set('branch', branch)
-    const s = p.toString()
-    return s ? `?${s}` : ''
-  }, [year, semester, branch])
   const categories = [
     {
       name: "Notes",

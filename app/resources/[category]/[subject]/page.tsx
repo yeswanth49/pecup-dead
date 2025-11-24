@@ -1,7 +1,7 @@
 // app/resources/[category]/[subject]/page.tsx
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, use } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -86,11 +86,12 @@ export default function SubjectPage({
   params,
   searchParams,
 }: {
-  params: { category: string; subject: string }
+  params: Promise<{ category: string; subject: string }>
   searchParams: { [key: string]: string | string[] | undefined }
 }) {
-  const { category } = params
-  const { subjects, profile, resources: bulkResources, dynamicData } = useProfile()
+  const unwrappedParams = use(params)
+  const { category } = unwrappedParams
+  const { subjects, profile, resources: bulkResources, dynamicData, forceRefresh } = useProfile()
 
   const [usersCount, setUsersCount] = useState<number>(0)
 
@@ -133,7 +134,7 @@ export default function SubjectPage({
 
   let decodedSubject = ''
   try {
-    decodedSubject = decodeURIComponent(params.subject)
+    decodedSubject = decodeURIComponent(unwrappedParams.subject)
   } catch {
     decodedSubject = ''
   }
@@ -257,7 +258,7 @@ export default function SubjectPage({
 
   // Fetch resources on mount
   useEffect(() => {
-    async function fetchResources() {
+    async function fetchResources(forceRefresh = false) {
       lastFetchRef.current = Date.now()
       setLoading(true)
       setError(null)
@@ -272,8 +273,18 @@ export default function SubjectPage({
       // Compute cache key for logging
       const cacheKey = `resources_${category}_${decodedSubject}_${qpYear || 'none'}_${qpSem || 'none'}_${qpBranch || 'none'}`
 
-      // FIRST: Check bulk-fetched resources from context
-      if (bulkResources && typeof bulkResources === 'object') {
+      // If force refresh, clear all caches first
+      if (forceRefresh) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[DEBUG] Force refresh: clearing all caches for ${cacheKey}`)
+        }
+        // Clear the specific resource cache
+        ResourcesCache.clearAll()
+        // Note: We skip bulk resources check when force refreshing
+      }
+
+      // FIRST: Check bulk-fetched resources from context (skip if force refresh)
+      if (!forceRefresh && bulkResources && typeof bulkResources === 'object') {
         const subjectLower = decodedSubject.toLowerCase()
         const subjectResources = bulkResources[subjectLower]
 
@@ -290,26 +301,28 @@ export default function SubjectPage({
         }
       }
 
-      // SECOND: Check ResourcesCache (separate cache for individual pages)
-      const cached = ResourcesCache.get(category, decodedSubject, qpYear, qpSem, qpBranch)
-      if (cached) {
-        const metadata = ResourcesCache.getCacheMetadata(category, decodedSubject, qpYear, qpSem, qpBranch)
-        if (metadata) {
-          // Only use cache if not expired
-          if (!metadata.isExpired) {
-            setResources(cached)
-            setLoading(false)
-            return
-          } else {
+      // SECOND: Check ResourcesCache (separate cache for individual pages) (skip if force refresh)
+      if (!forceRefresh) {
+        const cached = ResourcesCache.get(category, decodedSubject, qpYear, qpSem, qpBranch)
+        if (cached) {
+          const metadata = ResourcesCache.getCacheMetadata(category, decodedSubject, qpYear, qpSem, qpBranch)
+          if (metadata) {
+            // Only use cache if not expired
+            if (!metadata.isExpired) {
+              setResources(cached)
+              setLoading(false)
+              return
+            } else {
+            }
+            // If expired, proceed to fetch fresh data
           }
-          // If expired, proceed to fetch fresh data
         }
       }
 
       // THIRD: Fetch from API as fallback
 
       if (process.env.NODE_ENV !== 'production') {
-        console.log(`[DEBUG] Resources not in cache, fetching from API for key: ${cacheKey}`)
+        console.log(`[DEBUG] ${forceRefresh ? 'Force refresh' : 'Resources not in cache'}, fetching from API for key: ${cacheKey}`)
       }
 
       if (process.env.NODE_ENV !== 'production') {
@@ -379,8 +392,10 @@ export default function SubjectPage({
       }
     }
 
-    fetchResources()
-  }, [category, decodedSubject, searchParams.year, searchParams.semester, searchParams.branch, refreshTrigger])
+    // Check if this is a force refresh (refreshTrigger > 0)
+    const isForceRefresh = refreshTrigger > 0
+    fetchResources(isForceRefresh)
+  }, [category, decodedSubject, searchParams.year, searchParams.semester, searchParams.branch, refreshTrigger, bulkResources])
 
   // Revalidate on window focus
   useEffect(() => {
@@ -511,7 +526,12 @@ export default function SubjectPage({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setRefreshTrigger(prev => prev + 1)}
+                  onClick={async () => {
+                    // Clear all caches including bulk resources
+                    await forceRefresh()
+                    // Trigger local refresh
+                    setRefreshTrigger(prev => prev + 1)
+                  }}
                   disabled={loading}
                   className="hidden sm:inline-flex"
                 >

@@ -5,7 +5,7 @@ import { Header } from '@/components/Header'
 import ChatBubble from '@/components/ChatBubble'
 import { ChevronRight, Users, Loader2 } from "lucide-react"
 import { Badge } from '@/components/ui/badge'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, use } from 'react'
 import { useProfile } from '@/lib/enhanced-profile-context'
 import { notFound } from 'next/navigation'
 import ResourcesFiltersClient from './ResourcesFiltersClient'
@@ -30,10 +30,11 @@ const resourceData = {
 } as const
 
 export default function CategoryPage({ params, searchParams }: {
-  params: { category: string }
+  params: Promise<{ category: string }>
   searchParams: { year?: string; semester?: string; branch?: string }
 }) {
   const { profile } = useProfile()
+  const unwrappedParams = use(params)
 
   const [usersCount, setUsersCount] = useState<number>(0)
   const { dynamicData } = useProfile()
@@ -59,7 +60,7 @@ export default function CategoryPage({ params, searchParams }: {
     }
   }
 
-  const { category } = params
+  const { category } = unwrappedParams
   const resolvedSearchParams = searchParams
 
   if (!resourceData[category as keyof typeof resourceData]) {
