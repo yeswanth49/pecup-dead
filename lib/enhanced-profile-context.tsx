@@ -49,10 +49,10 @@ interface Profile {
 }
 
 export interface Subject {
-  id: string
-  code: string
-  name: string
-  resource_type?: string
+	id: string
+	code: string
+	name: string
+	resource_type?: string
 }
 
 export interface ProfileContextType {
@@ -60,6 +60,7 @@ export interface ProfileContextType {
 	subjects: Subject[]
 	staticData: EnhancedProfileStaticData | null
 	dynamicData: EnhancedProfileDynamicData | null
+	resources: Record<string, Record<string, any[]>> | null
 	loading: boolean
 	error: string | null
 	warnings?: string[] | null
@@ -76,6 +77,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 	const [subjects, setSubjects] = useState<Subject[]>([])
 	const [staticData, setStaticData] = useState<EnhancedProfileStaticData | null>(null)
 	const [dynamicData, setDynamicData] = useState<EnhancedProfileDynamicData | null>(null)
+	const [resources, setResources] = useState<Record<string, Record<string, any[]>> | null>(null)
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
 	const [warnings, setWarnings] = useState<string[] | null>(null)
@@ -88,12 +90,13 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 			setSubjects([])
 			setStaticData(null)
 			setDynamicData(null)
+			setResources(null)
 			setError(null)
 			setWarnings(null)
 
 			// Clear all caches to ensure clean slate for next user
 			ProfileCache.clear()
-			try { ProfileDisplayCache.clear() } catch (_) {}
+			try { ProfileDisplayCache.clear() } catch (_) { }
 			StaticCache.clear()
 			DynamicCache.clear()
 			SubjectsCache.clearAll()
@@ -118,22 +121,22 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 		if (cachedProfile) {
 			setProfile(cachedProfile)
 			// Seed persistent display cache for instant header render
-			try { ProfileDisplayCache.set(email, cachedProfile) } catch (_) {}
+			try { ProfileDisplayCache.set(email, cachedProfile) } catch (_) { }
 			foundCache = true
 
 			// Try to load subjects for this profile
-				let cachedSubjects: Subject[] | null = null
-				if (cachedProfile && typeof cachedProfile.year === 'number' && cachedProfile.year > 0 && cachedProfile.branch && cachedProfile.semester) {
-					cachedSubjects = SubjectsCache.get(
-						cachedProfile.branch,
-						cachedProfile.year,
-						cachedProfile.semester
-					)
-					PerfMon.recordCacheCheck(!!cachedSubjects)
-					if (cachedSubjects) {
-						setSubjects(cachedSubjects)
-					}
+			let cachedSubjects: Subject[] | null = null
+			if (cachedProfile && typeof cachedProfile.year === 'number' && cachedProfile.year > 0 && cachedProfile.branch && cachedProfile.semester) {
+				cachedSubjects = SubjectsCache.get(
+					cachedProfile.branch,
+					cachedProfile.year,
+					cachedProfile.semester
+				)
+				PerfMon.recordCacheCheck(!!cachedSubjects)
+				if (cachedSubjects) {
+					setSubjects(cachedSubjects)
 				}
+			}
 		}
 
 		if (cachedStatic) {
@@ -182,7 +185,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 				subjectsCount
 			})
 		}
-	// eslint-disable-next-line react-hooks/exhaustive-deps
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [session?.user?.email, status])
 
 	// Simple fetch with optional retry/backoff for transient failures
@@ -195,7 +198,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 				try {
 					const body = await res.json()
 					if (body?.error?.message) message = body.error.message
-				} catch (_) {}
+				} catch (_) { }
 				throw new Error(message)
 			}
 			return res
@@ -217,8 +220,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 		setError(null)
 
 		try {
-				const stopTimer = PerfMon.startOperation('api:bulk-fetch')
-				const response = await fetchWithRetry(
+			const stopTimer = PerfMon.startOperation('api:bulk-fetch')
+			const response = await fetchWithRetry(
 				'/api/bulk-academic-data',
 				{ cache: 'no-store' },
 				// Retry only when user is waiting (showLoading)
@@ -229,19 +232,20 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 			if (!response.ok) throw new Error('Failed to fetch data')
 
 			const data = await response.json()
-				try {
-					const durationMs = stopTimer()
-					if (process.env.NODE_ENV !== 'production') {
-						// eslint-disable-next-line no-console
-						console.log('[PerfMon] bulk-fetch', Math.round(durationMs), 'ms', PerfMon.getSnapshot())
-					}
-				} catch (_) {}
+			try {
+				const durationMs = stopTimer()
+				if (process.env.NODE_ENV !== 'production') {
+					// eslint-disable-next-line no-console
+					console.log('[PerfMon] bulk-fetch', Math.round(durationMs), 'ms', PerfMon.getSnapshot())
+				}
+			} catch (_) { }
 
 			// Update state
 			setProfile(data.profile)
 			setSubjects(Array.isArray(data.subjects) ? data.subjects : [])
 			setStaticData((data.static as EnhancedProfileStaticData) ?? null)
 			setDynamicData((data.dynamic as EnhancedProfileDynamicData) ?? null)
+			setResources(data.resources || null)
 			setWarnings(Array.isArray(data.contextWarnings) ? data.contextWarnings : null)
 
 			// Update caches
@@ -290,7 +294,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 						? { branch: data.profile.branch, year: data.profile.year, semester: data.profile.semester }
 						: undefined
 				})
-			} catch (_) {}
+			} catch (_) { }
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : String(err)
 			setError(message || 'Failed to load data')
@@ -307,7 +311,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 	const refreshProfile = async () => {
 		if (!session?.user?.email) return
 		ProfileCache.clear()
-		try { ProfileDisplayCache.clear() } catch (_) {}
+		try { ProfileDisplayCache.clear() } catch (_) { }
 		await fetchBulkData(true)
 	}
 
@@ -324,7 +328,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 		ProfileCache.clear()
 		StaticCache.clear()
 		DynamicCache.clear()
-		try { ProfileDisplayCache.clear() } catch (_) {}
+		try { ProfileDisplayCache.clear() } catch (_) { }
 		ResourcesCache.clearAll()
 		if (profile && profile.branch && profile.year && profile.semester) {
 			SubjectsCache.clearForContext(profile.branch, profile.year, profile.semester)
@@ -352,7 +356,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 		return () => {
 			document.removeEventListener('visibilitychange', onVisibilityChange)
 		}
-	// eslint-disable-next-line react-hooks/exhaustive-deps
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [profile])
 
 	// Cross-tab subscription to hydrate this tab's caches/state without loops
@@ -392,14 +396,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 						setSubjects((prev) => Array.isArray(p.subjects) ? p.subjects : prev)
 					}
 				}
-			} catch (_) {}
+			} catch (_) { }
 		})
 
 		return () => {
 			mounted = false
 			unsubscribe()
 		}
-	// eslint-disable-next-line react-hooks/exhaustive-deps
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [status, session?.user?.email])
 
 	return (
@@ -409,6 +413,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 				subjects,
 				staticData,
 				dynamicData,
+				resources,
 				loading,
 				error,
 				warnings,

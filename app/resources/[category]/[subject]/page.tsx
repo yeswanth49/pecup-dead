@@ -90,10 +90,9 @@ export default function SubjectPage({
   searchParams: { [key: string]: string | string[] | undefined }
 }) {
   const { category } = params
-  const { subjects, profile } = useProfile()
+  const { subjects, profile, resources: bulkResources, dynamicData } = useProfile()
 
   const [usersCount, setUsersCount] = useState<number>(0)
-  const { dynamicData } = useProfile()
 
   useEffect(() => {
     if (dynamicData?.usersCount) {
@@ -273,32 +272,41 @@ export default function SubjectPage({
       // Compute cache key for logging
       const cacheKey = `resources_${category}_${decodedSubject}_${qpYear || 'none'}_${qpSem || 'none'}_${qpBranch || 'none'}`
 
-      // Check cache first
+      // FIRST: Check bulk-fetched resources from context
+      if (bulkResources && typeof bulkResources === 'object') {
+        const subjectLower = decodedSubject.toLowerCase()
+        const subjectResources = bulkResources[subjectLower]
+
+        if (subjectResources && typeof subjectResources === 'object') {
+          const categoryResources = subjectResources[category]
+
+          if (Array.isArray(categoryResources) && categoryResources.length > 0) {
+            // Transform to canonical Resource format
+            const transformedResources: Resource[] = categoryResources.map(transformResourceDTOToResource)
+            setResources(transformedResources)
+            setLoading(false)
+            return
+          }
+        }
+      }
+
+      // SECOND: Check ResourcesCache (separate cache for individual pages)
       const cached = ResourcesCache.get(category, decodedSubject, qpYear, qpSem, qpBranch)
       if (cached) {
         const metadata = ResourcesCache.getCacheMetadata(category, decodedSubject, qpYear, qpSem, qpBranch)
         if (metadata) {
-          if (process.env.NODE_ENV !== 'production') {
-            console.log(`[DEBUG] Resources loaded from cache for key: ${metadata.key}, count: ${cached.length}`)
-            console.log(`[DEBUG] Cache age: ${metadata.age} ms (${Math.round(metadata.age / 1000 / 60 / 60)} hours)`)
-            if (metadata.isExpired) {
-              console.log('[DEBUG] Cache is expired, refetching...')
-            }
-          }
-
           // Only use cache if not expired
           if (!metadata.isExpired) {
-            if (process.env.NODE_ENV !== 'production') {
-              console.log(`[DEBUG] Resources loaded from cache for key: ${metadata.key}, count: ${cached.length}`)
-            }
-
             setResources(cached)
             setLoading(false)
             return
+          } else {
           }
           // If expired, proceed to fetch fresh data
         }
       }
+
+      // THIRD: Fetch from API as fallback
 
       if (process.env.NODE_ENV !== 'production') {
         console.log(`[DEBUG] Resources not in cache, fetching from API for key: ${cacheKey}`)
@@ -307,7 +315,7 @@ export default function SubjectPage({
       if (process.env.NODE_ENV !== 'production') {
         console.log(`[DEBUG] Fetching for params: category=${category}, subject=${decodedSubject}, year=${qpYear}, semester=${qpSem}, branch=${qpBranch}`)
       }
-      
+
       const queryParams = new URLSearchParams({
         category,
         subject: decodedSubject
@@ -533,11 +541,11 @@ export default function SubjectPage({
 
           {loading && (
             <div className="space-y-4">
-              {[1,2,3,4,5].map(unit => (
+              {[1, 2, 3, 4, 5].map(unit => (
                 <div key={unit} className="border rounded-lg p-4">
                   <Skeleton className="h-6 w-32 mb-3" />
                   <div className="space-y-3">
-                    {[1,2,3].map(file => (
+                    {[1, 2, 3].map(file => (
                       <div key={file} className="flex items-center justify-between">
                         <Skeleton className="h-5 w-48" />
                         <div className="flex gap-2">

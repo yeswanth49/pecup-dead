@@ -74,7 +74,7 @@ export class ProfileCache {
         this.clear()
         return
       }
-      sessionStorage.setItem(
+      localStorage.setItem(
         this.KEY,
         JSON.stringify({ email, profile: safeProfile, timestamp: Date.now() })
       )
@@ -86,7 +86,7 @@ export class ProfileCache {
   static get(email: string): CachedProfile | null {
     if (typeof window === 'undefined') return null
     try {
-      const cached = sessionStorage.getItem(this.KEY)
+      const cached = localStorage.getItem(this.KEY)
       if (!cached) return null
 
       const { email: cachedEmail, profile } = JSON.parse(cached) as { email?: string; profile?: unknown }
@@ -114,11 +114,11 @@ export class ProfileCache {
   static clear() {
     if (typeof window === 'undefined') return
     try {
-      sessionStorage.removeItem(this.KEY)
+      localStorage.removeItem(this.KEY)
       if (process.env.NODE_ENV !== 'production') {
         console.log('[DEBUG] ProfileCache cleared')
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 }
 
@@ -194,7 +194,7 @@ export class StaticCache {
       if (process.env.NODE_ENV !== 'production') {
         console.log('[DEBUG] StaticCache cleared')
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 }
 
@@ -227,7 +227,7 @@ export class SubjectsCache {
             // Remove oldest entries one at a time until we have space or run out of old entries
             const toRemove = Math.min(3, Math.ceil(entries.length / 4))
             for (let i = 0; i < toRemove; i++) {
-              try { localStorage.removeItem(entries[i].key) } catch (_) {}
+              try { localStorage.removeItem(entries[i].key) } catch (_) { }
             }
 
             try {
@@ -240,7 +240,7 @@ export class SubjectsCache {
               // If still quota exceeded, try more aggressive cleanup
               const additionalToRemove = Math.min(5, Math.ceil(entries.length / 3))
               for (let i = toRemove; i < toRemove + additionalToRemove && i < entries.length; i++) {
-                try { localStorage.removeItem(entries[i].key) } catch (_) {}
+                try { localStorage.removeItem(entries[i].key) } catch (_) { }
               }
               localStorage.setItem(
                 key,
@@ -277,7 +277,7 @@ export class SubjectsCache {
       return subjects ?? null
     } catch (e) {
       console.warn('Failed to read subjects cache:', e)
-      try { localStorage.removeItem(this.getKey(branch, year, semester)) } catch (_) {}
+      try { localStorage.removeItem(this.getKey(branch, year, semester)) } catch (_) { }
       return null
     }
   }
@@ -290,7 +290,7 @@ export class SubjectsCache {
       if (process.env.NODE_ENV !== 'production') {
         console.log(`[DEBUG] SubjectsCache cleared for context: ${branch}_${year}_${semester}`)
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   static clearAll() {
@@ -298,12 +298,12 @@ export class SubjectsCache {
     try {
       const keys = Object.keys(localStorage).filter(key => key.startsWith('subjects_'))
       for (const key of keys) {
-        try { localStorage.removeItem(key) } catch (_) {}
+        try { localStorage.removeItem(key) } catch (_) { }
       }
       if (process.env.NODE_ENV !== 'production') {
         console.log(`[DEBUG] SubjectsCache cleared all (${keys.length} keys)`)
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 }
 
@@ -335,7 +335,7 @@ export class ResourcesCache {
 
           const toRemove = Math.min(3, Math.ceil(entries.length / 4))
           for (let i = 0; i < toRemove; i++) {
-            try { localStorage.removeItem(entries[i].key) } catch (_) {}
+            try { localStorage.removeItem(entries[i].key) } catch (_) { }
           }
 
           try {
@@ -346,7 +346,7 @@ export class ResourcesCache {
           } catch (retryErr) {
             console.warn('ResourcesCache: quota exceeded; skipping cache write after cleanup:', retryErr)
           }
-        } catch (_) {}
+        } catch (_) { }
       } else {
         console.warn('Failed to cache resources:', e)
       }
@@ -386,7 +386,7 @@ export class ResourcesCache {
       return resources ?? null
     } catch (e) {
       console.warn('Failed to read resources cache:', e)
-      try { localStorage.removeItem(this.getKey(category, subject, year, semester, branch)) } catch (_) {}
+      try { localStorage.removeItem(this.getKey(category, subject, year, semester, branch)) } catch (_) { }
       return null
     }
   }
@@ -424,25 +424,25 @@ export class ResourcesCache {
       const prefix = `resources_${category}_${subject}_`
       const keys = Object.keys(localStorage).filter(k => k.startsWith(prefix))
       for (const key of keys) {
-        try { localStorage.removeItem(key) } catch (_) {}
+        try { localStorage.removeItem(key) } catch (_) { }
       }
       if (process.env.NODE_ENV !== 'production') {
         console.log(`[DEBUG] ResourcesCache cleared for ${category}_${subject} (${keys.length} keys)`)
       }
-    } catch (_) {}
+    } catch (_) { }
   }
- 
+
   static clearAll() {
     if (typeof window === 'undefined') return
     try {
       const keys = Object.keys(localStorage).filter(key => key.startsWith('resources_'))
       for (const key of keys) {
-        try { localStorage.removeItem(key) } catch (_) {}
+        try { localStorage.removeItem(key) } catch (_) { }
       }
       if (process.env.NODE_ENV !== 'production') {
         console.log(`[DEBUG] ResourcesCache cleared all (${keys.length} keys)`)
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 }
 
@@ -453,16 +453,16 @@ export class DynamicCache {
   static set(data: unknown) {
     if (typeof window === 'undefined') return
     try {
-      sessionStorage.setItem(
+      localStorage.setItem(
         this.KEY,
         JSON.stringify({ data, timestamp: Date.now(), expiresAt: Date.now() + this.TTL })
       )
     } catch (e) {
-      // Handle quota exceeded for sessionStorage
+      // Handle quota exceeded for localStorage
       if (isQuotaExceeded(e)) {
         try {
-          sessionStorage.removeItem(this.KEY)
-          sessionStorage.setItem(
+          localStorage.removeItem(this.KEY)
+          localStorage.setItem(
             this.KEY,
             JSON.stringify({ data, timestamp: Date.now(), expiresAt: Date.now() + this.TTL })
           )
@@ -481,7 +481,7 @@ export class DynamicCache {
   static get<T>(validator?: (d: unknown) => d is T): unknown | T | null {
     if (typeof window === 'undefined') return null
     try {
-      const cached = sessionStorage.getItem(this.KEY)
+      const cached = localStorage.getItem(this.KEY)
       if (!cached) return null
 
       const { data, expiresAt } = JSON.parse(cached) as { data: unknown; expiresAt?: number }
@@ -514,11 +514,11 @@ export class DynamicCache {
   static clear() {
     if (typeof window === 'undefined') return
     try {
-      sessionStorage.removeItem(this.KEY)
+      localStorage.removeItem(this.KEY)
       if (process.env.NODE_ENV !== 'production') {
         console.log('[DEBUG] DynamicCache cleared')
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 }
 
@@ -555,7 +555,7 @@ export class ProfileDisplayCache {
       )
     } catch (e) {
       // best-effort, ignore quota errors
-      try { localStorage.removeItem(this.KEY) } catch (_) {}
+      try { localStorage.removeItem(this.KEY) } catch (_) { }
     }
   }
 
@@ -601,7 +601,7 @@ export class ProfileDisplayCache {
       if (process.env.NODE_ENV !== 'production') {
         console.log('[DEBUG] ProfileDisplayCache cleared')
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 }
 

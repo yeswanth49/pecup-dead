@@ -7,17 +7,18 @@ import { useProfile } from '@/lib/enhanced-profile-context'
 import { PerfMon } from '@/lib/performance-monitor'
 
 type CacheStatus = {
-  profile: { present: boolean; email?: string | null; id?: string | null }
-  staticData: { present: boolean; keys?: string[] }
-  dynamicData: { present: boolean }
-  subjects: { present: boolean; count?: number; context?: { branch: string; year: number; semester: number } | null }
-  resources: { present: boolean; count?: number }
+  profile: { present: boolean; storage: string; email?: string | null; id?: string | null }
+  staticData: { present: boolean; storage: string; keys?: string[] }
+  dynamicData: { present: boolean; storage: string }
+  subjects: { present: boolean; storage: string; count?: number; context?: { branch: string; year: number; semester: number } | null }
+  bulkResources: { present: boolean; storage: string; subjects?: string[]; totalCount?: number }
+  resourcesCache: { present: boolean; storage: string; count?: number }
 }
 
 export function CacheDebugger() {
   const isDev = process.env.NODE_ENV === 'development'
   const { data: session } = useSession()
-  const { profile } = useProfile()
+  const { profile, resources: bulkResources } = useProfile()
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<CacheStatus | null>(null)
   const [metrics, setMetrics] = useState(PerfMon.getSnapshot())
@@ -39,21 +40,56 @@ export function CacheDebugger() {
         ? SubjectsCache.get(subjectsContext.branch, subjectsContext.year, subjectsContext.semester)
         : null
 
-      // Check resources cache
+      // Check resources cache (individual page cache)
       const resourcesKeys = Object.keys(localStorage).filter(key => key.startsWith('resources_'))
       const resourcesPresent = resourcesKeys.length > 0
 
+      // Check bulk resources from context
+      let bulkResourcesSubjects: string[] = []
+      let bulkResourcesTotal = 0
+      if (bulkResources && typeof bulkResources === 'object') {
+        bulkResourcesSubjects = Object.keys(bulkResources)
+        bulkResourcesTotal = Object.values(bulkResources).reduce((sum, subj) => {
+          if (typeof subj === 'object' && subj !== null) {
+            return sum + Object.values(subj).reduce((catSum, resources) => {
+              return catSum + (Array.isArray(resources) ? resources.length : 0)
+            }, 0)
+          }
+          return sum
+        }, 0)
+      }
+
       const s: CacheStatus = {
-        profile: { present: !!prof, email, id: (prof as any)?.id ?? null },
-        staticData: { present: !!stat, keys: stat ? Object.keys(stat as any) : [] },
-        dynamicData: { present: !!dyn },
+        profile: {
+          present: !!prof,
+          storage: 'localStorage',
+          email,
+          id: (prof as any)?.id ?? null
+        },
+        staticData: {
+          present: !!stat,
+          storage: 'localStorage',
+          keys: stat ? Object.keys(stat as any) : []
+        },
+        dynamicData: {
+          present: !!dyn,
+          storage: 'localStorage'
+        },
         subjects: {
           present: Array.isArray(subs) && subs.length > 0,
+          storage: 'localStorage',
           count: Array.isArray(subs) ? subs.length : 0,
           context: subjectsContext
         },
-        resources: {
+        bulkResources: {
+          present: bulkResourcesSubjects.length > 0,
+          storage: 'Context (from bulk fetch)',
+          subjects: bulkResourcesSubjects,
+          totalCount: bulkResourcesTotal
+        },
+        resourcesCache: {
           present: resourcesPresent,
+          storage: 'localStorage',
           count: resourcesKeys.length
         }
       }
@@ -71,7 +107,7 @@ export function CacheDebugger() {
     computeStatus()
     // Recompute when email/context changes while open
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, email, subjectsContext?.branch, subjectsContext?.year, subjectsContext?.semester])
+  }, [open, email, subjectsContext?.branch, subjectsContext?.year, subjectsContext?.semester, bulkResources])
 
   const clearAll = () => {
     try {
@@ -80,7 +116,7 @@ export function CacheDebugger() {
       DynamicCache.clear()
       SubjectsCache.clearAll()
       ResourcesCache.clearAll()
-    } catch (_) {}
+    } catch (_) { }
     computeStatus()
   }
 
@@ -102,8 +138,8 @@ export function CacheDebugger() {
         </button>
       )}
       {open && (
-        <div className="w-80 max-w-[90vw] rounded-lg border bg-white dark:bg-neutral-900 shadow-lg">
-          <div className="flex items-center justify-between border-b px-3 py-2">
+        <div className="w-80 max-w-[90vw] max-h-[80vh] overflow-y-auto rounded-lg border bg-white dark:bg-neutral-900 shadow-lg">
+          <div className="flex items-center justify-between border-b px-3 py-2 sticky top-0 bg-white dark:bg-neutral-900">
             <div className="text-sm font-semibold">Cache Debugger</div>
             <button
               type="button"
@@ -141,6 +177,7 @@ export function CacheDebugger() {
             <div className="space-y-2 text-xs">
               <section className="rounded border p-2">
                 <div className="font-medium mb-1">ProfileCache</div>
+                <div><span className="text-muted-foreground">storage:</span> {status?.profile.storage}</div>
                 <div><span className="text-muted-foreground">email:</span> {status?.profile.email ?? '—'}</div>
                 <div><span className="text-muted-foreground">present:</span> {status?.profile.present ? 'yes' : 'no'}</div>
                 <div><span className="text-muted-foreground">id:</span> {status?.profile.id ?? '—'}</div>
@@ -148,6 +185,7 @@ export function CacheDebugger() {
 
               <section className="rounded border p-2">
                 <div className="font-medium mb-1">StaticCache</div>
+                <div><span className="text-muted-foreground">storage:</span> {status?.staticData.storage}</div>
                 <div><span className="text-muted-foreground">present:</span> {status?.staticData.present ? 'yes' : 'no'}</div>
                 {status?.staticData.present && (
                   <div className="mt-1">
@@ -159,11 +197,13 @@ export function CacheDebugger() {
 
               <section className="rounded border p-2">
                 <div className="font-medium mb-1">DynamicCache</div>
+                <div><span className="text-muted-foreground">storage:</span> {status?.dynamicData.storage}</div>
                 <div><span className="text-muted-foreground">present:</span> {status?.dynamicData.present ? 'yes' : 'no'}</div>
               </section>
 
               <section className="rounded border p-2">
                 <div className="font-medium mb-1">SubjectsCache</div>
+                <div><span className="text-muted-foreground">storage:</span> {status?.subjects.storage}</div>
                 <div><span className="text-muted-foreground">context:</span> {subjectsContext ? `${subjectsContext.branch} • Y${subjectsContext.year} • S${subjectsContext.semester}` : '—'}</div>
                 <div><span className="text-muted-foreground">present:</span> {status?.subjects.present ? 'yes' : 'no'}</div>
                 {typeof status?.subjects.count === 'number' && (
@@ -171,11 +211,24 @@ export function CacheDebugger() {
                 )}
               </section>
 
+              <section className="rounded border p-2 bg-blue-50/50 dark:bg-blue-950/20">
+                <div className="font-medium mb-1">Bulk Resources (Context)</div>
+                <div><span className="text-muted-foreground">source:</span> {status?.bulkResources.storage}</div>
+                <div><span className="text-muted-foreground">present:</span> {status?.bulkResources.present ? 'yes' : 'no'}</div>
+                {status?.bulkResources.present && (
+                  <>
+                    <div><span className="text-muted-foreground">subjects:</span> {status.bulkResources.subjects?.join(', ') || '—'}</div>
+                    <div><span className="text-muted-foreground">total resources:</span> {status.bulkResources.totalCount}</div>
+                  </>
+                )}
+              </section>
+
               <section className="rounded border p-2">
-                <div className="font-medium mb-1">ResourcesCache</div>
-                <div><span className="text-muted-foreground">present:</span> {status?.resources.present ? 'yes' : 'no'}</div>
-                {typeof status?.resources.count === 'number' && (
-                  <div><span className="text-muted-foreground">count:</span> {status?.resources.count}</div>
+                <div className="font-medium mb-1">ResourcesCache (Individual Pages)</div>
+                <div><span className="text-muted-foreground">storage:</span> {status?.resourcesCache.storage}</div>
+                <div><span className="text-muted-foreground">present:</span> {status?.resourcesCache.present ? 'yes' : 'no'}</div>
+                {typeof status?.resourcesCache.count === 'number' && (
+                  <div><span className="text-muted-foreground">cache keys:</span> {status?.resourcesCache.count}</div>
                 )}
               </section>
 
@@ -207,5 +260,4 @@ export function CacheDebugger() {
 }
 
 export default CacheDebugger
-
 
