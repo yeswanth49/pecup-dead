@@ -27,9 +27,7 @@ import {
 import { BotIcon } from 'lucide-react';
 
 function ChatContent() {
-    const { messages, sendMessage, isLoading } = useChat({
-        api: '/api/chat',
-    });
+    const { messages, sendMessage, isLoading } = useChat();
 
     const onSubmit = async (message: { text: string; files: any[] }) => {
         if (message.text.trim() || message.files.length > 0) {
