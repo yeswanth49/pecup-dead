@@ -1,4 +1,5 @@
 'use client'
+// Force rebuild
 
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -13,7 +14,7 @@ import { BookOpen, Bell, Archive, Phone, AlertCircle, Loader2, Settings, Users, 
 import { useProfile, ProfileContextType, EnhancedProfileDynamicData } from '@/lib/enhanced-profile-context'
 import { useSession } from 'next-auth/react'
 import Loader from '@/components/Loader'
-import { triggerSideCannons } from '@/components/ui/button'
+
 
 type Exam = {
   subject: string
@@ -88,7 +89,7 @@ export default function HomePage() {
       if (!hasSeenConfetti) {
         // Small delay to ensure the page is fully rendered
         setTimeout(() => {
-          triggerSideCannons()
+          // triggerSideCannons() // Function missing
           localStorage.setItem('confetti_seen_300', 'true')
         }, 500)
       }
