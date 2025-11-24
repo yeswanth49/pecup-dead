@@ -16,7 +16,7 @@ export function TopBar() {
   }
 
   return (
-    <div className="flex w-full items-center justify-between px-16 md:px-17 pt-6 pb-0 mb-0">
+    <div className="flex w-full items-center justify-between px-4 md:px-16 pt-6 pb-0 mb-0">
       <div className="text-2xl md:text-3xl font-bold text-primary">PEC.UP</div>
       <div className="flex gap-2">
         <RefreshButton />
@@ -27,16 +27,16 @@ export function TopBar() {
               size="sm"
               onClick={handleResetProfile}
             >
-              <RotateCcw className="h-4 w-4" />
-              Reset Year & Branch
+              <RotateCcw className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">Reset Year & Branch</span>
             </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => signOut()}
             >
-              <LogOut className="h-4 w-4" />
-              Logout
+              <LogOut className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">Logout</span>
             </Button>
           </>
         )}

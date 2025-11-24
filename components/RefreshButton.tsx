@@ -33,13 +33,13 @@ export function RefreshButton(): ReactElement {
 		>
 			{loading ? (
 				<>
-					<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-					Refreshing...
+					<Loader2 className="h-4 w-4 animate-spin md:mr-2" />
+					<span className="hidden md:inline">Refreshing...</span>
 				</>
 			) : (
 				<>
-					<RefreshCw className="mr-2 h-4 w-4" />
-					Refresh Data
+					<RefreshCw className="h-4 w-4 md:mr-2" />
+					<span className="hidden md:inline">Refresh Data</span>
 				</>
 			)}
 		</Button>
